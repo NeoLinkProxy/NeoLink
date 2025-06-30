@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import org.fxmisc.richtext.StyleClassedTextArea?>
+
+<VBox xmlns="http://javafx.com/javafx/24"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="neoproject.neolink.gui.controller.MainController"
+      spacing="15"
+      styleClass="root">
+
+    <!-- 标题 -->
+    <Label text="NeoLink 内网穿透客户端" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+
+    <!-- 配置区域 -->
+    <GridPane hgap="15" vgap="15" styleClass="grid-pane">
+        <columnConstraints>
+            <ColumnConstraints prefWidth="100"/>
+            <ColumnConstraints prefWidth="250"/>
+            <ColumnConstraints prefWidth="100"/>
+            <ColumnConstraints prefWidth="250"/>
+        </columnConstraints>
+
+        <!-- 服务器配置 -->
+        <Label text="服务器地址:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <TextField fx:id="serverHostField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+        <Label text="服务器端口:" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
+        <TextField fx:id="serverPortField" GridPane.rowIndex="0" GridPane.columnIndex="3"/>
+
+        <!-- 本地配置 -->
+        <Label text="本地地址:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+        <TextField fx:id="localHostField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+        <Label text="本地端口:" GridPane.rowIndex="1" GridPane.columnIndex="2"/>
+        <TextField fx:id="localPortField" GridPane.rowIndex="1" GridPane.columnIndex="3"/>
+
+        <!-- 序列号 -->
+        <Label text="序列号:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+        <TextField fx:id="accessCodeField" GridPane.rowIndex="2" GridPane.columnIndex="1" GridPane.columnSpan="3"/>
+
+        <!-- 选项 -->
+        <Label text="调试选项:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+        <HBox spacing="15" GridPane.rowIndex="3" GridPane.columnIndex="1" GridPane.columnSpan="3">
+            <CheckBox fx:id="debugModeCheck" text="调试模式"/>
+            <CheckBox fx:id="autoScrollCheck" text="自动滚动" selected="true"/>
+        </HBox>
+    </GridPane>
+
+    <!-- 按钮区域 -->
+    <HBox spacing="15" alignment="CENTER_LEFT">
+        <Button fx:id="toggleButton" text="启动隧道" styleClass="action-button"/>
+        <ProgressIndicator fx:id="progressIndicator" prefWidth="30" prefHeight="30" visible="false"/>
+        <Button text="滚动到底部" onAction="#scrollToBottom" styleClass="scroll-button"/>
+    </HBox>
+
+    <!-- 日志标签 -->
+    <Label text="运行日志:" style="-fx-font-weight: bold;"/>
+
+    <!-- 控制台输出 -->
+    <StyleClassedTextArea fx:id="consoleArea" editable="false"
+                          styleClass="console-area"
+                          style="-fx-font-family: 'Consolas'; -fx-font-size: 12px;"
+                          VBox.vgrow="ALWAYS"/>
+</VBox>
