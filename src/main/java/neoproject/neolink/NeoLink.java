@@ -87,9 +87,6 @@ public class NeoLink {
     }
 
     public static void main(String[] args) {
-        System.setProperty("file.encoding", "UTF-8");
-        System.setProperty("sun.jnu.encoding", "UTF-8");
-
         checkARGS(args);
 
         ConfigOperator.readAndSetValue();
@@ -136,13 +133,14 @@ public class NeoLink {
 
     private static void detectAndCatchNeoOperation() throws IOException, ClassNotFoundException {
         String msg;
-        while ((msg = receiveStr(hookSocketReader)) != null) {
+        while ((msg = receiveStr(hookSocketReader))!=null) {
             try {
                 checkInterruption();
             } catch (InterruptedException e) {
                 say("隧道正在停止...");
                 return;
             }
+//            System.out.println("msg = " + msg);
             if (msg.startsWith(":>")) {
                 msg = msg.substring(2);
                 String[] ele = msg.split(";");
@@ -415,8 +413,9 @@ public class NeoLink {
         } catch (Exception e) {
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
-
+            System.gc();
         }
+        System.out.println(1);
     }
 
     public static void sayInfoNoNewLine(String str) {
