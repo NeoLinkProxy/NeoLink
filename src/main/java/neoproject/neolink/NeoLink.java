@@ -415,7 +415,6 @@ public class NeoLink {
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
             System.gc();
         }
-        System.out.println(1);
     }
 
     public static void sayInfoNoNewLine(String str) {
