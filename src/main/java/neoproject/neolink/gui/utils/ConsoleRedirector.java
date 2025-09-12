@@ -1,6 +1,7 @@
 package neoproject.neolink.gui.utils;
 
 import org.fxmisc.richtext.StyleClassedTextArea;
+
 import java.io.OutputStream;
 import java.io.PrintStream;
 

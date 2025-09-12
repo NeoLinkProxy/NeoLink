@@ -6,19 +6,19 @@
 
     <groupId>neoproject</groupId>
     <artifactId>NeoLink</artifactId>
-    <version>2.3-SNAPSHOT</version>
+    <version>3.0-RELEASE</version>
 
     <properties>
-        <maven.compiler.source>24</maven.compiler.source>
-        <maven.compiler.target>24</maven.compiler.target>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>asia.ceroxe</groupId>
+            <groupId>fun.ceroxe</groupId>
             <artifactId>plethora-api</artifactId>
-            <version>0.0.8</version>
+            <version>0.1.0</version>
         </dependency>
         <!-- JavaFX 24 -->
         <dependency>

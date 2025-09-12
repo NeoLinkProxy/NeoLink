@@ -2,34 +2,46 @@ package neoproject.neolink.gui.controller;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import neoproject.neolink.NeoLink;
 import neoproject.neolink.gui.utils.FXLoggist;
+import org.fxmisc.richtext.StyleClassedTextArea;
 import plethora.print.log.LogType;
 import plethora.print.log.State;
 import plethora.time.Time;
-import org.fxmisc.richtext.StyleClassedTextArea;
 
 import java.io.File;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainController {
 
-    @FXML private HBox titleBar=new HBox();
-    @FXML private TextField serverHostField;
-    @FXML private TextField serverPortField;
-    @FXML private TextField localHostField;
-    @FXML private TextField localPortField;
-    @FXML private TextField accessCodeField;
-    @FXML private CheckBox debugModeCheck;
-    @FXML private Button toggleButton;
-    @FXML private StyleClassedTextArea consoleArea;
-    @FXML private ProgressIndicator progressIndicator;
-    @FXML private CheckBox autoScrollCheck;
+    @FXML
+    private HBox titleBar = new HBox();
+    @FXML
+    private TextField serverHostField;
+    @FXML
+    private TextField serverPortField;
+    @FXML
+    private TextField localHostField;
+    @FXML
+    private TextField localPortField;
+    @FXML
+    private TextField accessCodeField;
+    @FXML
+    private CheckBox debugModeCheck;
+    @FXML
+    private Button toggleButton;
+    @FXML
+    private StyleClassedTextArea consoleArea;
+    @FXML
+    private ProgressIndicator progressIndicator;
+    @FXML
+    private CheckBox autoScrollCheck;
 
     private Thread tunnelThread;
     private FXLoggist fxLoggist;
@@ -211,12 +223,6 @@ public class MainController {
         try {
             if (NeoLink.hookSocket != null && !NeoLink.hookSocket.isClosed()) {
                 NeoLink.hookSocket.close();
-            }
-            if (NeoLink.hookSocketReader != null) {
-                NeoLink.hookSocketReader.close();
-            }
-            if (NeoLink.hookSocketWriter != null) {
-                NeoLink.hookSocketWriter.close();
             }
         } catch (Exception e) {
             if (fxLoggist != null) {

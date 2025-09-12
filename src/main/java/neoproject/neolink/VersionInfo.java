@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import static neoproject.neolink.NeoLink.IS_DEBUG_MODE;
 
 public class VersionInfo {
-    public static final String VERSION = "2.3-RELEASE";
+    public static final String VERSION = "3.0-RELEASE";
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {
@@ -25,7 +25,7 @@ public class VersionInfo {
                         4.作者本人对此软件的所有成分具有最终解释权
                         5.本eula以后可能有变动的可能，请以最新的为准
                         6.由于本内网穿透服务器采用的是竞价计费，业务若异常中断，请第一时间通知作者
-
+                        
                         1. This software only supports Minecraft TCP intranet penetration and does not support other types of penetration for other purposes
                         2. It is hereby stated that it is strictly prohibited to use this software for illegal activities. If it is used for illegal purposes, the author will not bear any responsibility (including but not limited to legal, social and other responsibilities), and actively cooperate with relevant authorities to investigate.
                         3. This software belongs to personal service. If you have any questions, you can add QQ group 304509047 or author QQ 1591117599

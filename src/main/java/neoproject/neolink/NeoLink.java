@@ -4,6 +4,7 @@ import neoproject.neolink.threads.CheckAliveThread;
 import neoproject.neolink.threads.Transformer;
 import plethora.management.bufferedFile.SizeCalculator;
 import plethora.net.NetworkUtils;
+import plethora.net.SecureSocket;
 import plethora.os.detect.OSDetector;
 import plethora.os.windowsSystem.WindowsOperation;
 import plethora.print.log.LogType;
@@ -16,10 +17,6 @@ import plethora.time.Time;
 import plethora.utils.Sleeper;
 import plethora.utils.StringUtils;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.Socket;
 import java.util.Locale;
@@ -35,7 +32,7 @@ public class NeoLink {
     public static int HOST_CONNECT_PORT = 802;
     public static int UPDATE_PORT = 803;
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
-    public static Socket hookSocket;
+    public static SecureSocket hookSocket;
     public static String key = null;
     public static int localPort = -1;
     public static Loggist loggist = NeoLink.initLoggist();
@@ -43,8 +40,6 @@ public class NeoLink {
     ;
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
 
-    public static ObjectOutputStream hookSocketWriter;
-    public static ObjectInputStream hookSocketReader;
     public static RSAUtil rsaUtil = new RSAUtil(2048);
     public static AESUtil aesUtil;
     public static boolean IS_RECONNECTED_OPERATION = false;
@@ -131,9 +126,9 @@ public class NeoLink {
         }
     }
 
-    private static void detectAndCatchNeoOperation() throws IOException, ClassNotFoundException {
+    private static void detectAndCatchNeoOperation() throws IOException {
         String msg;
-        while ((msg = receiveStr(hookSocketReader))!=null) {
+        while ((msg = receiveStr()) != null) {
             try {
                 checkInterruption();
             } catch (InterruptedException e) {
@@ -158,6 +153,7 @@ public class NeoLink {
             }
         }
     }
+
     private static void checkInterruption() throws InterruptedException {
         if (Thread.interrupted()) {
             throw new InterruptedException("隧道被用户中断");
@@ -185,17 +181,16 @@ public class NeoLink {
     private static void connectToNeoAndDoConfiguration() throws IOException {
         say(languageData.CONNECT_TO + REMOTE_DOMAIN_NAME + languageData.OMITTED);
         if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
-            hookSocket = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_NEO, HOST_HOOK_PORT);
+            hookSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, HOST_HOOK_PORT);
         } else {
-            hookSocket = new Socket(REMOTE_DOMAIN_NAME, HOST_HOOK_PORT);
+            hookSocket = new SecureSocket(REMOTE_DOMAIN_NAME, HOST_HOOK_PORT);
         }
-        initObjectStream(hookSocket);
     }
 
     private static void printlnLogo() {
         if (!IS_RECONNECTED_OPERATION) {
             say("""
-
+                    
                        _____                                    \s
                       / ____|                                   \s
                      | |        ___   _ __    ___   __  __   ___\s
@@ -225,8 +220,8 @@ public class NeoLink {
     private static void uploadAndReceiveMessages() throws IOException, ClassNotFoundException {
         // zh version key (https-mode->LOCAL_DOMAIN_NAME)
         String clientInfo = NeoLink.formateClientInfoString(languageData, key);
-        sendStr(hookSocketWriter, clientInfo);
-        String str = receiveStr(hookSocketReader);
+        sendStr(clientInfo);
+        String str = receiveStr();
         if (str.contains("nsupported") || str.contains("不") || str.contains("旧")) {
             loggist.say(new State(LogType.ERROR, "SERVER", str));
             String versions = str.split(":")[1];
@@ -342,22 +337,6 @@ public class NeoLink {
         }
     }
 
-    public static void initObjectStream(Socket hookSocket) {
-        try {
-            hookSocketReader = new ObjectInputStream(hookSocket.getInputStream());
-            hookSocketWriter = new ObjectOutputStream(hookSocket.getOutputStream());
-
-            hookSocketWriter.writeObject(rsaUtil.getPublicKey());
-            hookSocketWriter.flush();
-
-            SecretKey secretKey = new SecretKeySpec(rsaUtil.decrypt((byte[]) hookSocketReader.readObject()), "AES");
-            aesUtil = new AESUtil(secretKey);
-
-        } catch (Exception e) {
-            debugOperation(e);
-            exitAndFreeze(-1);
-        }
-    }
 
     public static void exitAndFreeze(int exitCode) {
         say("Press enter to exit the program...");
@@ -381,34 +360,32 @@ public class NeoLink {
         try {
             Socket server;
 
-                if (ProxyOperator.PROXY_IP_TO_LOCAL_SERVER != null) {
-                    server = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_LOCAL, localPort);
-                } else {
-                    server = new Socket(LOCAL_DOMAIN_NAME, localPort);
-                }
+            if (ProxyOperator.PROXY_IP_TO_LOCAL_SERVER != null) {
+                server = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_LOCAL, localPort);
+            } else {
+                server = new Socket(LOCAL_DOMAIN_NAME, localPort);
+            }
 
-                Socket transferChannelServer;
-                if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
-                    transferChannelServer = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_NEO, HOST_CONNECT_PORT);
-                } else {
-                    transferChannelServer = new Socket(REMOTE_DOMAIN_NAME, HOST_CONNECT_PORT);
-                }
-                ObjectOutputStream objectOutputStream = new ObjectOutputStream(transferChannelServer.getOutputStream());
-                ObjectInputStream objectInputStream = new ObjectInputStream(transferChannelServer.getInputStream());
-                objectOutputStream.writeInt(REMOTE_PORT);
-                objectOutputStream.flush();
+            SecureSocket transferChannelServer;
+            if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
+                transferChannelServer = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, HOST_CONNECT_PORT);
+            } else {
+                transferChannelServer = new SecureSocket(REMOTE_DOMAIN_NAME, HOST_CONNECT_PORT);
+            }
 
-                say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.BUILD_UP);
+            transferChannelServer.sendInt(REMOTE_PORT);
 
-                Transformer serverToTransferChannelServerThread = new Transformer(server, transferChannelServer, Transformer.LOCAL_TO_NEO, objectOutputStream, objectInputStream);
-                Transformer transferChannelServerToServerThread = new Transformer(transferChannelServer, server, Transformer.NEO_TO_LOCAL, objectOutputStream, objectInputStream);
-                ThreadManager threadManager = new ThreadManager(serverToTransferChannelServerThread, transferChannelServerToServerThread);
-                threadManager.startAll();
+            say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.BUILD_UP);
 
-                closeSocket(server);
-                closeSocket(transferChannelServer);
+            Transformer serverToTransferChannelServerThread = new Transformer(server, transferChannelServer);
+            Transformer transferChannelServerToServerThread = new Transformer(transferChannelServer, server);
+            ThreadManager threadManager = new ThreadManager(serverToTransferChannelServerThread, transferChannelServerToServerThread);
+            threadManager.startAll();
 
-                say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.DESTROY);
+            closeSocket(server);
+            closeSocket(transferChannelServer);
+
+            say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.DESTROY);
 
         } catch (Exception e) {
             debugOperation(e);
@@ -426,7 +403,7 @@ public class NeoLink {
         if (IS_DEBUG_MODE) {
             String exceptionMsg = StringUtils.getExceptionMsg(e);
             System.out.println(exceptionMsg);
-            loggist.write(exceptionMsg,true);
+            loggist.write(exceptionMsg, true);
         }
     }
 

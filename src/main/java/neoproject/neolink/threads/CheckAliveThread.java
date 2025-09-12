@@ -18,7 +18,7 @@ public class CheckAliveThread implements Runnable {
     public void run() {
         while (true) {
             try {
-                NeoLink.hookSocketWriter.writeObject("");
+                NeoLink.hookSocket.sendStr("");
             } catch (Exception e) {
                 if (NeoLink.IS_DEBUG_MODE) {
                     NeoLink.debugOperation(e);

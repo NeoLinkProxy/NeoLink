@@ -1,12 +1,10 @@
 package neoproject.neolink.gui.utils;
 
 import javafx.application.Platform;
-import neoproject.neolink.gui.controller.MainController;
+import org.fxmisc.richtext.StyleClassedTextArea;
 import plethora.print.Printer;
-import plethora.print.log.LogType;
 import plethora.print.log.Loggist;
 import plethora.print.log.State;
-import org.fxmisc.richtext.StyleClassedTextArea;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -114,13 +112,20 @@ public class FXLoggist extends Loggist {
         try {
             int code = Integer.parseInt(colorCode);
             switch (code) {
-                case Printer.color.RED: return "log-error";
-                case Printer.color.YELLOW: return "log-warning";
-                case Printer.color.ORANGE: return "log-orange";
-                case Printer.color.BLUE: return "log-info";
-                case Printer.color.PURPLE: return "log-purple";
-                case Printer.color.GREEN: return "log-success";
-                default: return "log-default";
+                case Printer.color.RED:
+                    return "log-error";
+                case Printer.color.YELLOW:
+                    return "log-warning";
+                case Printer.color.ORANGE:
+                    return "log-orange";
+                case Printer.color.BLUE:
+                    return "log-info";
+                case Printer.color.PURPLE:
+                    return "log-purple";
+                case Printer.color.GREEN:
+                    return "log-success";
+                default:
+                    return "log-default";
             }
         } catch (NumberFormatException e) {
             return "log-default";

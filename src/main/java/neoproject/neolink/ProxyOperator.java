@@ -1,7 +1,7 @@
 package neoproject.neolink;
 
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
+import plethora.net.SecureSocket;
+
 import java.io.IOException;
 import java.net.*;
 
@@ -96,8 +96,34 @@ public class ProxyOperator {
             targetSocket.connect(new InetSocketAddress(LOCAL_DOMAIN_NAME, targetPort));
         }
         return targetSocket;
+    }
 
-
+    public synchronized static SecureSocket getHandledSecureSocket(int socketType, int targetPort) throws IOException {
+        SecureSocket targetSocket;
+        if (socketType == Type.TO_NEO) {
+            if (PROXY_IP_TO_NEO_SERVER_USERNAME != null) {
+                Authenticator.setDefault(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(PROXY_IP_TO_NEO_SERVER_USERNAME, PROXY_IP_TO_NEO_SERVER_PASSWORD.toCharArray());
+                    }
+                });
+            }
+            Proxy proxy = new Proxy(PROXY_IP_TO_NEO_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_NEO_SERVER_IP, PROXY_IP_TO_NEO_SERVE_PORT));
+            targetSocket = new SecureSocket(proxy, REMOTE_DOMAIN_NAME, targetPort);
+        } else {
+            if (PROXY_IP_TO_LOCAL_SERVER_USERNAME != null) {
+                Authenticator.setDefault(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(PROXY_IP_TO_LOCAL_SERVER_USERNAME, PROXY_IP_TO_LOCAL_SERVER_PASSWORD.toCharArray());
+                    }
+                });
+            }
+            Proxy proxy = new Proxy(PROXY_IP_TO_LOCAL_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_LOCAL_SERVER_IP, PROXY_IP_TO_LOCAL_SERVER_PORT));
+            targetSocket = new SecureSocket(proxy, REMOTE_DOMAIN_NAME, targetPort);
+        }
+        return targetSocket;
     }
 
     public static class Type {

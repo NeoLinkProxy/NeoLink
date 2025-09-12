@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.geometry.Insets?>
+
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import org.fxmisc.richtext.StyleClassedTextArea?>
-
 <VBox xmlns="http://javafx.com/javafx/24"
       xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="neoproject.neolink.gui.controller.MainController"
