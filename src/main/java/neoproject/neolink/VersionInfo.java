@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import static neoproject.neolink.NeoLink.IS_DEBUG_MODE;
 
 public class VersionInfo {
-    public static final String VERSION = "3.0-RELEASE";
+    public static final String VERSION = "3.1-RELEASE";
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {

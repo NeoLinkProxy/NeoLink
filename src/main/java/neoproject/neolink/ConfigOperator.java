@@ -92,7 +92,7 @@ public class ConfigOperator {
                     
                     #数据包数组的长度
                     #The length of the packet array
-                    BUFFER_LEN=117""");
+                    BUFFER_LEN=4096""");
 
             bufferedWriter.flush();
             bufferedWriter.close();
