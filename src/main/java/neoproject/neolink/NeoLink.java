@@ -10,8 +10,6 @@ import plethora.os.windowsSystem.WindowsOperation;
 import plethora.print.log.LogType;
 import plethora.print.log.Loggist;
 import plethora.print.log.State;
-import plethora.security.encryption.AESUtil;
-import plethora.security.encryption.RSAUtil;
 import plethora.thread.ThreadManager;
 import plethora.time.Time;
 import plethora.utils.Sleeper;
@@ -40,8 +38,6 @@ public class NeoLink {
     ;
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
 
-    public static RSAUtil rsaUtil = new RSAUtil(2048);
-    public static AESUtil aesUtil;
     public static boolean IS_RECONNECTED_OPERATION = false;
     public static boolean IS_DEBUG_MODE = false;
     public static boolean ENABLE_AUTO_RECONNECT = true;
@@ -94,7 +90,7 @@ public class NeoLink {
 
             enterAccessCode();//告知用户输入key
 
-            connectToNeoAndDoConfiguration();//使用key连接NeoServer,并且初始化对象流
+            connectToNeo();//使用key连接NeoServer
 
             uploadAndReceiveMessages();//上传key和版本信息，并且获取响应，如果版本过旧旧获取新版本
 
@@ -178,7 +174,7 @@ public class NeoLink {
         }
     }
 
-    private static void connectToNeoAndDoConfiguration() throws IOException {
+    private static void connectToNeo() throws IOException {
         say(languageData.CONNECT_TO + REMOTE_DOMAIN_NAME + languageData.OMITTED);
         if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
             hookSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, HOST_HOOK_PORT);
@@ -217,11 +213,12 @@ public class NeoLink {
         }
     }
 
-    private static void uploadAndReceiveMessages() throws IOException, ClassNotFoundException {
-        // zh version key (https-mode->LOCAL_DOMAIN_NAME)
+    private static void uploadAndReceiveMessages() throws IOException {
+        // zh version key
         String clientInfo = NeoLink.formateClientInfoString(languageData, key);
         sendStr(clientInfo);
         String str = receiveStr();
+//        System.out.println("str = " + str);
         if (str.contains("nsupported") || str.contains("不") || str.contains("旧")) {
             loggist.say(new State(LogType.ERROR, "SERVER", str));
             String versions = str.split(":")[1];
@@ -230,7 +227,7 @@ public class NeoLink {
 
             checkUpdate(CLIENT_FILE_PREFIX + version);//it will exit!
 
-        } else if (str.contains("exit") || str.contains("退") || str.contains("错误") || str.contains("denied") || str.contains("already") || str.contains("占")) {
+        } else if (str.contains("exit") || str.contains("退") || str.contains("错误") || str.contains("denied") || str.contains("already") || str.contains("过期") || str.contains("占")) {
             say(str);
             exitAndFreeze(0);
         } else {

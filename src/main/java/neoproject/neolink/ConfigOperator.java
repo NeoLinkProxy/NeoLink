@@ -39,7 +39,6 @@ public class ConfigOperator {
                 NeoLink.RECONNECTION_INTERVAL = Integer.parseInt(lineConfigReader.get("RECONNECTION_INTERVAL"));
                 ProxyOperator.PROXY_IP_TO_NEO_SERVER = lineConfigReader.get("PROXY_IP_TO_NEO_SERVER");
                 ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = lineConfigReader.get("PROXY_IP_TO_LOCAL_SERVER");
-                AdminMgr.ADMIN_PORT = Integer.parseInt(lineConfigReader.get("ADMIN_PORT"));
                 CheckAliveThread.HEARTBEAT_PACKET_DELAY = Integer.parseInt(lineConfigReader.get("HEARTBEAT_PACKET_DELAY"));
                 Transformer.BUFFER_LEN = Integer.parseInt(lineConfigReader.get("BUFFER_LEN"));
 
@@ -68,7 +67,6 @@ public class ConfigOperator {
                     HOST_HOOK_PORT=801
                     HOST_CONNECT_PORT=802
                     UPDATE_PORT=803
-                    ADMIN_PORT=945
                     
                     #设置用来连接本地服务器的代理服务器ip和端口，示例：socks->127.0.0.1:7890 如果需要登录则提供密码， 格式： ip:端口@用户名:密码   示例：socks->127.0.0.1:7890@Ceroxe;123456   如果不需要去请留空
                     #Set the proxy server IP address and port to connect to the on-premises server,Example: socks->127.0.0.1:7890 Provide password if login is required, Format: type->ip:port@username:password Example: socks->127.0.0.1:7890@Ceroxe;123456   If you don't need to go, leave it blank
