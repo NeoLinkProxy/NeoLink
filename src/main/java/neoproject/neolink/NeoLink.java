@@ -33,24 +33,37 @@ public class NeoLink {
     public static SecureSocket hookSocket;
     public static String key = null;
     public static int localPort = -1;
-    public static Loggist loggist = NeoLink.initLoggist();
+    public static Loggist loggist;
+    public static String OUTPUT_FILE_PATH = null;
     public static LanguageData languageData = new LanguageData();
-    ;
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
 
     public static boolean IS_RECONNECTED_OPERATION = false;
     public static boolean IS_DEBUG_MODE = false;
     public static boolean ENABLE_AUTO_RECONNECT = true;
     public static int RECONNECTION_INTERVAL = 60;//s
-    public static String INPUT_ADMIN_PASSWORD;
 
 
-    private static Loggist initLoggist() {
-        String currentDir = System.getProperty("user.dir");
-        File logFile = new File(currentDir + File.separator + "logs" + File.separator + Time.getCurrentTimeAsFileName(false) + ".log");
-        Loggist l = new Loggist(logFile);
-        l.openWriteChannel();
-        return l;
+    private static void initLoggist() {
+        if (OUTPUT_FILE_PATH!=null){
+            File logFile = new File(OUTPUT_FILE_PATH);
+            if (!logFile.exists()){
+                try {
+                    logFile.createNewFile();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            Loggist l = new Loggist(logFile);
+            l.openWriteChannel();
+            NeoLink.loggist=l;
+        }else {
+            String currentDir = System.getProperty("user.dir");
+            File logFile = new File(currentDir + File.separator + "logs" + File.separator + Time.getCurrentTimeAsFileName(false) + ".log");
+            Loggist l = new Loggist(logFile);
+            l.openWriteChannel();
+            NeoLink.loggist=l;
+        }
     }
 
     private static void checkARGS(String[] args) {
@@ -66,6 +79,7 @@ public class NeoLink {
                 switch (ele[0]) {//--key:aaabbb --localPort:25565
                     case "--key" -> NeoLink.key = ele[1];
                     case "--local-port" -> NeoLink.localPort = Integer.parseInt(ele[1]);
+                    case "--output-file" -> NeoLink.OUTPUT_FILE_PATH = ele[1]+":"+ele[2];
                 }
             }
         }
@@ -73,6 +87,8 @@ public class NeoLink {
 
     public static void main(String[] args) {
         checkARGS(args);
+
+        initLoggist();
 
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
