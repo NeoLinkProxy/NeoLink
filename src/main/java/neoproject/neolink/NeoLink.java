@@ -66,14 +66,8 @@ public class NeoLink {
                 switch (ele[0]) {//--key:aaabbb --localPort:25565
                     case "--key" -> NeoLink.key = ele[1];
                     case "--local-port" -> NeoLink.localPort = Integer.parseInt(ele[1]);
-                    case "--admin" -> NeoLink.INPUT_ADMIN_PASSWORD = ele[1];
                 }
             }
-        }
-
-        if (INPUT_ADMIN_PASSWORD != null) {
-            //TODO Somethings
-            System.exit(2);
         }
     }
 
