@@ -74,12 +74,12 @@ public class NeoLink {
                 case "--no-color" -> loggist.disableColor();
                 case "--debug" -> IS_DEBUG_MODE = true;
             }
-            if (arg.contains(":")) {
-                String[] ele = arg.split(":");
-                switch (ele[0]) {//--key:aaabbb --localPort:25565
+            if (arg.contains("=")) {
+                String[] ele = arg.split("=");
+                switch (ele[0]) {//--key=aaabbb --localPort=25565
                     case "--key" -> NeoLink.key = ele[1];
                     case "--local-port" -> NeoLink.localPort = Integer.parseInt(ele[1]);
-                    case "--output-file" -> NeoLink.OUTPUT_FILE_PATH = ele[1]+":"+ele[2];
+                    case "--output-file" -> NeoLink.OUTPUT_FILE_PATH = ele[1];
                 }
             }
         }
