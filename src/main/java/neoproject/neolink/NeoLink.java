@@ -30,7 +30,6 @@ public class NeoLink {
     public static String LOCAL_DOMAIN_NAME = "127.0.0.1";
     public static int HOST_HOOK_PORT = 801;
     public static int HOST_CONNECT_PORT = 802;
-    public static int UPDATE_PORT = 803;
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static SecureSocket hookSocket;
     public static String key = null;

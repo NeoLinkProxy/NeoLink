@@ -34,7 +34,6 @@ public class ConfigOperator {
                 NeoLink.LOCAL_DOMAIN_NAME = lineConfigReader.get("LOCAL_DOMAIN_NAME");
                 NeoLink.HOST_HOOK_PORT = Integer.parseInt(lineConfigReader.get("HOST_HOOK_PORT"));
                 NeoLink.HOST_CONNECT_PORT = Integer.parseInt(lineConfigReader.get("HOST_CONNECT_PORT"));
-                NeoLink.UPDATE_PORT = Integer.parseInt(lineConfigReader.get("UPDATE_PORT"));
                 NeoLink.ENABLE_AUTO_RECONNECT = Boolean.parseBoolean(lineConfigReader.get("ENABLE_AUTO_RECONNECT"));
                 NeoLink.RECONNECTION_INTERVAL = Integer.parseInt(lineConfigReader.get("RECONNECTION_INTERVAL"));
                 ProxyOperator.PROXY_IP_TO_NEO_SERVER = lineConfigReader.get("PROXY_IP_TO_NEO_SERVER");
@@ -66,7 +65,6 @@ public class ConfigOperator {
                     LOCAL_DOMAIN_NAME=localhost
                     HOST_HOOK_PORT=801
                     HOST_CONNECT_PORT=802
-                    UPDATE_PORT=803
                     
                     #设置用来连接本地服务器的代理服务器ip和端口，示例：socks->127.0.0.1:7890 如果需要登录则提供密码， 格式： ip:端口@用户名:密码   示例：socks->127.0.0.1:7890@Ceroxe;123456   如果不需要去请留空
                     #Set the proxy server IP address and port to connect to the on-premises server,Example: socks->127.0.0.1:7890 Provide password if login is required, Format: type->ip:port@username:password Example: socks->127.0.0.1:7890@Ceroxe;123456   If you don't need to go, leave it blank
