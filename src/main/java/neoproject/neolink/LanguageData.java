@@ -5,6 +5,8 @@ import java.io.Serializable;
 import static neoproject.neolink.NeoLink.say;
 
 public class LanguageData implements Serializable {
+    private String currentLanguage = "en";
+
     public String SERVER_IS_OFFLINE = "The server is offline.";
     public String IT_MUST_BE_INT = "This should be an integer.";
     public String PORT_OUT_OF_RANGE_MSG = "The input port range should be between 1~65535.";
@@ -26,16 +28,10 @@ public class LanguageData implements Serializable {
     public String DESTROY = " destroyed";
     public String FAIL_TO_CONNECT_LOCALHOST = "Fail to connect to " + NeoLink.LOCAL_DOMAIN_NAME + ":";
     public String TOO_LONG_LATENCY_MSG = "Delay greater than 200 milliseconds, please note!";
-    public String WARNING_HTTPS_MODE_MSG = "Warning, HTTPS mode enabled";
-    public String NOTICE_LOCAL_FORWARDING = "Note that local forwarding mode has been activated.";
-    public String UNABLE_TO_CREATE_DEFAULT_KEYSTORE_FILE = "Unable to create default keystore file.";
-    public String CERTIFICATE_NOT_FOUND_USE_DEFAULT = "Certificate not found, use the default test certificate";
-    public String PASSWORD_VARIABLE_NOT_SET = "The environment variable KEYSTORE_PASSWORD is not set";
     public String LOAD = "Load ";
     public String AS_A_CERTIFICATE = " as a certificate";
     public String LISTEN_AT = "Listen at ";
-    public String WARNING_SSLTER = "Note that SSL termination mode is enabled.";
-    private String currentLanguage = "en";
+    public String NO_FLOW_LEFT = "No extra network traffic left.";
 
 
     public void sayReconnectMsg(int second) {
@@ -71,15 +67,10 @@ public class LanguageData implements Serializable {
         languageData.DOWNLOAD_SUCCESS = "下载更新成功。";
         languageData.PLEASE_RUN = "请运行 ";
         languageData.TOO_LONG_LATENCY_MSG = "延迟大于200毫秒，请注意。";
-        languageData.WARNING_HTTPS_MODE_MSG = "注意，https模式已启用。";
-        languageData.NOTICE_LOCAL_FORWARDING = "注意，启动了本地转发模式。";
-        languageData.UNABLE_TO_CREATE_DEFAULT_KEYSTORE_FILE = "无法创建默认的keystore证书。";
-        languageData.CERTIFICATE_NOT_FOUND_USE_DEFAULT = "找不到证书，使用默认测试证书。";
-        languageData.PASSWORD_VARIABLE_NOT_SET = "环境变量 KEYSTORE_PASSWORD 并没有设置。";
         languageData.LOAD = "加载 ";
         languageData.AS_A_CERTIFICATE = " 作为证书。";
         languageData.LISTEN_AT = "监听端口： ";
-        languageData.WARNING_SSLTER = "注意，启用了 SSL 终止模式。";
+        languageData.NO_FLOW_LEFT = "没有多余的流量了。";
         return languageData;
     }
 

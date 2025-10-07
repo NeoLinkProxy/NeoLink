@@ -1,8 +1,6 @@
 package neoproject.neolink;
 
 
-import plethora.net.SecureSocket;
-
 import java.io.Closeable;
 import java.io.IOException;
 
@@ -28,8 +26,7 @@ public class InternetOperator {
         }
     }
 
-    public static String getInternetAddressAndPort(SecureSocket socket) {
-        return socket.getInetAddress().toString().replaceAll("/", "") + ":" + socket.getPort();
+    public static byte[] receiveBytes() throws IOException {
+        return hookSocket.receiveByte();
     }
-
 }

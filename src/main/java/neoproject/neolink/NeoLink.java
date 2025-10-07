@@ -2,7 +2,6 @@ package neoproject.neolink;
 
 import neoproject.neolink.threads.CheckAliveThread;
 import neoproject.neolink.threads.Transformer;
-import plethora.management.bufferedFile.SizeCalculator;
 import plethora.net.NetworkUtils;
 import plethora.net.SecureSocket;
 import plethora.os.detect.OSDetector;
@@ -15,7 +14,10 @@ import plethora.time.Time;
 import plethora.utils.Sleeper;
 import plethora.utils.StringUtils;
 
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.Socket;
 import java.util.Locale;
 import java.util.Scanner;
@@ -45,9 +47,9 @@ public class NeoLink {
 
 
     private static void initLoggist() {
-        if (OUTPUT_FILE_PATH!=null){
+        if (OUTPUT_FILE_PATH != null) {
             File logFile = new File(OUTPUT_FILE_PATH);
-            if (!logFile.exists()){
+            if (!logFile.exists()) {
                 try {
                     logFile.createNewFile();
                 } catch (IOException e) {
@@ -56,13 +58,13 @@ public class NeoLink {
             }
             Loggist l = new Loggist(logFile);
             l.openWriteChannel();
-            NeoLink.loggist=l;
-        }else {
+            NeoLink.loggist = l;
+        } else {
             String currentDir = System.getProperty("user.dir");
             File logFile = new File(currentDir + File.separator + "logs" + File.separator + Time.getCurrentTimeAsFileName(false) + ".log");
             Loggist l = new Loggist(logFile);
             l.openWriteChannel();
-            NeoLink.loggist=l;
+            NeoLink.loggist = l;
         }
     }
 
@@ -147,7 +149,8 @@ public class NeoLink {
                 String[] ele = msg.split(";");
                 if (ele[0].equals("sendSocket")) {//:>sendSocket;
                     new Thread(() -> NeoLink.createNewConnection(ele[1])).start();
-                } else if (ele[0].equals("exit")) {
+                } else if (ele[0].equals("exitNoFlow")) {
+                    say(languageData.NO_FLOW_LEFT, LogType.ERROR);
                     exitAndFreeze(0);
                 } else {
                     NeoLink.REMOTE_PORT = Integer.parseInt(ele[0]);
@@ -233,10 +236,9 @@ public class NeoLink {
             loggist.say(new State(LogType.ERROR, "SERVER", str));
             String versions = str.split(":")[1];
             String[] ver = versions.split("\\|");
-            String version = ver[ver.length - 1];
+            String version = ver[ver.length - 1];//取最新的
 
             checkUpdate(CLIENT_FILE_PREFIX + version);//it will exit!
-
         } else if (str.contains("exit") || str.contains("退") || str.contains("错误") || str.contains("denied") || str.contains("already") || str.contains("过期") || str.contains("占")) {
             say(str);
             exitAndFreeze(0);
@@ -258,69 +260,60 @@ public class NeoLink {
     public static void checkUpdate(String fileName) {
         try {
             boolean isWindows = OSDetector.isWindows();
-
-            File clientFile;
-            if (isWindows) {
-                clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".exe");
+            if (isWindows) {//告诉服务端是什么版本，exe，jar
+                sendStr("exe");
             } else {
-                clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".jar");
+                sendStr("jar");
             }
 
-            if (clientFile.exists()) {
+            boolean canDownload = Boolean.parseBoolean(receiveStr());
+            if (canDownload) {
+
+                File clientFile;
                 if (isWindows) {
-                    clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".exe"));
+                    clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".exe");
                 } else {
-                    clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".jar"));
+                    clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".jar");
                 }
-                clientFile.createNewFile();
-            } else {
-                clientFile.createNewFile();
-            }
 
-            Socket socket = new Socket(REMOTE_DOMAIN_NAME, UPDATE_PORT);
-            BufferedInputStream clientBufferedInputStream = new BufferedInputStream(socket.getInputStream());
-            BufferedOutputStream clientBufferedOutputStream = new BufferedOutputStream(socket.getOutputStream());
-            BufferedOutputStream fileBufferedOutputStream = new BufferedOutputStream(new FileOutputStream(clientFile));
-
-            if (isWindows) {
-                clientBufferedOutputStream.write(0);
-                clientBufferedOutputStream.flush();//告诉服务端是什么版本，0：exe，1：jar
-            } else {
-                clientBufferedOutputStream.write(1);
-                clientBufferedOutputStream.flush();//告诉服务端是什么版本，0：exe，1：jar
-            }
-
-            sayInfoNoNewLine(languageData.START_TO_DOWNLOAD_UPDATE);
-
-            byte[] data = new byte[(int) SizeCalculator.mibToByte(5)];
-            int len;
-            while ((len = clientBufferedInputStream.read(data)) != -1) {
-                fileBufferedOutputStream.write(data, 0, len);
-                fileBufferedOutputStream.flush();
-                System.out.print(".");
-            }
-            fileBufferedOutputStream.close();
-            clientBufferedInputStream.close();
-
-            System.out.println();
-
-            say(languageData.DOWNLOAD_SUCCESS);
-
-            if (isWindows) {
-                String command = "cmd.exe /c start \"" + clientFile.getName() + "\" " + "\"" + clientFile.getAbsolutePath() + "\"";
-                if (key != null) {
-                    command = command + " --key:" + key;
+                if (clientFile.exists()) {
+                    if (isWindows) {
+                        clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".exe"));
+                    } else {
+                        clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".jar"));
+                    }
+                    clientFile.createNewFile();
+                } else {
+                    clientFile.createNewFile();
                 }
-                if (localPort != -1) {
-                    command = command + " --local-port:" + localPort;
-                }
-                WindowsOperation.run(command);
-                System.exit(0);
-            } else {
-                say(languageData.PLEASE_RUN + clientFile.getAbsolutePath());
-            }
 
-            exitAndFreeze(0);
+                say(languageData.START_TO_DOWNLOAD_UPDATE);
+                byte[] newClient = receiveBytes();
+
+                BufferedOutputStream fileBufferedOutputStream = new BufferedOutputStream(new FileOutputStream(clientFile));
+                fileBufferedOutputStream.write(newClient);
+                fileBufferedOutputStream.close();
+
+                say(languageData.DOWNLOAD_SUCCESS);
+
+                if (isWindows) {
+                    String command = "cmd.exe /c start \"" + clientFile.getName() + "\" " + "\"" + clientFile.getAbsolutePath() + "\"";
+                    if (key != null) {
+                        command = command + " --key=" + key;
+                    }
+                    if (localPort != -1) {
+                        command = command + " --local-port=" + localPort;
+                    }
+                    WindowsOperation.run(command);
+                    System.exit(0);
+                } else {
+                    say(languageData.PLEASE_RUN + clientFile.getAbsolutePath());
+                }
+
+                exitAndFreeze(0);
+            } else {
+                exitAndFreeze(-1);
+            }
         } catch (IOException e) {
             debugOperation(e);
             say("Fail to check updates.", LogType.ERROR);
@@ -329,7 +322,7 @@ public class NeoLink {
     }
 
     private static String formateClientInfoString(LanguageData languageData, String key) {
-        // zh;version;key;(https-mode->LOCAL_DOMAIN_NAME)
+        // zh;version;key
         return languageData.getCurrentLanguage() + ";" +
                 VersionInfo.VERSION +
                 ";" +
@@ -387,7 +380,7 @@ public class NeoLink {
             Transformer serverToTransferChannelServerThread = new Transformer(server, transferChannelServer);
             Transformer transferChannelServerToServerThread = new Transformer(transferChannelServer, server);
             ThreadManager threadManager = new ThreadManager(serverToTransferChannelServerThread, transferChannelServerToServerThread);
-            threadManager.startAll();
+            threadManager.start();
 
             closeSocket(server);
             closeSocket(transferChannelServer);
