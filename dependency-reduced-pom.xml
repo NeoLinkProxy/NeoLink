@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>neoproject</groupId>
   <artifactId>NeoLink</artifactId>
-  <version>3.3-RELEASE</version>
+  <version>3.5-RELEASE</version>
   <build>
     <plugins>
       <plugin>
@@ -31,5 +31,6 @@
     <maven.compiler.target>21</maven.compiler.target>
     <maven.compiler.source>21</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <javafx.version>21.0.8</javafx.version>
   </properties>
 </project>
