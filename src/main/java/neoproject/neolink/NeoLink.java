@@ -1,5 +1,6 @@
 package neoproject.neolink;
 
+import neoproject.neolink.gui.AppStart;
 import neoproject.neolink.threads.CheckAliveThread;
 import neoproject.neolink.threads.Transformer;
 import plethora.net.NetworkUtils;
@@ -62,11 +63,18 @@ public class NeoLink {
      * 这是修复 `java.util.NoSuchElementException: No line found` 的关键。
      */
     public static Scanner inputScanner;
+    private static boolean isGUIMode=false;
 
     // ==================== 主流程 ====================
     public static void main(String[] args) {
         parseCommandLineArgs(args);
         // 在初始化日志前检测语言，以确保日志也可能是中文的
+
+        if (isGUIMode){
+            AppStart.main(args);
+            System.exit(0);
+        }
+
         initializeLogger();
         detectLanguage();
 
@@ -141,6 +149,7 @@ public class NeoLink {
             case "--zh-ch" -> languageData = LanguageData.getChineseLanguage();
             case "--no-color" -> loggist.disableColor();
             case "--debug" -> isDebugMode = true;
+            case "--gui" -> isGUIMode = true;
         }
     }
 
