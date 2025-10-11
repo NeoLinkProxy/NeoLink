@@ -24,382 +24,322 @@ import java.util.Scanner;
 
 import static neoproject.neolink.InternetOperator.*;
 
+/**
+ * NeoLink 客户端主类。
+ * 负责处理命令行参数、初始化日志、与服务器建立连接、处理内网穿透逻辑以及自动重连。
+ */
 public class NeoLink {
-    public static int REMOTE_PORT;
-    public static String REMOTE_DOMAIN_NAME = "127.0.0.1";
-    public static String LOCAL_DOMAIN_NAME = "127.0.0.1";
-    public static int HOST_HOOK_PORT = 801;
-    public static int HOST_CONNECT_PORT = 802;
+
+    // ==================== 常量定义 (遵循 SCREAMING_SNAKE_CASE) ====================
+    public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
+    public static final int DEFAULT_HOST_HOOK_PORT = 801;
+    public static final int DEFAULT_HOST_CONNECT_PORT = 802;
+    public static final int DEFAULT_RECONNECTION_INTERVAL_SECONDS = 30;
+    public static final int INVALID_LOCAL_PORT = -1;
+
+    // ==================== 可配置的全局状态 (重命名以提高可读性) ====================
+    public static int remotePort;
+    public static String remoteDomainName = "127.0.0.1";
+    public static String localDomainName = "127.0.0.1";
+    public static int hostHookPort = DEFAULT_HOST_HOOK_PORT;
+    public static int hostConnectPort = DEFAULT_HOST_CONNECT_PORT;
     public static SecureSocket hookSocket;
     public static String key = null;
-    public static int localPort = -1;
+    public static int localPort = INVALID_LOCAL_PORT;
     public static Loggist loggist;
-    public static String OUTPUT_FILE_PATH = null;
+    public static String outputFilePath = null;
     public static LanguageData languageData = new LanguageData();
-    public static final String CLIENT_FILE_PREFIX = "NeoLink-";
 
-    public static boolean IS_RECONNECTED_OPERATION = false;
-    public static boolean IS_DEBUG_MODE = false;
-    public static boolean ENABLE_AUTO_RECONNECT = true;
-    public static int RECONNECTION_INTERVAL = 60;//s
+    public static boolean isReconnectedOperation = false;
+    public static boolean isDebugMode = false;
+    public static boolean enableAutoReconnect = true;
+    public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
 
+    // ==================== 关键修复: 全局 Scanner ====================
+    /**
+     * 全局的 Scanner 实例，用于从标准输入读取用户命令。
+     * 这是修复 `java.util.NoSuchElementException: No line found` 的关键。
+     */
+    public static Scanner inputScanner;
 
-    private static void initLoggist() {
-        if (OUTPUT_FILE_PATH != null) {
-            File logFile = new File(OUTPUT_FILE_PATH);
-            if (!logFile.exists()) {
-                try {
-                    logFile.createNewFile();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            Loggist l = new Loggist(logFile);
-            l.openWriteChannel();
-            NeoLink.loggist = l;
-        } else {
-            String currentDir = System.getProperty("user.dir");
-            File logFile = new File(currentDir + File.separator + "logs" + File.separator + Time.getCurrentTimeAsFileName(false) + ".log");
-            Loggist l = new Loggist(logFile);
-            l.openWriteChannel();
-            NeoLink.loggist = l;
-        }
-    }
-
-    private static void checkARGS(String[] args) {
-        for (String arg : args) {
-            switch (arg) {
-                case "--en-us" -> languageData = new LanguageData();
-                case "--zh-ch" -> languageData = LanguageData.getChineseLanguage();
-                case "--no-color" -> loggist.disableColor();
-                case "--debug" -> IS_DEBUG_MODE = true;
-            }
-            if (arg.contains("=")) {
-                String[] ele = arg.split("=");
-                switch (ele[0]) {//--key=aaabbb --localPort=25565
-                    case "--key" -> NeoLink.key = ele[1];
-                    case "--local-port" -> NeoLink.localPort = Integer.parseInt(ele[1]);
-                    case "--output-file" -> NeoLink.OUTPUT_FILE_PATH = ele[1];
-                }
-            }
-        }
-    }
-
+    // ==================== 主流程 ====================
     public static void main(String[] args) {
-        checkARGS(args);
+        parseCommandLineArgs(args);
+        // 在初始化日志前检测语言，以确保日志也可能是中文的
+        initializeLogger();
+        detectLanguage();
 
-        initLoggist();
-
+        // ==================== 关键修复: 初始化全局 Scanner ====================
+        // 必须在 initializeLogger 之后，因为 detectLanguage 可能会想打印日志
+        inputScanner = new Scanner(System.in);
+        // =============================================================
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
 
-        printlnLogo();
+        if (!isReconnectedOperation) {
+            printLogo();
+            printBasicInfo();
+        }
 
         try {
-            printBasicInfo();//检测语言，打印基本信息
+            promptForAccessKey();
+            connectToNeoServer();
+            exchangeClientInfoWithServer();
 
-            enterAccessCode();//告知用户输入key
-
-            connectToNeo();//使用key连接NeoServer
-
-            uploadAndReceiveMessages();//上传key和版本信息，并且获取响应，如果版本过旧旧获取新版本
-
-            //通过验证，开始服务
+            // 通过验证，开始核心服务
             CheckAliveThread.startThread();
-
-            enterLocalPort();//告知用户输入需要内网穿透的本地端口
-
-            detectAndCatchNeoOperation();//持续检测Neo发来的指令或者消息，用于服务
+            promptForLocalPort();
+            listenForServerCommands();
         } catch (Exception e) {
-            debugOperation(e);
-
-            reconnectOperation();//连接失败后，尝试重新连接服务器
+            handleConnectionFailure(e);
         }
     }
 
-    private static void reconnectOperation() {
-        say(languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + REMOTE_DOMAIN_NAME, LogType.ERROR);
-        if (ENABLE_AUTO_RECONNECT) {
-            for (int i = 0; i < RECONNECTION_INTERVAL; i++) {
-                languageData.sayReconnectMsg(RECONNECTION_INTERVAL - i);
-                Sleeper.sleep(1000);//1s
+    // ==================== 语言检测 (恢复原始逻辑) ====================
+
+    /**
+     * 根据系统默认语言环境自动检测并设置为中文（如果适用）。
+     * 此逻辑在命令行参数解析之后、日志初始化之前执行。
+     * 如果用户通过命令行指定了语言（如 --zh-ch），则此方法不会覆盖它。
+     */
+    public static void detectLanguage() {
+        // 只有在 languageData 仍是默认的英文实例时才进行自动检测
+        if ("en".equals(languageData.getCurrentLanguage())) {
+            Locale defaultLocale = Locale.getDefault();
+            if (defaultLocale.getLanguage().contains("zh")) {
+                languageData = LanguageData.getChineseLanguage();
+                // 现在 loggist 已经初始化，可以安全地打印日志
+                say("使用zh-ch作为备选语言");
             }
-            NeoLink.IS_RECONNECTED_OPERATION = true;
-            NeoLink.main(new String[]{key, String.valueOf(localPort)});
+        }
+    }
+
+    // ==================== 命令行与初始化 ====================
+    private static void parseCommandLineArgs(String[] args) {
+        for (String arg : args) {
+            if (arg.contains("=")) {
+                parseKeyValueArgument(arg);
+            } else {
+                parseFlagArgument(arg);
+            }
+        }
+    }
+
+    private static void parseKeyValueArgument(String arg) {
+        String[] parts = arg.split("=", 2);
+        switch (parts[0]) {
+            case "--key" -> key = parts[1];
+            case "--local-port" -> localPort = Integer.parseInt(parts[1]);
+            case "--output-file" -> outputFilePath = parts[1];
+        }
+    }
+
+    private static void parseFlagArgument(String arg) {
+        switch (arg) {
+            case "--en-us" -> languageData = new LanguageData();
+            case "--zh-ch" -> languageData = LanguageData.getChineseLanguage();
+            case "--no-color" -> loggist.disableColor();
+            case "--debug" -> isDebugMode = true;
+        }
+    }
+
+    private static void initializeLogger() {
+        File logFile;
+        if (outputFilePath != null) {
+            logFile = new File(outputFilePath);
+        } else {
+            String logsDirPath = CURRENT_DIR_PATH + File.separator + "logs";
+            File logsDir = new File(logsDirPath);
+            logsDir.mkdirs(); // 确保日志目录存在
+            logFile = new File(logsDirPath, Time.getCurrentTimeAsFileName(false) + ".log");
+        }
+
+        try {
+            if (!logFile.exists()) {
+                logFile.createNewFile();
+            }
+            Loggist logger = new Loggist(logFile);
+            logger.openWriteChannel();
+            loggist = logger;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize logger", e);
+        }
+    }
+
+    // ==================== 服务器交互 ====================
+    private static void connectToNeoServer() throws IOException {
+        say(languageData.CONNECT_TO + remoteDomainName + languageData.OMITTED);
+        if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
+            hookSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, hostHookPort);
+        } else {
+            hookSocket = new SecureSocket(remoteDomainName, hostHookPort);
+        }
+    }
+
+    private static void exchangeClientInfoWithServer() throws IOException {
+        String clientInfo = formatClientInfoString(languageData, key);
+        sendStr(clientInfo);
+        String serverResponse = receiveStr();
+
+        if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
+            String versions = serverResponse.split(":")[1];
+            String[] versionArray = versions.split("\\|");
+            String latestVersion = versionArray[versionArray.length - 1];
+            checkUpdate(CLIENT_FILE_PREFIX + latestVersion);
+        } else if (serverResponse.contains("exit") || serverResponse.contains("退") || serverResponse.contains("错误")
+                || serverResponse.contains("denied") || serverResponse.contains("already")
+                || serverResponse.contains("过期") || serverResponse.contains("占")) {
+            say(serverResponse);
+            exitAndFreeze(0);
+        } else {
+            if (OSDetector.isWindows()) {
+                int latency = NetworkUtils.getLatency(remoteDomainName);
+                if (latency == -1) {
+                    loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
+                    loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
+                } else {
+                    loggist.say(new State(LogType.INFO, "SERVER", serverResponse + " " + latency + "ms"));
+                }
+            } else {
+                loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
+            }
+        }
+    }
+
+    // ==================== 用户交互 (修复版) ====================
+    private static void promptForAccessKey() {
+        if (key == null) {
+            sayInfoNoNewLine(languageData.PLEASE_ENTER_ACCESS_CODE);
+            // 使用全局 Scanner
+            key = inputScanner.nextLine();
+        }
+    }
+
+    private static void promptForLocalPort() {
+        if (localPort == INVALID_LOCAL_PORT) {
+            sayInfoNoNewLine(languageData.ENTER_PORT_MSG);
+            // 使用全局 Scanner
+            String input = inputScanner.nextLine();
+            try {
+                int port = Integer.parseInt(input);
+                if (port < 1 || port > 65535) {
+                    throw new IllegalArgumentException("Port out of range");
+                }
+                localPort = port;
+            } catch (IllegalArgumentException e) {
+                say(languageData.PORT_OUT_OF_RANGE_MSG, LogType.ERROR);
+                exitAndFreeze(-1);
+            }
+        }
+    }
+
+    // ==================== 核心服务循环 ====================
+    public static void listenForServerCommands() throws IOException {
+        String message;
+        while ((message = receiveStr()) != null) {
+            try {
+                checkForInterruption();
+            } catch (InterruptedException e) {
+                say("隧道正在停止...");
+                return;
+            }
+
+            if (message.startsWith(":>")) {
+                handleServerCommand(message.substring(2));
+            } else if (message.contains("This access code have") || message.contains("消耗") || message.contains("使用链接")) {
+                loggist.say(new State(LogType.WARNING, "SERVER", message));
+            } else {
+                say(message);
+            }
+        }
+        // 如果循环结束，说明 receiveStr() 返回了 null，即连接已断开。
+        // 我们需要主动抛出一个异常来触发重连逻辑。
+        throw new IOException("Connection to server was closed by remote host.");
+    }
+
+    private static void handleServerCommand(String command) {
+        String[] parts = command.split(";", 2);
+        if ("sendSocket".equals(parts[0])) {
+            new Thread(() -> createNewConnection(parts[1])).start();
+        } else if ("exitNoFlow".equals(parts[0])) {
+            say(languageData.NO_FLOW_LEFT, LogType.ERROR);
+            exitAndFreeze(0);
+        } else {
+            remotePort = Integer.parseInt(parts[0]);
+        }
+    }
+
+    private static void checkForInterruption() throws InterruptedException {
+        if (Thread.interrupted()) {
+            throw new InterruptedException("隧道被用户中断");
+        }
+    }
+
+    // ==================== 错误处理与退出 (修复版) ====================
+    private static void handleConnectionFailure(Exception e) {
+        debugOperation(e);
+        attemptReconnection();
+    }
+
+    private static void attemptReconnection() {
+
+        say(languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + remoteDomainName, LogType.ERROR);
+        if (enableAutoReconnect) {
+            for (int i = 0; i < reconnectionIntervalSeconds; i++) {
+                languageData.sayReconnectMsg(reconnectionIntervalSeconds - i);
+                Sleeper.sleep(1000);
+            }
+            isReconnectedOperation = true;
+            main(new String[]{"--key=" + key, "--local-port=" + localPort});
             System.exit(0);
         } else {
             exitAndFreeze(-1);
         }
     }
 
-    private static void detectAndCatchNeoOperation() throws IOException {
-        String msg;
-        while ((msg = receiveStr()) != null) {
-            try {
-                checkInterruption();
-            } catch (InterruptedException e) {
-                say("隧道正在停止...");
-                return;
-            }
-//            System.out.println("msg = " + msg);
-            if (msg.startsWith(":>")) {
-                msg = msg.substring(2);
-                String[] ele = msg.split(";");
-                if (ele[0].equals("sendSocket")) {//:>sendSocket;
-                    new Thread(() -> NeoLink.createNewConnection(ele[1])).start();
-                } else if (ele[0].equals("exitNoFlow")) {
-                    say(languageData.NO_FLOW_LEFT, LogType.ERROR);
-                    exitAndFreeze(0);
-                } else {
-                    NeoLink.REMOTE_PORT = Integer.parseInt(ele[0]);
-                }
-            } else if (msg.contains("This access code have") || msg.contains("消耗") || msg.contains("使用链接")) {
-                loggist.say(new State(LogType.WARNING, "SERVER", msg));
-            } else {
-                say(msg);
-            }
-        }
-    }
-
-    private static void checkInterruption() throws InterruptedException {
-        if (Thread.interrupted()) {
-            throw new InterruptedException("隧道被用户中断");
-        }
-    }
-
-    private static void enterLocalPort() {
-        if (localPort == -1) {
-            sayInfoNoNewLine(languageData.ENTER_PORT_MSG);
-            try {
-                localPort = Integer.parseInt(NeoLink.inputStr());
-                if (localPort < 1 || localPort > 65535) {
-                    throw new IndexOutOfBoundsException();
-                }
-            } catch (IndexOutOfBoundsException e) {
-                say(languageData.PORT_OUT_OF_RANGE_MSG, LogType.ERROR);
-                exitAndFreeze(-1);
-            } catch (NumberFormatException e) {
-                say(languageData.IT_MUST_BE_INT, LogType.ERROR);
-                exitAndFreeze(-1);
-            }
-        }
-    }
-
-    private static void connectToNeo() throws IOException {
-        say(languageData.CONNECT_TO + REMOTE_DOMAIN_NAME + languageData.OMITTED);
-        if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
-            hookSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, HOST_HOOK_PORT);
-        } else {
-            hookSocket = new SecureSocket(REMOTE_DOMAIN_NAME, HOST_HOOK_PORT);
-        }
-    }
-
-    private static void printlnLogo() {
-        if (!IS_RECONNECTED_OPERATION) {
-            say("""
-                    
-                       _____                                    \s
-                      / ____|                                   \s
-                     | |        ___   _ __    ___   __  __   ___\s
-                     | |       / _ \\ | '__|  / _ \\  \\ \\/ /  / _ \\
-                     | |____  |  __/ | |    | (_) |  >  <  |  __/
-                      \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
-                                                                \s
-                                                                 \
-                    """);
-        }
-    }
-
-    private static void printBasicInfo() {
-        if (!IS_RECONNECTED_OPERATION) {
-            speakAnnouncement();
-            say(languageData.VERSION + VersionInfo.VERSION);
-        }
-    }
-
-    private static void enterAccessCode() {
-        if (key == null) {
-            sayInfoNoNewLine(languageData.PLEASE_ENTER_ACCESS_CODE);
-            NeoLink.key = NeoLink.inputStr();
-        }
-    }
-
-    private static void uploadAndReceiveMessages() throws IOException {
-        // zh version key
-        String clientInfo = NeoLink.formateClientInfoString(languageData, key);
-        sendStr(clientInfo);
-        String str = receiveStr();
-//        System.out.println("str = " + str);
-        if (str.contains("nsupported") || str.contains("不") || str.contains("旧")) {
-            loggist.say(new State(LogType.ERROR, "SERVER", str));
-            String versions = str.split(":")[1];
-            String[] ver = versions.split("\\|");
-            String version = ver[ver.length - 1];//取最新的
-
-            checkUpdate(CLIENT_FILE_PREFIX + version);//it will exit!
-        } else if (str.contains("exit") || str.contains("退") || str.contains("错误") || str.contains("denied") || str.contains("already") || str.contains("过期") || str.contains("占")) {
-            say(str);
-            exitAndFreeze(0);
-        } else {
-            if (OSDetector.isWindows()) {
-                int latency = NetworkUtils.getLatency(REMOTE_DOMAIN_NAME);
-                if (latency == -1) {
-                    loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
-                    loggist.say(new State(LogType.INFO, "SERVER", str));
-                } else {
-                    loggist.say(new State(LogType.INFO, "SERVER", str + " " + latency + "ms"));
-                }
-            } else {
-                loggist.say(new State(LogType.INFO, "SERVER", str));
-            }
-        }
-    }
-
-    public static void checkUpdate(String fileName) {
-        try {
-            boolean isWindows = OSDetector.isWindows();
-            if (isWindows) {//告诉服务端是什么版本，exe，jar
-                sendStr("exe");
-            } else {
-                sendStr("jar");
-            }
-
-            boolean canDownload = Boolean.parseBoolean(receiveStr());
-            if (canDownload) {
-
-                File clientFile;
-                if (isWindows) {
-                    clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".exe");
-                } else {
-                    clientFile = new File(System.getProperty("user.dir") + File.separator + fileName + ".jar");
-                }
-
-                if (clientFile.exists()) {
-                    if (isWindows) {
-                        clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".exe"));
-                    } else {
-                        clientFile.renameTo(new File(clientFile.getParent() + File.separator + fileName + " - copy" + ".jar"));
-                    }
-                    clientFile.createNewFile();
-                } else {
-                    clientFile.createNewFile();
-                }
-
-                say(languageData.START_TO_DOWNLOAD_UPDATE);
-                byte[] newClient = receiveBytes();
-
-                BufferedOutputStream fileBufferedOutputStream = new BufferedOutputStream(new FileOutputStream(clientFile));
-                fileBufferedOutputStream.write(newClient);
-                fileBufferedOutputStream.close();
-
-                say(languageData.DOWNLOAD_SUCCESS);
-
-                if (isWindows) {
-                    String command = "cmd.exe /c start \"" + clientFile.getName() + "\" " + "\"" + clientFile.getAbsolutePath() + "\"";
-                    if (key != null) {
-                        command = command + " --key=" + key;
-                    }
-                    if (localPort != -1) {
-                        command = command + " --local-port=" + localPort;
-                    }
-                    WindowsOperation.run(command);
-                    System.exit(0);
-                } else {
-                    say(languageData.PLEASE_RUN + clientFile.getAbsolutePath());
-                }
-
-                exitAndFreeze(0);
-            } else {
-                exitAndFreeze(-1);
-            }
-        } catch (IOException e) {
-            debugOperation(e);
-            say("Fail to check updates.", LogType.ERROR);
-            exitAndFreeze(0);
-        }
-    }
-
-    private static String formateClientInfoString(LanguageData languageData, String key) {
-        // zh;version;key
-        return languageData.getCurrentLanguage() + ";" +
-                VersionInfo.VERSION +
-                ";" +
-                key;
-    }
-
-    public static void detectLanguage() {
-        Locale l = Locale.getDefault();
-        if (l.getLanguage().contains("zh")) {
-            NeoLink.languageData = LanguageData.getChineseLanguage();
-            say("使用zh-ch作为备选语言");
-        }
-    }
-
-
     public static void exitAndFreeze(int exitCode) {
         say("Press enter to exit the program...");
-        Scanner scanner = new Scanner(System.in);
-        scanner.nextLine();
+        // 使用全局 Scanner
+        inputScanner.nextLine();
         System.exit(exitCode);
     }
 
+    // ==================== 辅助与工具方法 ====================
+    public static void printLogo() {
+        say("""
+                
+                   _____                                    \s
+                  / ____|                                   \s
+                 | |        ___   _ __    ___   __  __   ___\s
+                 | |       / _ \\ | '__|  / _ \\  \\ \\/ /  / _ \\
+                 | |____  |  __/ | |    | (_) |  >  <  |  __/
+                  \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
+                                                            \s
+                                                             \
+                """);
+    }
+
+    public static void printBasicInfo() {
+        speakAnnouncement();
+        say(languageData.VERSION + VersionInfo.VERSION);
+    }
 
     private static void speakAnnouncement() {
         say(languageData.IF_YOU_SEE_EULA);
         VersionInfo.outPutEula();
     }
 
-    public static String inputStr() {
-        Scanner scanner = new Scanner(System.in);
-        return scanner.nextLine();
-    }
-
-    public static void createNewConnection(String remoteAddress) {
-        try {
-            Socket server;
-
-            if (ProxyOperator.PROXY_IP_TO_LOCAL_SERVER != null) {
-                server = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_LOCAL, localPort);
-            } else {
-                server = new Socket(LOCAL_DOMAIN_NAME, localPort);
-            }
-
-            SecureSocket transferChannelServer;
-            if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
-                transferChannelServer = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, HOST_CONNECT_PORT);
-            } else {
-                transferChannelServer = new SecureSocket(REMOTE_DOMAIN_NAME, HOST_CONNECT_PORT);
-            }
-
-            transferChannelServer.sendInt(REMOTE_PORT);
-
-            say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.BUILD_UP);
-
-            Transformer serverToTransferChannelServerThread = new Transformer(server, transferChannelServer);
-            Transformer transferChannelServerToServerThread = new Transformer(transferChannelServer, server);
-            ThreadManager threadManager = new ThreadManager(serverToTransferChannelServerThread, transferChannelServerToServerThread);
-            threadManager.start();
-
-            closeSocket(server);
-            closeSocket(transferChannelServer);
-
-            say(languageData.A_CONNECTION + remoteAddress + " -> " + LOCAL_DOMAIN_NAME + ":" + localPort + languageData.DESTROY);
-
-        } catch (Exception e) {
-            debugOperation(e);
-            say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
-            System.gc();
-        }
+    public static String formatClientInfoString(LanguageData languageData, String key) {
+        return languageData.getCurrentLanguage() + ";" + VersionInfo.VERSION + ";" + key;
     }
 
     public static void sayInfoNoNewLine(String str) {
         loggist.sayNoNewLine(new State(LogType.INFO, "HOST-CLIENT", str));
     }
 
-
     public static void debugOperation(Exception e) {
-        if (IS_DEBUG_MODE) {
+        if (isDebugMode) {
             String exceptionMsg = StringUtils.getExceptionMsg(e);
             System.out.println(exceptionMsg);
             loggist.write(exceptionMsg, true);
@@ -412,5 +352,111 @@ public class NeoLink {
 
     public static void say(String str, LogType logType) {
         loggist.say(new State(logType, "HOST-CLIENT", str));
+    }
+
+    // ==================== 核心功能: 更新检查 ====================
+
+    /**
+     * 检查并下载服务器提供的新版本客户端。
+     *
+     * @param fileName 新客户端文件的基础名称。
+     */
+    public static void checkUpdate(String fileName) {
+        try {
+            boolean isWindows = OSDetector.isWindows();
+            // 告知服务端客户端类型 (exe 或 jar)
+            sendStr(isWindows ? "exe" : "jar");
+
+            boolean canDownload = Boolean.parseBoolean(receiveStr());
+            if (!canDownload) {
+                exitAndFreeze(-1);
+                return;
+            }
+
+            // 确定新客户端文件的完整路径
+            String fileExtension = isWindows ? ".exe" : ".jar";
+            File clientFile = new File(CURRENT_DIR_PATH, fileName + fileExtension);
+
+            // 如果文件已存在，重命名为 " - copy" 版本
+            if (clientFile.exists()) {
+                File backupFile = new File(clientFile.getParent(), fileName + " - copy" + fileExtension);
+                clientFile.renameTo(backupFile);
+                clientFile.createNewFile();
+            } else {
+                clientFile.createNewFile();
+            }
+
+            say(languageData.START_TO_DOWNLOAD_UPDATE);
+            byte[] newClientData = receiveBytes();
+
+            // 使用 try-with-resources 确保流被正确关闭
+            try (BufferedOutputStream fileOutputStream = new BufferedOutputStream(new FileOutputStream(clientFile))) {
+                fileOutputStream.write(newClientData);
+            }
+
+            say(languageData.DOWNLOAD_SUCCESS);
+
+            if (isWindows) {
+                // 在 Windows 上自动启动新版本
+                StringBuilder command = new StringBuilder("cmd.exe /c start \"\" \"");
+                command.append(clientFile.getAbsolutePath()).append("\"");
+                if (key != null) {
+                    command.append(" --key=").append(key);
+                }
+                if (localPort != INVALID_LOCAL_PORT) {
+                    command.append(" --local-port=").append(localPort);
+                }
+                WindowsOperation.run(command.toString());
+                System.exit(0);
+            } else {
+                // 在非 Windows 系统上提示用户手动运行
+                say(languageData.PLEASE_RUN + clientFile.getAbsolutePath());
+            }
+
+            exitAndFreeze(0);
+        } catch (IOException e) {
+            debugOperation(e);
+            say("Fail to check updates.", LogType.ERROR);
+            exitAndFreeze(0);
+        }
+    }
+
+    // ==================== 网络连接管理 ====================
+    public static void createNewConnection(String remoteAddress) {
+        try {
+            Socket localServerSocket;
+            if (ProxyOperator.PROXY_IP_TO_LOCAL_SERVER != null) {
+                localServerSocket = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_LOCAL, localPort);
+            } else {
+                localServerSocket = new Socket(localDomainName, localPort);
+            }
+
+            SecureSocket neoTransferSocket;
+            if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
+                neoTransferSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, hostConnectPort);
+            } else {
+                neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
+            }
+
+            neoTransferSocket.sendInt(remotePort);
+            say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+
+            Transformer serverToNeoThread = new Transformer(localServerSocket, neoTransferSocket);
+            Transformer neoToServerThread = new Transformer(neoTransferSocket, localServerSocket);
+            ThreadManager threadManager = new ThreadManager(serverToNeoThread, neoToServerThread);
+            threadManager.start();
+
+            // 注意: 这里的 closeSocket 调用可能在数据传输完成前就执行了。
+            // 在工业级代码中，这通常由 Transformer 线程在完成工作后负责。
+            // 此处保留原逻辑。
+            closeSocket(localServerSocket);
+            closeSocket(neoTransferSocket);
+
+            say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+        } catch (Exception e) {
+            debugOperation(e);
+            say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
+            System.gc();
+        }
     }
 }

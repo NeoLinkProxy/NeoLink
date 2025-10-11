@@ -5,125 +5,153 @@ import plethora.net.SecureSocket;
 import java.io.IOException;
 import java.net.*;
 
-import static neoproject.neolink.NeoLink.LOCAL_DOMAIN_NAME;
-import static neoproject.neolink.NeoLink.REMOTE_DOMAIN_NAME;
+import static neoproject.neolink.NeoLink.localDomainName;
+import static neoproject.neolink.NeoLink.remoteDomainName;
 
+/**
+ * 代理操作器，用于处理通过 HTTP 或 SOCKS 代理连接到 Neo 服务器或本地服务。
+ */
 public class ProxyOperator {
+
+    // 代理到本地服务的配置
     public static String PROXY_IP_TO_LOCAL_SERVER = null;
-    private static Proxy.Type PROXY_IP_TO_LOCAL_SERVER_TYPE = null;
-    private static String PROXY_IP_TO_LOCAL_SERVER_IP = null;
-    private static int PROXY_IP_TO_LOCAL_SERVER_PORT;
-    private static String PROXY_IP_TO_LOCAL_SERVER_USERNAME = null;
-    private static String PROXY_IP_TO_LOCAL_SERVER_PASSWORD = null;
+    private static Proxy.Type proxyToLocalType = null;
+    private static String proxyToLocalIp = null;
+    private static int proxyToLocalPort;
+    private static String proxyToLocalUsername = null;
+    private static String proxyToLocalPassword = null;
 
+    // 代理到 Neo 服务器的配置
     public static String PROXY_IP_TO_NEO_SERVER = null;
-    private static Proxy.Type PROXY_IP_TO_NEO_SERVER_TYPE = null;
-    private static String PROXY_IP_TO_NEO_SERVER_IP = null;
-    private static int PROXY_IP_TO_NEO_SERVE_PORT;
-    private static String PROXY_IP_TO_NEO_SERVER_USERNAME = null;
-    private static String PROXY_IP_TO_NEO_SERVER_PASSWORD = null;
+    private static Proxy.Type proxyToNeoType = null;
+    private static String proxyToNeoIp = null;
+    private static int proxyToNeoPort;
+    private static String proxyToNeoUsername = null;
+    private static String proxyToNeoPassword = null;
 
+    /**
+     * 初始化代理配置，解析命令行或配置文件中提供的代理字符串。
+     */
     public static void init() {
         if (PROXY_IP_TO_LOCAL_SERVER != null) {
-            //socks->127.0.0.1:7890@Ceroxe;123456
-            String[] typeAndProperty = PROXY_IP_TO_LOCAL_SERVER.split("->");
-            if (typeAndProperty[0].equals("socks")) {
-                PROXY_IP_TO_LOCAL_SERVER_TYPE = Proxy.Type.SOCKS;
-            } else if (typeAndProperty[0].equals("http")) {
-                PROXY_IP_TO_LOCAL_SERVER_TYPE = Proxy.Type.HTTP;
-            } else {
-                PROXY_IP_TO_LOCAL_SERVER_TYPE = Proxy.Type.DIRECT;
-            }
-            String[] ele = typeAndProperty[1].split("@");
-            String[] ipAndPort = ele[0].split(":");
-            PROXY_IP_TO_LOCAL_SERVER_IP = ipAndPort[0];
-            PROXY_IP_TO_LOCAL_SERVER_PORT = Integer.parseInt(ipAndPort[1]);
-            if (ele.length != 1) {
-                String[] usernameAndPassword = ele[1].split(";");
-                PROXY_IP_TO_LOCAL_SERVER_USERNAME = usernameAndPassword[0];
-                PROXY_IP_TO_LOCAL_SERVER_PASSWORD = usernameAndPassword[1];
-            }
+            parseProxyConfig(PROXY_IP_TO_LOCAL_SERVER, true);
         }
-
-
         if (PROXY_IP_TO_NEO_SERVER != null) {
-            String[] typeAndProperty = PROXY_IP_TO_NEO_SERVER.split("->");
-            if (typeAndProperty[0].equals("socks")) {
-                PROXY_IP_TO_NEO_SERVER_TYPE = Proxy.Type.SOCKS;
-            } else if (typeAndProperty[0].equals("http")) {
-                PROXY_IP_TO_NEO_SERVER_TYPE = Proxy.Type.HTTP;
-            } else {
-                PROXY_IP_TO_NEO_SERVER_TYPE = Proxy.Type.DIRECT;
-            }
-            String[] ele2 = typeAndProperty[1].split("@");
-            String[] ipAndPort2 = ele2[0].split(":");
-            PROXY_IP_TO_NEO_SERVER_IP = ipAndPort2[0];
-            PROXY_IP_TO_NEO_SERVE_PORT = Integer.parseInt(ipAndPort2[1]);
-            if (ele2.length != 1) {
-                String[] usernameAndPassword2 = ele2[1].split(";");
-                PROXY_IP_TO_NEO_SERVER_USERNAME = usernameAndPassword2[0];
-                PROXY_IP_TO_NEO_SERVER_PASSWORD = usernameAndPassword2[1];
-            }
+            parseProxyConfig(PROXY_IP_TO_NEO_SERVER, false);
         }
-
     }
 
+    private static void parseProxyConfig(String proxyConfig, boolean isLocalProxy) {
+        String[] typeAndProperty = proxyConfig.split("->", 2);
+        Proxy.Type proxyType;
+        if ("socks".equals(typeAndProperty[0])) {
+            proxyType = Proxy.Type.SOCKS;
+        } else if ("http".equals(typeAndProperty[0])) {
+            proxyType = Proxy.Type.HTTP;
+        } else {
+            proxyType = Proxy.Type.DIRECT;
+        }
+
+        String[] authParts = typeAndProperty[1].split("@", 2);
+        String[] ipPortParts = authParts[0].split(":", 2);
+        String ip = ipPortParts[0];
+        int port = Integer.parseInt(ipPortParts[1]);
+
+        String username = null;
+        String password = null;
+        if (authParts.length > 1) {
+            String[] userPass = authParts[1].split(";", 2);
+            username = userPass[0];
+            password = userPass[1];
+        }
+
+        if (isLocalProxy) {
+            proxyToLocalType = proxyType;
+            proxyToLocalIp = ip;
+            proxyToLocalPort = port;
+            proxyToLocalUsername = username;
+            proxyToLocalPassword = password;
+        } else {
+            proxyToNeoType = proxyType;
+            proxyToNeoIp = ip;
+            proxyToNeoPort = port;
+            proxyToNeoUsername = username;
+            proxyToNeoPassword = password;
+        }
+    }
+
+    /**
+     * 创建一个经过代理处理的普通 Socket。
+     */
     public synchronized static Socket getHandledSocket(int socketType, int targetPort) throws IOException {
-        Socket targetSocket;
+        Proxy proxy;
+        String targetHost;
+        int proxyPort;
+        String proxyUsername;
+        String proxyPassword;
+
         if (socketType == Type.TO_NEO) {
-            if (PROXY_IP_TO_NEO_SERVER_USERNAME != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(PROXY_IP_TO_NEO_SERVER_USERNAME, PROXY_IP_TO_NEO_SERVER_PASSWORD.toCharArray());
-                    }
-                });
-            }
-            Proxy proxy = new Proxy(PROXY_IP_TO_NEO_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_NEO_SERVER_IP, PROXY_IP_TO_NEO_SERVE_PORT));
-            targetSocket = new Socket(proxy);
-            targetSocket.connect(new InetSocketAddress(REMOTE_DOMAIN_NAME, targetPort));
+            proxy = new Proxy(proxyToNeoType, new InetSocketAddress(proxyToNeoIp, proxyToNeoPort));
+            targetHost = remoteDomainName;
+            proxyPort = proxyToNeoPort;
+            proxyUsername = proxyToNeoUsername;
+            proxyPassword = proxyToNeoPassword;
         } else {
-            if (PROXY_IP_TO_LOCAL_SERVER_USERNAME != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(PROXY_IP_TO_LOCAL_SERVER_USERNAME, PROXY_IP_TO_LOCAL_SERVER_PASSWORD.toCharArray());
-                    }
-                });
-            }
-            Proxy proxy = new Proxy(PROXY_IP_TO_LOCAL_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_LOCAL_SERVER_IP, PROXY_IP_TO_LOCAL_SERVER_PORT));
-            targetSocket = new Socket(proxy);
-            targetSocket.connect(new InetSocketAddress(LOCAL_DOMAIN_NAME, targetPort));
+            proxy = new Proxy(proxyToLocalType, new InetSocketAddress(proxyToLocalIp, proxyToLocalPort));
+            targetHost = localDomainName;
+            proxyPort = proxyToLocalPort;
+            proxyUsername = proxyToLocalUsername;
+            proxyPassword = proxyToLocalPassword;
         }
-        return targetSocket;
+
+        if (proxyUsername != null) {
+            Authenticator.setDefault(new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(proxyUsername, proxyPassword.toCharArray());
+                }
+            });
+        }
+
+        Socket socket = new Socket(proxy);
+        socket.connect(new InetSocketAddress(targetHost, targetPort));
+        return socket;
     }
 
+    /**
+     * 创建一个经过代理处理的 SecureSocket。
+     */
     public synchronized static SecureSocket getHandledSecureSocket(int socketType, int targetPort) throws IOException {
-        SecureSocket targetSocket;
+        Proxy proxy;
+        String targetHost;
+        int proxyPort;
+        String proxyUsername;
+        String proxyPassword;
+
         if (socketType == Type.TO_NEO) {
-            if (PROXY_IP_TO_NEO_SERVER_USERNAME != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(PROXY_IP_TO_NEO_SERVER_USERNAME, PROXY_IP_TO_NEO_SERVER_PASSWORD.toCharArray());
-                    }
-                });
-            }
-            Proxy proxy = new Proxy(PROXY_IP_TO_NEO_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_NEO_SERVER_IP, PROXY_IP_TO_NEO_SERVE_PORT));
-            targetSocket = new SecureSocket(proxy, REMOTE_DOMAIN_NAME, targetPort);
+            proxy = new Proxy(proxyToNeoType, new InetSocketAddress(proxyToNeoIp, proxyToNeoPort));
+            targetHost = remoteDomainName;
+            proxyPort = proxyToNeoPort;
+            proxyUsername = proxyToNeoUsername;
+            proxyPassword = proxyToNeoPassword;
         } else {
-            if (PROXY_IP_TO_LOCAL_SERVER_USERNAME != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(PROXY_IP_TO_LOCAL_SERVER_USERNAME, PROXY_IP_TO_LOCAL_SERVER_PASSWORD.toCharArray());
-                    }
-                });
-            }
-            Proxy proxy = new Proxy(PROXY_IP_TO_LOCAL_SERVER_TYPE, new InetSocketAddress(PROXY_IP_TO_LOCAL_SERVER_IP, PROXY_IP_TO_LOCAL_SERVER_PORT));
-            targetSocket = new SecureSocket(proxy, REMOTE_DOMAIN_NAME, targetPort);
+            proxy = new Proxy(proxyToLocalType, new InetSocketAddress(proxyToLocalIp, proxyToLocalPort));
+            targetHost = localDomainName; // 修复：这里应该是 localDomainName
+            proxyPort = proxyToLocalPort;
+            proxyUsername = proxyToLocalUsername;
+            proxyPassword = proxyToLocalPassword;
         }
-        return targetSocket;
+
+        if (proxyUsername != null) {
+            Authenticator.setDefault(new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(proxyUsername, proxyPassword.toCharArray());
+                }
+            });
+        }
+
+        return new SecureSocket(proxy, targetHost, targetPort);
     }
 
     public static class Type {

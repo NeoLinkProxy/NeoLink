@@ -8,94 +8,88 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+/**
+ * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
+ */
 public class Transformer implements Runnable {
-    public static int BUFFER_LEN = 117;
-    //
-    private Socket sender;
-    private Socket receiver;
+    public static int BUFFER_LENGTH = 4096;
+    public static final int MODE_NEO_TO_LOCAL = 0;
+    public static final int MODE_LOCAL_TO_NEO = 1;
 
-    private SecureSocket secureSender;
-    private SecureSocket secureReceiver;
+    private final Socket plainSocket;
+    private final SecureSocket secureSocket;
+    private final int mode;
 
-    public int mode;
-    public static final int LOCAL_TO_NEO = 0;
-    public static final int NEO_TO_LOCAL = 1;
-
-    public Transformer(SecureSocket sender, Socket receiver) {
-        this.secureSender = sender;
-        this.receiver = receiver;
-        this.mode = NEO_TO_LOCAL;
+    /**
+     * 构造函数：用于从 Neo 服务器接收数据并转发到本地服务。
+     */
+    public Transformer(SecureSocket secureSender, Socket localReceiver) {
+        this.secureSocket = secureSender;
+        this.plainSocket = localReceiver;
+        this.mode = MODE_NEO_TO_LOCAL;
     }
 
-    public Transformer(Socket sender, SecureSocket receiver) {
-        this.sender = sender;
-        this.secureReceiver = receiver;
-        this.mode = LOCAL_TO_NEO;
+    /**
+     * 构造函数：用于从本地服务接收数据并转发到 Neo 服务器。
+     */
+    public Transformer(Socket localSender, SecureSocket secureReceiver) {
+        this.plainSocket = localSender;
+        this.secureSocket = secureReceiver;
+        this.mode = MODE_LOCAL_TO_NEO;
     }
 
     @Override
-    public void run() {//对象流一定都是AtomServer服务端的，对象流参数前面的Socket一定是通向AtomServer的
-        if (this.mode == Transformer.NEO_TO_LOCAL) {
-            transferDataToLocalServer(secureSender, receiver);
+    public void run() {
+        if (mode == MODE_NEO_TO_LOCAL) {
+            transferDataToLocalServer(secureSocket, plainSocket);
         } else {
-            transferDataToNeoServer(sender, secureReceiver);
+            transferDataToNeoServer(plainSocket, secureSocket);
         }
     }
 
-    public static void transferDataToNeoServer(Socket sender, SecureSocket secureReceiver) {
-        try {
-            BufferedInputStream bufferedInputStream = new BufferedInputStream(sender.getInputStream());
-
-            int realLen;
-            byte[] data = new byte[BUFFER_LEN];
-            while ((realLen = bufferedInputStream.read(data)) != -1) {
-                secureReceiver.sendByte(data, 0, realLen);
-                ;
+    /**
+     * 将数据从本地服务转发到 Neo 服务器。
+     */
+    public static void transferDataToNeoServer(Socket localSender, SecureSocket neoReceiver) {
+        try (BufferedInputStream inputFromLocal = new BufferedInputStream(localSender.getInputStream())) {
+            byte[] buffer = new byte[BUFFER_LENGTH];
+            int bytesRead;
+            while ((bytesRead = inputFromLocal.read(buffer)) != -1) {
+                neoReceiver.sendByte(buffer, 0, bytesRead);
             }
-
-            secureReceiver.sendByte(null);//告知传输完毕
-            sender.shutdownInput();
-
+            neoReceiver.sendByte(null); // 发送结束信号
+            localSender.shutdownInput();
         } catch (Exception e) {
             NeoLink.debugOperation(e);
-
             try {
-
-                secureReceiver.shutdownOutput();//传输出现错误
-                sender.shutdownInput();
-
+                neoReceiver.shutdownOutput();
+                localSender.shutdownInput();
             } catch (IOException ignore) {
+                // 忽略关闭时的异常
             }
-
         }
     }
 
-    public static void transferDataToLocalServer(SecureSocket sender, Socket receiver) {
-        try {
-            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(receiver.getOutputStream());
-
+    /**
+     * 将数据从 Neo 服务器转发到本地服务。
+     */
+    public static void transferDataToLocalServer(SecureSocket neoSender, Socket localReceiver) {
+        try (BufferedOutputStream outputToLocal = new BufferedOutputStream(localReceiver.getOutputStream())) {
             byte[] data;
-            while ((data = sender.receiveByte()) != null) {
-                bufferedOutputStream.write(data);
-                bufferedOutputStream.flush();
+            while ((data = neoSender.receiveByte()) != null) {
+                outputToLocal.write(data);
+                outputToLocal.flush();
             }
-            sender.shutdownInput();
-            receiver.shutdownOutput();
-        } catch (Exception e) {//EOF EXCEPTION !
+            neoSender.shutdownInput();
+            localReceiver.shutdownOutput();
+        } catch (Exception e) {
             NeoLink.debugOperation(e);
             try {
-                sender.shutdownInput();
-                receiver.shutdownOutput();
+                neoSender.shutdownInput();
+                localReceiver.shutdownOutput();
             } catch (IOException ignore) {
+                // 忽略关闭时的异常
             }
         }
-    }
-
-    public SecureSocket getSecureReceiver() {
-        return secureReceiver;
-    }
-
-    public SecureSocket getSecureSender() {
-        return secureSender;
     }
 }

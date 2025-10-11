@@ -1,0 +1,107 @@
+.root {
+    -fx-font-family: "Segoe UI", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+    -fx-font-size: 14px;
+    -fx-background-color: #1e1e1e;
+}
+
+.group-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #ffffff;
+}
+
+.log-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #ffffff;
+}
+
+.text-field, .password-field {
+    -fx-background-color: #2d2d2d;
+    -fx-border-color: #3e3e42;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 8px 10px;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-prompt-text-fill: #888888;
+}
+
+.text-field:focused, .password-field:focused {
+    -fx-border-color: #0078d4;
+    -fx-border-width: 2px;
+}
+
+.button {
+    -fx-background-color: #2d2d2d;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #3e3e42;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 8px 20px;
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+}
+
+.button:hover {
+    -fx-background-color: #3e3e42;
+}
+
+.button:pressed {
+    -fx-background-color: #4a4a4a;
+}
+
+.primary-button {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: white;
+    -fx-border-color: transparent;
+}
+
+.primary-button:hover {
+    -fx-background-color: #106ebe;
+}
+
+.primary-button:pressed {
+    -fx-background-color: #005a9e;
+}
+
+/* --- Custom CheckBox Style for Dark Theme --- */
+.check-box {
+    -fx-label-padding: 0 0 0 30;
+}
+.check-box .box {
+    -fx-background-color: #2d2d2d;
+    -fx-border-color: #3e3e42;
+    -fx-border-width: 2px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px;
+    -fx-effect: null;
+}
+.check-box:hover .box {
+    -fx-border-color: #555555;
+}
+.check-box:selected .box {
+    -fx-background-color: #0078d4;
+    -fx-border-color: #0078d4;
+}
+.check-box .mark {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+.check-box:selected .mark {
+    -fx-background-color: white;
+    -fx-shape: "M2.5 6.5L5.5 9.5L10.5 3.5";
+    -fx-scale-shape: true;
+    -fx-stroke-width: 2px;
+    -fx-padding: 2px 2px 2px 2px;
+}
+.check-box .text {
+    -fx-fill: #ffffff; /* 修复文字太灰的问题 */
+}
+.label {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+}

@@ -11,7 +11,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import static neoproject.neolink.NeoLink.detectLanguage;
 import static neoproject.neolink.NeoLink.say;
 
 
@@ -30,22 +29,21 @@ public class ConfigOperator {
             try {
                 lineConfigReader.load();
 
-                NeoLink.REMOTE_DOMAIN_NAME = lineConfigReader.get("REMOTE_DOMAIN_NAME");
-                NeoLink.LOCAL_DOMAIN_NAME = lineConfigReader.get("LOCAL_DOMAIN_NAME");
-                NeoLink.HOST_HOOK_PORT = Integer.parseInt(lineConfigReader.get("HOST_HOOK_PORT"));
-                NeoLink.HOST_CONNECT_PORT = Integer.parseInt(lineConfigReader.get("HOST_CONNECT_PORT"));
-                NeoLink.ENABLE_AUTO_RECONNECT = Boolean.parseBoolean(lineConfigReader.get("ENABLE_AUTO_RECONNECT"));
-                NeoLink.RECONNECTION_INTERVAL = Integer.parseInt(lineConfigReader.get("RECONNECTION_INTERVAL"));
+                NeoLink.remoteDomainName = lineConfigReader.get("REMOTE_DOMAIN_NAME");
+                NeoLink.localDomainName = lineConfigReader.get("LOCAL_DOMAIN_NAME");
+                NeoLink.hostHookPort = Integer.parseInt(lineConfigReader.get("HOST_HOOK_PORT"));
+                NeoLink.hostConnectPort = Integer.parseInt(lineConfigReader.get("HOST_CONNECT_PORT"));
+                NeoLink.enableAutoReconnect = Boolean.parseBoolean(lineConfigReader.get("ENABLE_AUTO_RECONNECT"));
+                NeoLink.reconnectionIntervalSeconds = Integer.parseInt(lineConfigReader.get("RECONNECTION_INTERVAL"));
                 ProxyOperator.PROXY_IP_TO_NEO_SERVER = lineConfigReader.get("PROXY_IP_TO_NEO_SERVER");
                 ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = lineConfigReader.get("PROXY_IP_TO_LOCAL_SERVER");
                 CheckAliveThread.HEARTBEAT_PACKET_DELAY = Integer.parseInt(lineConfigReader.get("HEARTBEAT_PACKET_DELAY"));
-                Transformer.BUFFER_LEN = Integer.parseInt(lineConfigReader.get("BUFFER_LEN"));
+                Transformer.BUFFER_LENGTH = Integer.parseInt(lineConfigReader.get("BUFFER_LEN"));
 
             } catch (Exception e) {
                 createAndSetDefaultConfig();
             }
         }
-        detectLanguage();
     }
 
     private static void createAndSetDefaultConfig() {

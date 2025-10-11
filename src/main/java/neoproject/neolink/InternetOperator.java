@@ -19,7 +19,9 @@ public class InternetOperator {
     public static void closeSocket(Closeable... closeables) {
         for (Closeable a : closeables) {
             try {
-                a.close();
+                if (a != null) {
+                    a.close();
+                }
             } catch (IOException e) {
                 debugOperation(e);
             }

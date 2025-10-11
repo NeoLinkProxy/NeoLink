@@ -6,10 +6,11 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
 
-import static neoproject.neolink.NeoLink.IS_DEBUG_MODE;
+import static neoproject.neolink.NeoLink.debugOperation;
+
 
 public class VersionInfo {
-    public static final String VERSION = "3.3-RELEASE";
+    public static final String VERSION = "3.4-RELEASE";
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {
@@ -34,10 +35,7 @@ public class VersionInfo {
                         6. Since the intranet penetrating server adopts auction billing, if the business is abnormally interrupted, please notify the author as soon as possible""");
                 bufferedWriter.close();
             } catch (Exception e) {
-                if (IS_DEBUG_MODE) {
-                    e.printStackTrace();
-                }
-                e.printStackTrace();
+                debugOperation(e);
             }
         }
     }
