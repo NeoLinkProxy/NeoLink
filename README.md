@@ -5,6 +5,15 @@
 
 ![Java](https://img.shields.io/badge/Java-21%2B-orange?logo=openjdk&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#许可证)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?logo=windows&logoColor=white)
+![GUI](https://img.shields.io/badge/Interface-JavaFX-blueviolet?logo=javafx)
+![Build](https://img.shields.io/badge/Build-GraalVM%20Native-lightblue?logo=graalvm)
+![Status](https://img.shields.io/badge/Status-Stable-success?logo=github)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?logo=windows&logoColor=white)
+![GUI](https://img.shields.io/badge/Interface-JavaFX-blueviolet?logo=javafx)
+![Build](https://img.shields.io/badge/Build-GraalVM%20Native-lightblue?logo=graalvm)
+![Status](https://img.shields.io/badge/Status-Stable-success?logo=github)
+![Made with Love](https://img.shields.io/badge/Made%20with-%E2%9D%A4-red)
 ---
 
 ## 说明（概览）
@@ -15,21 +24,54 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP 服务�
 > EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
 ---
 
-## 要求
+![图片](/image.jpg "Magic Gardens")
 
-- **Java 21**（EXE 版本无需 Java 环境，要求 Win10 1909+）  
-- 可选：JavaFX（如果要使用 GUI） — 请确保运行环境包含 JavaFX 或使用带 JavaFX 的打包方式。  
-- 网络：能够访问目标 NeoServer（默认端口见配置）。
+## ✨ 特性
+
+- **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
+- **Minecraft 优先**：默认针对 Minecraft TCP 服务（如 25565 端口）优化。
+- **通用 TCP 支持**：除 HTTPS 外，所有 TCP 服务均可穿透（技术上支持，但官方仅对 Minecraft 提供完整支持）。
+- **双模式运行**：命令行（CLI）适合服务器部署，图形界面（GUI）适合新手。
+- **自动重连**：连接断开后自动重试，保障服务高可用。
+- **代理支持**：支持 HTTP / SOCKS5 代理连接 Neo 服务器或本地服务。
+- **多语言**：自动识别系统语言（中/英），也可通过参数强制指定。
+- **自动更新**：服务端可推送新版本，Windows 下自动下载并重启。
+- **日志记录**：所有操作自动记录到 `logs/` 目录。
+- **心跳保活**：维持长连接，防止 NAT 超时断开。
 
 ---
-## 启动方式
+
+## 🚀 快速开始
 *   Windows11 支持 EXE 启动（采用 Graalvm 构建，无需 Java 环境）
 *   Release 界面提供了环境捆绑版（仅支持 Windows），是电脑小白使用 NeoLink 最方便的选择，避免折腾
 *   其他平台仅支持 Java 21 以上的版本启动
----
-
 ## **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
 
+### 命令行模式（Terminal）
+将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：
+
+```bash
+java -jar NeoLink-XXXX.jar
+
+# 可选参数追加到后面
+# --output-file=path/to/logfile.log   将日志写入指定文件
+# --key=...                           访问密钥（必填）
+# `--local-port=...                   本地要被穿透的端口（必填）
+# --debug                             打印调试信息（异常栈）
+# --no-color                          关闭 ANSI 颜色输出
+# --en-us / --zh-ch                   指定语言
+# `--gui`                             使用 JavaFX GUI 启动
+```
+
+```bash
+# 使用 GUI
+java -jar NeoLink-XXXX.jar --gui
+```
+或者
+```bash
+# 使用 GUI
+NeoLink-XXXX.exe --gui
+```
 
 ### 2. 配置文件（`config.cfg`）
 
@@ -77,63 +119,6 @@ BUFFER_LEN=4096
   - `http->10.10.10.1:8080@user;pass`（带认证）
 - `PROXY_IP_TO_LOCAL_SERVER`：当访问本地服务（localDomainName/localPort）时，先走这个代理（可为空）
 - `PROXY_IP_TO_NEO_SERVER`：当访问 NeoServer 时，走此代理（可为空）
-
----
-
-## 运行
-
-### 命令行模式（Terminal）
-将构建后的 JAR（举例 `NeoLink.jar`）放到工作目录并运行：
-
-```bash
-# 最常用：指定访问密钥（必需）和本地端口（必需）
-java -jar NeoLink.jar --key=YOUR_ACCESS_KEY --local-port=25565
-
-# 可选参数
-# --output-file=path/to/logfile.log   将日志写入指定文件
-# --debug                             打印调试信息（异常栈）
-# --no-color                          关闭 ANSI 颜色输出
-# --en-us / --zh-ch                   指定语言
-```
-
-运行后程序会：
-1. 读取或创建 `config.cfg`
-2. 连接远程 NeoServer（配置中 REMOTE_DOMAIN_NAME + HOST_HOOK_PORT）
-3. 发送客户端信息并等待服务器响应
-4. 验证成功后维持心跳并监听来自服务器的命令（如 `sendSocket` 建立隧道）
-
-如果启用自动重连（`ENABLE_AUTO_RECONNECT=true`），客户端在断线后会按 `RECONNECTION_INTERVAL` 秒重试。
-
----
-
-### GUI 模式（JavaFX）
-JavaFX 环境已集成到程序中
-
-```bash
-# 使用 GUI
-java -jar NeoLink-XXXX.jar --gui
-```
-```bash
-# 使用 GUI
-java -jar NeoLink-XXXX.jar --gui
-```
-
-GUI 支持：
-- 填写远程地址 / 本地端口 / 访问密钥
-- 启动 / 停止服务
-- 实时查看日志（内置 WebView 渲染）
-
----
-
-## 命令行参数（提要）
-
-- `--Key=...`           : 访问密钥（必填）
-- `--local-port=...`    : 本地要被穿透的端口（必填）
-- `--output-file=...`   : 指定日志输出文件路径
-- `--gui`               : 使用 JavaFX GUI 启动
-- `--debug`             : 启用调试模式（打印异常细节）
-- `--no-color`          : 关闭控制台颜色
-- `--en-us` / `--zh-ch` : 强制语言
 
 ---
 
