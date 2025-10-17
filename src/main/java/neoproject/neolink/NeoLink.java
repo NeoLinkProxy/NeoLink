@@ -41,8 +41,8 @@ public class NeoLink {
 
     // ==================== 可配置的全局状态 (重命名以提高可读性) ====================
     public static int remotePort;
-    public static String remoteDomainName = "127.0.0.1";
-    public static String localDomainName = "127.0.0.1";
+    public static String remoteDomainName = "localhost";
+    public static String localDomainName = "localhost";
     public static int hostHookPort = DEFAULT_HOST_HOOK_PORT;
     public static int hostConnectPort = DEFAULT_HOST_CONNECT_PORT;
     public static SecureSocket hookSocket;
@@ -57,13 +57,14 @@ public class NeoLink {
     public static boolean enableAutoReconnect = true;
     public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
 
-    // ==================== 关键修复: 全局 Scanner ====================
-    /**
-     * 全局的 Scanner 实例，用于从标准输入读取用户命令。
-     * 这是修复 `java.util.NoSuchElementException: No line found` 的关键。
-     */
+
+    public static double savedWindowX = 100;
+    public static double savedWindowY = 100;
+    public static double savedWindowWidth = 950;
+    public static double savedWindowHeight = 700;
+
     public static Scanner inputScanner;
-    private static boolean isGUIMode=false;
+    private static boolean isGUIMode=true;
 
     // ==================== 主流程 ====================
     public static void main(String[] args) {
@@ -150,6 +151,7 @@ public class NeoLink {
             case "--no-color" -> loggist.disableColor();
             case "--debug" -> isDebugMode = true;
             case "--gui" -> isGUIMode = true;
+            case "--nogui" -> isGUIMode = false;
         }
     }
 

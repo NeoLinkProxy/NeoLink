@@ -1,5 +1,6 @@
 package neoproject.neolink.threads;
 
+import neoproject.neolink.InternetOperator;
 import neoproject.neolink.NeoLink;
 import plethora.net.SecureSocket;
 
@@ -58,15 +59,11 @@ public class Transformer implements Runnable {
                 neoReceiver.sendByte(buffer, 0, bytesRead);
             }
             neoReceiver.sendByte(null); // 发送结束信号
-            localSender.shutdownInput();
+            InternetOperator.shutdownInput(localSender);
         } catch (Exception e) {
             NeoLink.debugOperation(e);
-            try {
-                neoReceiver.shutdownOutput();
-                localSender.shutdownInput();
-            } catch (IOException ignore) {
-                // 忽略关闭时的异常
-            }
+            InternetOperator.shutdownOutput(neoReceiver);
+            InternetOperator.shutdownInput(localSender);
         }
     }
 
@@ -80,16 +77,12 @@ public class Transformer implements Runnable {
                 outputToLocal.write(data);
                 outputToLocal.flush();
             }
-            neoSender.shutdownInput();
-            localReceiver.shutdownOutput();
+            InternetOperator.shutdownInput(neoSender);
+            InternetOperator.shutdownOutput(localReceiver);
         } catch (Exception e) {
             NeoLink.debugOperation(e);
-            try {
-                neoSender.shutdownInput();
-                localReceiver.shutdownOutput();
-            } catch (IOException ignore) {
-                // 忽略关闭时的异常
-            }
+            InternetOperator.shutdownInput(neoSender);
+            InternetOperator.shutdownOutput(localReceiver);
         }
     }
 }
