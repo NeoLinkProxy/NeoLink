@@ -125,6 +125,8 @@
   }, {
     "pattern":"\\Qjfxwebkit.dll\\E"
   }, {
+    "pattern":"\\Qlogo.png\\E"
+  }, {
     "pattern":"\\Qmsvcp140.dll\\E"
   }, {
     "pattern":"\\Qmsvcp140_1.dll\\E"
@@ -150,8 +152,5 @@
   }, {
     "name":"com/sun/javafx/scene/control/skin/resources/controls",
     "locales":["", "zh-CN"]
-  }, {
-    "name":"sun.awt.resources.awt",
-    "classNames":["sun.awt.resources.awt", "sun.awt.resources.awt_zh_CN"]
   }]
 }

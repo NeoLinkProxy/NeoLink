@@ -170,6 +170,9 @@
   "name":"javafx.scene.image.Image"
 },
 {
+  "name":"javafx.scene.image.ImageView"
+},
+{
   "name":"javafx.scene.input.Clipboard"
 },
 {
@@ -231,10 +234,6 @@
 },
 {
   "name":"neoproject.neolink.gui.AppStart",
-  "methods":[{"name":"<init>","parameterTypes":[] }]
-},
-{
-  "name":"sun.java2d.marlin.DMarlinRenderingEngine",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {

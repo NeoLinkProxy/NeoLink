@@ -55,7 +55,8 @@ java -jar NeoLink-XXXX.jar
 # --debug                             打印调试信息（异常栈）
 # --no-color                          关闭 ANSI 颜色输出
 # --en-us / --zh-ch                   指定语言
-# `--gui`                             使用 JavaFX GUI 启动
+# `--nogui`                           禁用 JavaFX GUI 启动
+# `--gui`                             使用 JavaFX GUI 启动 （默认启用）
 ```
 
 ```bash
