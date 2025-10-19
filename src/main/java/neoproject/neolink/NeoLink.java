@@ -54,22 +54,22 @@ public class NeoLink {
 
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
+    private static boolean isGUIMode=true;
+
     public static boolean enableAutoReconnect = true;
     public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
-
 
     public static double savedWindowX = 100;
     public static double savedWindowY = 100;
     public static double savedWindowWidth = 950;
     public static double savedWindowHeight = 700;
 
-    public static Scanner inputScanner;
-    private static boolean isGUIMode=true;
+    public static Scanner inputScanner = new Scanner(System.in);;
+
 
     // ==================== 主流程 ====================
     public static void main(String[] args) {
         parseCommandLineArgs(args);
-        // 在初始化日志前检测语言，以确保日志也可能是中文的
 
         if (isGUIMode){
             AppStart.main(args);
@@ -79,10 +79,6 @@ public class NeoLink {
         initializeLogger();
         detectLanguage();
 
-        // ==================== 关键修复: 初始化全局 Scanner ====================
-        // 必须在 initializeLogger 之后，因为 detectLanguage 可能会想打印日志
-        inputScanner = new Scanner(System.in);
-        // =============================================================
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
 
@@ -104,8 +100,6 @@ public class NeoLink {
             handleConnectionFailure(e);
         }
     }
-
-    // ==================== 语言检测 (恢复原始逻辑) ====================
 
     /**
      * 根据系统默认语言环境自动检测并设置为中文（如果适用）。
@@ -457,9 +451,6 @@ public class NeoLink {
             ThreadManager threadManager = new ThreadManager(serverToNeoThread, neoToServerThread);
             threadManager.start();
 
-            // 注意: 这里的 closeSocket 调用可能在数据传输完成前就执行了。
-            // 在工业级代码中，这通常由 Transformer 线程在完成工作后负责。
-            // 此处保留原逻辑。
             closeSocket(localServerSocket);
             closeSocket(neoTransferSocket);
 

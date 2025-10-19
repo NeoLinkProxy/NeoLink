@@ -58,15 +58,10 @@ java -jar NeoLink-XXXX.jar
 # `--nogui`                           禁用 JavaFX GUI 启动
 # `--gui`                             使用 JavaFX GUI 启动 （默认启用）
 ```
-
-```bash
-# 使用 GUI
-java -jar NeoLink-XXXX.jar --gui
-```
 或者
 ```bash
 # 使用 GUI
-NeoLink-XXXX.exe --gui
+NeoLink-XXXX.exe
 ```
 
 ### 📁配置文件（`config.cfg`）
@@ -135,9 +130,9 @@ BUFFER_LEN=4096
 
 ## ❓常见问题（FAQ）
 
-Q: 为什么连接不上 NeoServer？  
+Q: 为什么连接不上 NeoProxyServer？  
 A:
-1. 检查 `config.cfg` 中 `REMOTE_DOMAIN_NAME` 与 `HOST_HOOK_PORT` 是否正确。  
+1. 检查 `config.cfg` 中 `REMOTE_DOMAIN_NAME` 与 `HOST_HOOK_PORT` 和 `HOST_CONNECT_PORT` 是否正确。  
 2. 确认服务器防火墙/云服务安全组已放通对应端口。  
 3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。  
 4. 使用 `--debug` 获取更多异常栈信息。
