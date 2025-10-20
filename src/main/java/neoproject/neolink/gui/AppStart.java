@@ -10,8 +10,15 @@ import javafx.stage.Stage;
  * 包含了对启动异常的捕获和处理。
  */
 public class AppStart extends Application {
-    public static void main(String[] args) {
+    // 添加一个接受 autoStart 参数的 main 方法
+    public static void main(String[] args, boolean autoStart) {
+        MainWindowController.setAutoStart(autoStart);
         launch(args);
+    }
+
+    // 保持原有的 main 方法，用于不带 autoStart 参数的调用
+    public static void main(String[] args) {
+        main(args, false); // 默认不自动启动
     }
 
     @Override

@@ -30,7 +30,6 @@ import static neoproject.neolink.InternetOperator.*;
  * 负责处理命令行参数、初始化日志、与服务器建立连接、处理内网穿透逻辑以及自动重连。
  */
 public class NeoLink {
-
     // ==================== 常量定义 (遵循 SCREAMING_SNAKE_CASE) ====================
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
@@ -51,47 +50,39 @@ public class NeoLink {
     public static Loggist loggist;
     public static String outputFilePath = null;
     public static LanguageData languageData = new LanguageData();
-
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
-    private static boolean isGUIMode=true;
-
+    private static boolean isGUIMode = true;
+    private static boolean shouldAutoStartInGUI = false; // 新增标志位
     public static boolean enableAutoReconnect = true;
     public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
-
     public static double savedWindowX = 100;
     public static double savedWindowY = 100;
     public static double savedWindowWidth = 950;
     public static double savedWindowHeight = 700;
-
-    public static Scanner inputScanner = new Scanner(System.in);;
-
+    public static Scanner inputScanner = new Scanner(System.in);
+    ;
 
     // ==================== 主流程 ====================
     public static void main(String[] args) {
         parseCommandLineArgs(args);
-
-        if (isGUIMode){
-            AppStart.main(args);
+        if (isGUIMode) {
+            // 将自动启动标志传递给 GUI
+            AppStart.main(args, shouldAutoStartInGUI);
             System.exit(0);
         }
-
         initializeLogger();
         detectLanguage();
-
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
-
         if (!isReconnectedOperation) {
             printLogo();
             printBasicInfo();
         }
-
         try {
             promptForAccessKey();
             connectToNeoServer();
             exchangeClientInfoWithServer();
-
             // 通过验证，开始核心服务
             CheckAliveThread.startThread();
             promptForLocalPort();
@@ -120,12 +111,26 @@ public class NeoLink {
 
     // ==================== 命令行与初始化 ====================
     private static void parseCommandLineArgs(String[] args) {
+        boolean hasKey = false;
+        boolean hasLocalPort = false;
+
         for (String arg : args) {
             if (arg.contains("=")) {
                 parseKeyValueArgument(arg);
+
+                if (arg.startsWith("--key=")) {//判断是否有这两个参数存在
+                    hasKey = true;
+                } else if (arg.startsWith("--local-port=")) {
+                    hasLocalPort = true;
+                }
+
             } else {
                 parseFlagArgument(arg);
             }
+        }
+        // 如果同时存在 --key 和 --local-port 且是 GUI 模式，则设置自动启动标志
+        if (hasKey && hasLocalPort && isGUIMode) {
+            shouldAutoStartInGUI = true;
         }
     }
 
@@ -149,7 +154,7 @@ public class NeoLink {
         }
     }
 
-    private static void initializeLogger() {
+    public static void initializeLogger() {
         File logFile;
         if (outputFilePath != null) {
             logFile = new File(outputFilePath);
@@ -159,7 +164,6 @@ public class NeoLink {
             logsDir.mkdirs(); // 确保日志目录存在
             logFile = new File(logsDirPath, Time.getCurrentTimeAsFileName(false) + ".log");
         }
-
         try {
             if (!logFile.exists()) {
                 logFile.createNewFile();
@@ -186,7 +190,6 @@ public class NeoLink {
         String clientInfo = formatClientInfoString(languageData, key);
         sendStr(clientInfo);
         String serverResponse = receiveStr();
-
         if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
             String versions = serverResponse.split(":")[1];
             String[] versionArray = versions.split("\\|");
@@ -249,7 +252,6 @@ public class NeoLink {
                 say("隧道正在停止...");
                 return;
             }
-
             if (message.startsWith(":>")) {
                 handleServerCommand(message.substring(2));
             } else if (message.contains("This access code have") || message.contains("消耗") || message.contains("使用链接")) {
@@ -288,7 +290,6 @@ public class NeoLink {
     }
 
     private static void attemptReconnection() {
-
         say(languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + remoteDomainName, LogType.ERROR);
         if (enableAutoReconnect) {
             for (int i = 0; i < reconnectionIntervalSeconds; i++) {
@@ -371,17 +372,14 @@ public class NeoLink {
             boolean isWindows = OSDetector.isWindows();
             // 告知服务端客户端类型 (exe 或 jar)
             sendStr(isWindows ? "exe" : "jar");
-
             boolean canDownload = Boolean.parseBoolean(receiveStr());
             if (!canDownload) {
                 exitAndFreeze(-1);
                 return;
             }
-
             // 确定新客户端文件的完整路径
             String fileExtension = isWindows ? ".exe" : ".jar";
             File clientFile = new File(CURRENT_DIR_PATH, fileName + fileExtension);
-
             // 如果文件已存在，重命名为 " - copy" 版本
             if (clientFile.exists()) {
                 File backupFile = new File(clientFile.getParent(), fileName + " - copy" + fileExtension);
@@ -390,17 +388,13 @@ public class NeoLink {
             } else {
                 clientFile.createNewFile();
             }
-
             say(languageData.START_TO_DOWNLOAD_UPDATE);
             byte[] newClientData = receiveBytes();
-
             // 使用 try-with-resources 确保流被正确关闭
             try (BufferedOutputStream fileOutputStream = new BufferedOutputStream(new FileOutputStream(clientFile))) {
                 fileOutputStream.write(newClientData);
             }
-
             say(languageData.DOWNLOAD_SUCCESS);
-
             if (isWindows) {
                 // 在 Windows 上自动启动新版本
                 StringBuilder command = new StringBuilder("cmd.exe /c start \"\" \"");
@@ -411,13 +405,15 @@ public class NeoLink {
                 if (localPort != INVALID_LOCAL_PORT) {
                     command.append(" --local-port=").append(localPort);
                 }
+                if (!isGUIMode) {
+                    command.append(" --nogui");
+                }
                 WindowsOperation.run(command.toString());
                 System.exit(0);
             } else {
                 // 在非 Windows 系统上提示用户手动运行
                 say(languageData.PLEASE_RUN + clientFile.getAbsolutePath());
             }
-
             exitAndFreeze(0);
         } catch (IOException e) {
             debugOperation(e);
@@ -435,25 +431,20 @@ public class NeoLink {
             } else {
                 localServerSocket = new Socket(localDomainName, localPort);
             }
-
             SecureSocket neoTransferSocket;
             if (ProxyOperator.PROXY_IP_TO_NEO_SERVER != null) {
                 neoTransferSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, hostConnectPort);
             } else {
                 neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             }
-
             neoTransferSocket.sendInt(remotePort);
             say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
-
             Transformer serverToNeoThread = new Transformer(localServerSocket, neoTransferSocket);
             Transformer neoToServerThread = new Transformer(neoTransferSocket, localServerSocket);
             ThreadManager threadManager = new ThreadManager(serverToNeoThread, neoToServerThread);
             threadManager.start();
-
             closeSocket(localServerSocket);
             closeSocket(neoTransferSocket);
-
             say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
         } catch (Exception e) {
             debugOperation(e);

@@ -31,25 +31,32 @@ public class InternetOperator {
         }
     }
 
-    public static void shutdownInput(SecureSocket socket){
+    public static void shutdownInput(SecureSocket socket) {
         try {
             socket.shutdownInput();
-        }catch (Exception ignore){}
+        } catch (Exception ignore) {
+        }
     }
-    public static void shutdownInput(Socket socket){
+
+    public static void shutdownInput(Socket socket) {
         try {
             socket.shutdownInput();
-        }catch (Exception ignore){}
+        } catch (Exception ignore) {
+        }
     }
-    public static void shutdownOutput(SecureSocket socket){
+
+    public static void shutdownOutput(SecureSocket socket) {
         try {
             socket.shutdownOutput();
-        }catch (Exception ignore){}
+        } catch (Exception ignore) {
+        }
     }
-    public static void shutdownOutput(Socket socket){
+
+    public static void shutdownOutput(Socket socket) {
         try {
             socket.shutdownOutput();
-        }catch (Exception ignore){}
+        } catch (Exception ignore) {
+        }
     }
 
 
