@@ -1,0 +1,41 @@
+/* 定义暗色主题的 ContextMenu 样式 */
+.context-menu {
+    -fx-background-color: #202020; /* 菜单背景色，接近 Windows 11 暗色 */
+    -fx-border-color: #3a3a3a;     /* 菜单边框色 */
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;        /* 菜单整体圆角 */
+    -fx-background-radius: 8px;    /* 菜单整体圆角 */
+    -fx-padding: 4px 0;            /* 内边距 */
+}
+
+/* 定义暗色主题的 MenuItem 样式 */
+.menu-item {
+    -fx-background-color: transparent; /* 默认背景透明 */
+    -fx-text-fill: #ffffff;            /* 默认文字颜色 */
+    -fx-font-size: 14px;               /* 字体大小 */
+    -fx-padding: 6px 12px;             /* 每个菜单项的内边距 */
+    -fx-background-radius: 6px;        /* 每个菜单项的圆角 */
+}
+
+/* 定义鼠标悬停时的 MenuItem 样式 */
+.menu-item:hover {
+    -fx-background-color: #333333; /* 悬停背景色，浅一点的灰色 */
+    -fx-text-fill: #ffffff;        /* 悬停时文字颜色，保持白色 */
+}
+
+/* 可选：定义选中/按下时的 MenuItem 样式 (通常与 hover 类似) */
+.menu-item:focused {
+    -fx-background-color: #333333; /* 焦点背景色 */
+    -fx-text-fill: #ffffff;        /* 焦点文字颜色 */
+}
+
+/* 可选：定义分割线样式 (如果添加了分割线) */
+.separator {
+    -fx-background-color: #3a3a3a; /* 分割线颜色 */
+    -fx-padding: 1px 0;            /* 分割线厚度 */
+}
+
+/* 可选：定义禁用的 MenuItem 样式 */
+.menu-item:disabled {
+    -fx-text-fill: #777777; /* 禁用时文字颜色 */
+}

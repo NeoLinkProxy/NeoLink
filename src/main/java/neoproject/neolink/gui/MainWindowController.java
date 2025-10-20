@@ -118,6 +118,13 @@ public class MainWindowController {
         String css = Objects.requireNonNull(MainWindowController.class.getResource("/dark-theme-webview.css")).toExternalForm();
         scene.getStylesheets().add(css);
 
+        // --- 添加 ContextMenu 的 CSS 样式表 ---
+        String contextMenuCss = Objects.requireNonNull(
+                MainWindowController.class.getResource("/dark-context-menu.css")
+        ).toExternalForm();
+        scene.getStylesheets().add(contextMenuCss);
+        // --- 添加结束 ---
+
         // --- 添加拖放事件处理，防止外部拖拽导致 NoClassDefFoundError ---
         // 为 Scene 添加事件处理，可以捕获窗口区域内的拖拽事件
         scene.setOnDragOver(event -> {
@@ -149,16 +156,6 @@ public class MainWindowController {
         } catch (Exception e) {
             // 如果加载 ICO 失败，记录错误（可选）或忽略
             System.err.println("Warning: Could not load logo.png: " + e.getMessage());
-            // e.printStackTrace(); // 可选：打印堆栈跟踪
-            // 如果 ICO 加载失败，可以尝试加载 PNG（如果之前有）
-            // try {
-            //     Image appIconPng = new Image(Objects.requireNonNull(
-            //         MainWindowController.class.getResourceAsStream("/logo.png")
-            //     ));
-            //     primaryStage.getIcons().add(appIconPng);
-            // } catch (Exception ignored) {
-            //     // 如果 PNG 也加载失败，忽略
-            // }
         }
         primaryStage.setScene(scene);
         primaryStage.setOnCloseRequest(e -> handleExit());
@@ -468,8 +465,77 @@ public class MainWindowController {
         logTitle.getStyleClass().add("log-title");
 
         logWebView = new WebView();
-        logWebView.setContextMenuEnabled(false);
-        // 修复：使用字符串拼接代替多行字符串字面量
+        logWebView.setContextMenuEnabled(false); // 禁用默认上下文菜单
+
+        // --- 添加自定义右键菜单 ---
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem copyItem = new MenuItem("复制");
+        // --- 不再添加内联样式或通过 contextMenu.getStylesheets() 添加 ---
+        // 样式将通过添加到 Scene 的 CSS 文件应用
+        copyItem.setOnAction(e -> {
+            // 使用 JavaScript 获取 WebView 中的选中文本
+            String script = "window.getSelection().toString();";
+            Object result = logWebView.getEngine().executeScript(script);
+            if (result instanceof String) {
+                String selectedText = (String) result;
+                if (selectedText != null && !selectedText.isEmpty()) {
+                    // 如果有选中文本，则复制到系统剪贴板
+                    javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+                    javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+                    content.putString(selectedText);
+                    clipboard.setContent(content);
+                }
+            }
+            // 复制操作完成后，手动隐藏菜单（虽然通常会自动隐藏）
+            contextMenu.hide();
+            // 如果没有选中文本或结果不是字符串，则不执行任何操作
+        });
+        contextMenu.getItems().add(copyItem);
+
+        // 显示菜单
+        logWebView.setOnContextMenuRequested(e -> {
+            // 检查是否有选中文本，如果没有，则禁用复制项
+            String script = "window.getSelection().toString();";
+            Object result = logWebView.getEngine().executeScript(script);
+            boolean hasSelection = (result instanceof String && !((String) result).isEmpty());
+            copyItem.setDisable(!hasSelection);
+
+            contextMenu.show(logWebView, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+
+        // --- 添加鼠标点击事件处理，确保菜单在点击外部时消失 ---
+        logWebView.setOnMousePressed(e -> {
+            // 如果是左键或中键点击，并且菜单当前是显示状态，则隐藏菜单
+            if ((e.getButton() == javafx.scene.input.MouseButton.PRIMARY ||
+                    e.getButton() == javafx.scene.input.MouseButton.MIDDLE) &&
+                    contextMenu.isShowing()) {
+                contextMenu.hide();
+            }
+            // 不调用 e.consume()，允许其他鼠标事件正常处理
+        });
+        // --- 添加结束 ---
+
+        // --- 添加 JavaFX 拖放事件处理 ---
+        logWebView.setOnDragOver(event -> {
+            event.consume();
+        });
+
+        logWebView.setOnDragEntered(event -> {
+            event.consume();
+        });
+
+        logWebView.setOnDragExited(event -> {
+            event.consume();
+        });
+
+        logWebView.setOnDragDropped(event -> {
+            event.setDropCompleted(false);
+            event.consume();
+        });
+        // --- 添加结束 ---
+
+        // 修复：使用字符串拼接代替多行字符串字面量，使用 \n 换行
         String initialHtml = "<!DOCTYPE html>\n" +
                 "<html>\n" +
                 "<head>\n" +
@@ -491,31 +557,6 @@ public class MainWindowController {
                 "</body>\n" +
                 "</html>";
         logWebView.getEngine().loadContent(initialHtml);
-
-        // --- 关键修复：为 WebView 控件添加 JavaFX 拖放事件处理 ---
-        // 这些处理器会在事件到达 WebView 内部渲染引擎之前消费它们
-        logWebView.setOnDragOver(event -> {
-            // 消费 dragover 事件，阻止默认行为和进一步处理
-            event.consume();
-        });
-
-        logWebView.setOnDragEntered(event -> {
-            // 消费 dragentered 事件
-            event.consume();
-        });
-
-        logWebView.setOnDragExited(event -> {
-            // 消费 dragexited 事件
-            event.consume();
-        });
-
-        logWebView.setOnDragDropped(event -> {
-            // 消费 drop 事件，阻止默认行为和进一步处理
-            // 设置 dropCompleted 为 false，明确表示未处理此操作
-            event.setDropCompleted(false);
-            event.consume();
-        });
-        // --- 修复结束 ---
 
         VBox logContainer = new VBox(8, logTitle, logWebView);
         VBox.setVgrow(logWebView, Priority.ALWAYS);
