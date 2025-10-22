@@ -15,7 +15,7 @@
 
 ## 说明（概览）
 
-NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP 服务（例如 Minecraft 服务器）暴露给公网 NeoServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP / SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
+NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP UDP 服务（例如 Minecraft 服务器）暴露给公网 NeoServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP / SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
 > **重点**：请仔细阅读 eula.txt 中声明的限制**不支持 HTTPS 隧道** <br>
 > EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
