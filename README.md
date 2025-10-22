@@ -1,6 +1,7 @@
 # NeoLink
 
-> **内网穿透客户端（NeoLink）** — 使用 Java 21 开发，支持除 HTTPS 以外的所有 TCP 类型内网穿透。
+> **内网穿透客户端（NeoLink）** — 使用 Java 21 开发，支持除 HTTPS 以外的所有类型内网穿透。
+> 自 4.7.0 版本开始，同步支持 TCP UDP
 > 推荐的场景：RDP 内网穿透，MC 服务器内网穿透，HTTP FileServer 等等
 
 ![Java](https://img.shields.io/badge/Java-21%2B-orange?logo=openjdk&logoColor=white)
@@ -16,7 +17,7 @@
 
 NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP 服务（例如 Minecraft 服务器）暴露给公网 NeoServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP / SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
-> **重点**：本软件仅支持 TCP 内网穿透（作者在 EULA 中声明明确限制）**不支持 HTTPS 隧道** <br>
+> **重点**：请仔细阅读 eula.txt 中声明的限制**不支持 HTTPS 隧道** <br>
 > EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
 ---
 
@@ -25,7 +26,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP 服务�
 ## ✨ 特性
 
 - **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
-- **通用 TCP 支持**：几乎所有类型的 TCP 服务均可穿透。
+- **通用 TCP UDP 支持**：几乎所有类型的服务均可穿透。
 - **双模式运行**：命令行（CLI）适合服务器部署，图形界面（GUI）适合新手。
 - **自动重连**：连接断开后自动重试，保障服务高可用。
 - **代理支持**：支持 HTTP / SOCKS5 代理连接 NeoProxyServer 或本地服务。

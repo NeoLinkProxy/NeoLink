@@ -11,11 +11,6 @@ import java.util.regex.Pattern;
  * 使用安全的 DOM 操作 API，彻底解决中文乱码问题。
  */
 public class GuiLogRedirector {
-    private final Consumer<String> logConsumer;
-    private final PrintStream originalOut;
-    private final PrintStream originalErr;
-    private final StringBuilder currentLine = new StringBuilder();
-
     // ANSI 转义序列的正则表达式
     private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[([\\d;]*)m");
     // ANSI 颜色代码到 HTML 颜色的映射
@@ -29,6 +24,11 @@ public class GuiLogRedirector {
         ANSI_COLORS[35] = "#ff79c6"; // 粉色
         ANSI_COLORS[36] = "#8be9fd"; // 青色
     }
+
+    private final Consumer<String> logConsumer;
+    private final PrintStream originalOut;
+    private final PrintStream originalErr;
+    private final StringBuilder currentLine = new StringBuilder();
 
     public GuiLogRedirector(Consumer<String> logConsumer) {
         this.logConsumer = logConsumer;

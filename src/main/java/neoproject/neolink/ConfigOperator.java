@@ -1,7 +1,7 @@
 package neoproject.neolink;
 
 import neoproject.neolink.threads.CheckAliveThread;
-import neoproject.neolink.threads.Transformer;
+import neoproject.neolink.threads.TCPTransformer;
 import plethora.management.bufferedFile.BufferedFile;
 import plethora.utils.config.LineConfigReader;
 
@@ -38,7 +38,7 @@ public class ConfigOperator {
                 ProxyOperator.PROXY_IP_TO_NEO_SERVER = lineConfigReader.get("PROXY_IP_TO_NEO_SERVER");
                 ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = lineConfigReader.get("PROXY_IP_TO_LOCAL_SERVER");
                 CheckAliveThread.HEARTBEAT_PACKET_DELAY = Integer.parseInt(lineConfigReader.get("HEARTBEAT_PACKET_DELAY"));
-                Transformer.BUFFER_LENGTH = Integer.parseInt(lineConfigReader.get("BUFFER_LEN"));
+                TCPTransformer.BUFFER_LENGTH = Integer.parseInt(lineConfigReader.get("BUFFER_LEN"));
 
             } catch (Exception e) {
                 createAndSetDefaultConfig();

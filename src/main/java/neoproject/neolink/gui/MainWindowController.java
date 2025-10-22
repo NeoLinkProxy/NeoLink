@@ -40,6 +40,21 @@ import java.util.regex.Pattern;
  * - 修复字符串字面量问题
  */
 public class MainWindowController {
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
+    private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
+    private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[([\\d;]*)m");
+    private static final String[] ANSI_COLORS = new String[128];
+    private static boolean shouldAutoStart = false; // 静态标志位
+
+    static {
+        ANSI_COLORS[31] = "#ff5555";
+        ANSI_COLORS[32] = "#50fa7b";
+        ANSI_COLORS[33] = "#f1fa8c";
+        ANSI_COLORS[34] = "#bd93f9";
+        ANSI_COLORS[35] = "#ff79c6";
+        ANSI_COLORS[36] = "#8be9fd";
+    }
+
     private final Stage primaryStage;
     private final ExecutorService coreExecutor = Executors.newSingleThreadExecutor();
     private ScheduledExecutorService logConsumerExecutor;
@@ -54,20 +69,6 @@ public class MainWindowController {
     private boolean isMaximized = false;
     private double xOffset = 0;
     private double yOffset = 0;
-    private static boolean shouldAutoStart = false; // 静态标志位
-    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
-    private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
-    private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[([\\d;]*)m");
-    private static final String[] ANSI_COLORS = new String[128];
-
-    static {
-        ANSI_COLORS[31] = "#ff5555";
-        ANSI_COLORS[32] = "#50fa7b";
-        ANSI_COLORS[33] = "#f1fa8c";
-        ANSI_COLORS[34] = "#bd93f9";
-        ANSI_COLORS[35] = "#ff79c6";
-        ANSI_COLORS[36] = "#8be9fd";
-    }
 
     public MainWindowController(Stage primaryStage) {
         this.primaryStage = primaryStage;

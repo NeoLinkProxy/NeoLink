@@ -2,7 +2,8 @@ package neoproject.neolink;
 
 import neoproject.neolink.gui.AppStart;
 import neoproject.neolink.threads.CheckAliveThread;
-import neoproject.neolink.threads.Transformer;
+import neoproject.neolink.threads.TCPTransformer;
+import neoproject.neolink.threads.UDPTransformer;
 import plethora.net.NetworkUtils;
 import plethora.net.SecureSocket;
 import plethora.os.detect.OSDetector;
@@ -19,6 +20,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.Socket;
 import java.util.Locale;
 import java.util.Scanner;
@@ -52,8 +54,6 @@ public class NeoLink {
     public static LanguageData languageData = new LanguageData();
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
-    private static boolean isGUIMode = true;
-    private static boolean shouldAutoStartInGUI = false; // 新增标志位
     public static boolean enableAutoReconnect = true;
     public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
     public static double savedWindowX = 100;
@@ -61,6 +61,8 @@ public class NeoLink {
     public static double savedWindowWidth = 950;
     public static double savedWindowHeight = 700;
     public static Scanner inputScanner = new Scanner(System.in);
+    private static boolean isGUIMode = true;
+    private static boolean shouldAutoStartInGUI = false; // 新增标志位
     ;
 
     // ==================== 主流程 ====================
@@ -268,7 +270,9 @@ public class NeoLink {
     private static void handleServerCommand(String command) {
         String[] parts = command.split(";", 2);
         if ("sendSocket".equals(parts[0])) {
-            new Thread(() -> createNewConnection(parts[1])).start();
+            new Thread(() -> createNewTCPConnection(parts[1])).start();
+        } else if ("sendSocketUDP".equals(parts[0])) {
+            new Thread(() -> createNewUDPConnection(parts[1])).start();
         } else if ("exitNoFlow".equals(parts[0])) {
             say(languageData.NO_FLOW_LEFT, LogType.ERROR);
             exitAndFreeze(0);
@@ -423,7 +427,7 @@ public class NeoLink {
     }
 
     // ==================== 网络连接管理 ====================
-    public static void createNewConnection(String remoteAddress) {
+    public static void createNewTCPConnection(String remoteAddress) {
         try {
             Socket localServerSocket;
             if (ProxyOperator.PROXY_IP_TO_LOCAL_SERVER != null) {
@@ -437,19 +441,57 @@ public class NeoLink {
             } else {
                 neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             }
+            neoTransferSocket.sendStr("TCP");
             neoTransferSocket.sendInt(remotePort);
-            say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
-            Transformer serverToNeoThread = new Transformer(localServerSocket, neoTransferSocket);
-            Transformer neoToServerThread = new Transformer(neoTransferSocket, localServerSocket);
+            say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+            TCPTransformer serverToNeoThread = new TCPTransformer(localServerSocket, neoTransferSocket);
+            TCPTransformer neoToServerThread = new TCPTransformer(neoTransferSocket, localServerSocket);
             ThreadManager threadManager = new ThreadManager(serverToNeoThread, neoToServerThread);
             threadManager.start();
-            closeSocket(localServerSocket);
-            closeSocket(neoTransferSocket);
-            say(languageData.A_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+            close(localServerSocket);
+            close(neoTransferSocket);
+            say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
         } catch (Exception e) {
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
             System.gc();
+        }
+    }
+
+    public static void createNewUDPConnection(String remoteAddress) {
+        SecureSocket neoTransferSocket = null;
+        DatagramSocket datagramSocket = null;
+        try {
+            // 1. 建立到服务端B的加密控制通道
+            neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
+
+            // 【关键】发送连接类型标识和端口号
+            neoTransferSocket.sendStr("UDP");
+            neoTransferSocket.sendInt(remotePort);
+
+            say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+
+            // 2. 创建用于与本地服务器S通信的UDP套接字
+            datagramSocket = new DatagramSocket();
+
+            // 5. 定义从本地服务器S到服务端B的数据流 (Local -> Neo)
+            UDPTransformer localToNeo = new UDPTransformer(datagramSocket, neoTransferSocket);
+            // 3. 定义从服务端B到本地服务器S的数据流 (Neo -> Local)
+            UDPTransformer neoToLocal = new UDPTransformer(neoTransferSocket, datagramSocket);
+
+            // 6. 【关键修复】使用 ThreadManager 管理线程和资源
+            ThreadManager threadManager = new ThreadManager(neoToLocal, localToNeo);
+            threadManager.start(); // 等待两个线程完成
+
+            // 7. 线程结束后，关闭资源并打印日志
+            say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+
+        } catch (Exception e) {
+            debugOperation(e);
+            say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
+        } finally {
+            // 8. 【关键修复】在 finally 块中确保资源被关闭
+            InternetOperator.close(neoTransferSocket, datagramSocket);
         }
     }
 }

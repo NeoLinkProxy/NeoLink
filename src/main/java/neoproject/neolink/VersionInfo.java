@@ -10,7 +10,7 @@ import static neoproject.neolink.NeoLink.debugOperation;
 
 
 public class VersionInfo {
-    public static final String VERSION = "3.7.0";
+    public static final String VERSION = "4.7.0";
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {

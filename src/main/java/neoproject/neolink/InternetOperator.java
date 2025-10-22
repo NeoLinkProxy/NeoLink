@@ -19,7 +19,7 @@ public class InternetOperator {
         return hookSocket.receiveStr();
     }
 
-    public static void closeSocket(Closeable... closeables) {
+    public static void close(Closeable... closeables) {
         for (Closeable a : closeables) {
             try {
                 if (a != null) {

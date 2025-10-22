@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
  */
 public class QueueBasedLoggist extends Loggist {
 
-    private final Loggist fileLoggist; // 传入的、负责文件写入的 Loggist 实例
     // ANSI 转义序列的正则表达式，用于匹配颜色代码
     private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[([\\d;]*)m");
+    private final Loggist fileLoggist; // 传入的、负责文件写入的 Loggist 实例
 
     // 构造函数接收一个已配置好文件路径的 Loggist 实例
     public QueueBasedLoggist(Loggist fileLoggist) {

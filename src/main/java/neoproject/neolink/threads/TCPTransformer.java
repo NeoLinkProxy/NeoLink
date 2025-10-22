@@ -11,11 +11,10 @@ import java.net.Socket;
 /**
  * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
  */
-public class Transformer implements Runnable {
-    public static int BUFFER_LENGTH = 4096;
+public class TCPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;
     public static final int MODE_LOCAL_TO_NEO = 1;
-
+    public static int BUFFER_LENGTH = 4096;
     private final Socket plainSocket;
     private final SecureSocket secureSocket;
     private final int mode;
@@ -23,7 +22,7 @@ public class Transformer implements Runnable {
     /**
      * 构造函数：用于从 Neo 服务器接收数据并转发到本地服务。
      */
-    public Transformer(SecureSocket secureSender, Socket localReceiver) {
+    public TCPTransformer(SecureSocket secureSender, Socket localReceiver) {
         this.secureSocket = secureSender;
         this.plainSocket = localReceiver;
         this.mode = MODE_NEO_TO_LOCAL;
@@ -32,19 +31,10 @@ public class Transformer implements Runnable {
     /**
      * 构造函数：用于从本地服务接收数据并转发到 Neo 服务器。
      */
-    public Transformer(Socket localSender, SecureSocket secureReceiver) {
+    public TCPTransformer(Socket localSender, SecureSocket secureReceiver) {
         this.plainSocket = localSender;
         this.secureSocket = secureReceiver;
         this.mode = MODE_LOCAL_TO_NEO;
-    }
-
-    @Override
-    public void run() {
-        if (mode == MODE_NEO_TO_LOCAL) {
-            transferDataToLocalServer(secureSocket, plainSocket);
-        } else {
-            transferDataToNeoServer(plainSocket, secureSocket);
-        }
     }
 
     /**
@@ -82,6 +72,15 @@ public class Transformer implements Runnable {
             NeoLink.debugOperation(e);
             InternetOperator.shutdownInput(neoSender);
             InternetOperator.shutdownOutput(localReceiver);
+        }
+    }
+
+    @Override
+    public void run() {
+        if (mode == MODE_NEO_TO_LOCAL) {
+            transferDataToLocalServer(secureSocket, plainSocket);
+        } else {
+            transferDataToNeoServer(plainSocket, secureSocket);
         }
     }
 }

@@ -3,7 +3,7 @@ package neoproject.neolink.threads;
 import neoproject.neolink.NeoLink;
 import plethora.utils.Sleeper;
 
-import static neoproject.neolink.InternetOperator.closeSocket;
+import static neoproject.neolink.InternetOperator.close;
 import static neoproject.neolink.NeoLink.debugOperation;
 
 public class CheckAliveThread implements Runnable {
@@ -19,6 +19,11 @@ public class CheckAliveThread implements Runnable {
         a.start();
     }
 
+    public static void stopThread() {
+        isRunning = false;
+        close(NeoLink.hookSocket);
+    }
+
     @Override
     public void run() {
         while (isRunning) {
@@ -30,10 +35,5 @@ public class CheckAliveThread implements Runnable {
             }
             Sleeper.sleep(HEARTBEAT_PACKET_DELAY);
         }
-    }
-
-    public static void stopThread() {
-        isRunning = false;
-        closeSocket(NeoLink.hookSocket);
     }
 }

@@ -15,14 +15,13 @@ public class ProxyOperator {
 
     // 代理到本地服务的配置
     public static String PROXY_IP_TO_LOCAL_SERVER = null;
+    // 代理到 Neo 服务器的配置
+    public static String PROXY_IP_TO_NEO_SERVER = null;
     private static Proxy.Type proxyToLocalType = null;
     private static String proxyToLocalIp = null;
     private static int proxyToLocalPort;
     private static String proxyToLocalUsername = null;
     private static String proxyToLocalPassword = null;
-
-    // 代理到 Neo 服务器的配置
-    public static String PROXY_IP_TO_NEO_SERVER = null;
     private static Proxy.Type proxyToNeoType = null;
     private static String proxyToNeoIp = null;
     private static int proxyToNeoPort;
