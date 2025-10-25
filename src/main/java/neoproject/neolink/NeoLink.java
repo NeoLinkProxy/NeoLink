@@ -1,6 +1,8 @@
 package neoproject.neolink;
 
 import neoproject.neolink.gui.AppStart;
+import neoproject.neolink.gui.MainWindowController;
+import neoproject.neolink.gui.NeoLinkCoreRunner;
 import neoproject.neolink.threads.CheckAliveThread;
 import neoproject.neolink.threads.TCPTransformer;
 import neoproject.neolink.threads.UDPTransformer;
@@ -22,8 +24,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Scanner;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static neoproject.neolink.InternetOperator.*;
 
@@ -39,8 +44,7 @@ public class NeoLink {
     public static final int DEFAULT_HOST_CONNECT_PORT = 802;
     public static final int DEFAULT_RECONNECTION_INTERVAL_SECONDS = 30;
     public static final int INVALID_LOCAL_PORT = -1;
-
-    // ==================== 可配置的全局状态 (重命名以提高可读性) ====================
+    private static final File currentFile = getCurrentFile();
     public static int remotePort;
     public static String remoteDomainName = "localhost";
     public static String localDomainName = "localhost";
@@ -55,6 +59,7 @@ public class NeoLink {
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
     public static boolean enableAutoReconnect = true;
+    public static boolean enableAutoUpdate = true;
     public static int reconnectionIntervalSeconds = DEFAULT_RECONNECTION_INTERVAL_SECONDS;
     public static double savedWindowX = 100;
     public static double savedWindowY = 100;
@@ -63,11 +68,15 @@ public class NeoLink {
     public static Scanner inputScanner = new Scanner(System.in);
     private static boolean isGUIMode = true;
     private static boolean shouldAutoStartInGUI = false; // 新增标志位
-    ;
+    private static boolean isBackend = false;
+    public static MainWindowController mainWindowController=null;
 
     // ==================== 主流程 ====================
     public static void main(String[] args) {
         parseCommandLineArgs(args);
+
+        killCmdWindowIfNeeded(args);
+
         if (isGUIMode) {
             // 将自动启动标志传递给 GUI
             AppStart.main(args, shouldAutoStartInGUI);
@@ -91,6 +100,24 @@ public class NeoLink {
             listenForServerCommands();
         } catch (Exception e) {
             handleConnectionFailure(e);
+        }
+    }
+
+    private static void killCmdWindowIfNeeded(String[] args) {
+        if (!isBackend && isGUIMode) {//有cmd窗口
+            if (currentFile != null && currentFile.getAbsolutePath().endsWith(".exe")) {
+                CopyOnWriteArrayList<String> newArgs = new CopyOnWriteArrayList<>();
+                newArgs.add(currentFile.getAbsolutePath());
+                newArgs.addAll(Arrays.asList(args));
+                newArgs.add("--backend");
+                ProcessBuilder processBuilder = new ProcessBuilder(newArgs);
+                try {
+                    processBuilder.start();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                System.exit(2);
+            }
         }
     }
 
@@ -153,6 +180,7 @@ public class NeoLink {
             case "--debug" -> isDebugMode = true;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
+            case "--backend" -> isBackend = true;
         }
     }
 
@@ -372,6 +400,15 @@ public class NeoLink {
      * @param fileName 新客户端文件的基础名称。
      */
     public static void checkUpdate(String fileName) {
+        if (!enableAutoUpdate) {
+            say(languageData.PLEASE_UPDATE_MANUALLY,LogType.ERROR);
+            if (isGUIMode){
+                mainWindowController.stopService();
+                return;
+            }else{
+                exitAndFreeze(2);
+            }
+        }
         try {
             boolean isWindows = OSDetector.isWindows();
             // 告知服务端客户端类型 (exe 或 jar)
@@ -492,6 +529,16 @@ public class NeoLink {
         } finally {
             // 8. 【关键修复】在 finally 块中确保资源被关闭
             InternetOperator.close(neoTransferSocket, datagramSocket);
+        }
+    }
+
+    public static File getCurrentFile() {
+        try {
+            String jarFilePath = NeoLink.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+            jarFilePath = java.net.URLDecoder.decode(jarFilePath, StandardCharsets.UTF_8);
+            return new File(jarFilePath);
+        } catch (Exception ignore) {
+            return null;
         }
     }
 }

@@ -1,6 +1,7 @@
 package neoproject.neolink.gui;
 
 import javafx.application.Platform;
+import javafx.event.Event;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
@@ -16,6 +17,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import neoproject.neolink.ConfigOperator;
 import neoproject.neolink.NeoLink;
+import neoproject.neolink.threads.CheckAliveThread;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -128,20 +130,14 @@ public class MainWindowController {
 
         // --- 添加拖放事件处理，防止外部拖拽导致 NoClassDefFoundError ---
         // 为 Scene 添加事件处理，可以捕获窗口区域内的拖拽事件
-        scene.setOnDragOver(event -> {
-            // 消费事件，阻止默认处理，防止错误
-            event.consume();
-        });
+        // 消费事件，阻止默认处理，防止错误
+        scene.setOnDragOver(Event::consume);
         // 可选：处理拖拽进入
-        scene.setOnDragEntered(event -> {
-            // 可以在这里改变视觉反馈，但同样要消费事件
-            event.consume();
-        });
+        // 可以在这里改变视觉反馈，但同样要消费事件
+        scene.setOnDragEntered(Event::consume);
         // 可选：处理拖拽离开
-        scene.setOnDragExited(event -> {
-            // 恢复视觉反馈，消费事件
-            event.consume();
-        });
+        // 恢复视觉反馈，消费事件
+        scene.setOnDragExited(Event::consume);
         // 可选：处理拖拽放置（虽然我们不希望发生，但也要消费）
         scene.setOnDragDropped(event -> {
             // 消费事件，不处理放置
@@ -477,9 +473,8 @@ public class MainWindowController {
             // 使用 JavaScript 获取 WebView 中的选中文本
             String script = "window.getSelection().toString();";
             Object result = logWebView.getEngine().executeScript(script);
-            if (result instanceof String) {
-                String selectedText = (String) result;
-                if (selectedText != null && !selectedText.isEmpty()) {
+            if (result instanceof String selectedText) {
+                if (!selectedText.isEmpty()) {
                     // 如果有选中文本，则复制到系统剪贴板
                     javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
                     javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
@@ -518,17 +513,11 @@ public class MainWindowController {
         // --- 添加结束 ---
 
         // --- 添加 JavaFX 拖放事件处理 ---
-        logWebView.setOnDragOver(event -> {
-            event.consume();
-        });
+        logWebView.setOnDragOver(Event::consume);
 
-        logWebView.setOnDragEntered(event -> {
-            event.consume();
-        });
+        logWebView.setOnDragEntered(Event::consume);
 
-        logWebView.setOnDragExited(event -> {
-            event.consume();
-        });
+        logWebView.setOnDragExited(Event::consume);
 
         logWebView.setOnDragDropped(event -> {
             event.setDropCompleted(false);
@@ -537,26 +526,27 @@ public class MainWindowController {
         // --- 添加结束 ---
 
         // 修复：使用字符串拼接代替多行字符串字面量，使用 \n 换行
-        String initialHtml = "<!DOCTYPE html>\n" +
-                "<html>\n" +
-                "<head>\n" +
-                "    <meta charset=\"UTF-8\">\n" +
-                "    <style>\n" +
-                "        body {\n" +
-                "            background-color: #0c0c0c;\n" +
-                "            color: #cccccc;\n" +
-                "            font-family: 'Consolas', 'Courier New', monospace;\n" +
-                "            font-size: 13px;\n" +
-                "            margin: 0;\n" +
-                "            padding: 12px;\n" +
-                "            white-space: pre-wrap;\n" +
-                "            word-wrap: break-word;\n" +
-                "        }\n" +
-                "    </style>\n" +
-                "</head>\n" +
-                "<body>\n" +
-                "</body>\n" +
-                "</html>";
+        String initialHtml = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body {
+                            background-color: #0c0c0c;
+                            color: #cccccc;
+                            font-family: 'Consolas', 'Courier New', monospace;
+                            font-size: 13px;
+                            margin: 0;
+                            padding: 12px;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        }
+                    </style>
+                </head>
+                <body>
+                </body>
+                </html>""";
         logWebView.getEngine().loadContent(initialHtml);
 
         VBox logContainer = new VBox(8, logTitle, logWebView);
@@ -627,7 +617,7 @@ public class MainWindowController {
         NeoLink.inputScanner = new Scanner(new ByteArrayInputStream(new byte[0]));
     }
 
-    private void stopService() {
+    public void stopService() {
         NeoLink.say("正在关闭 NeoLink 服务...");
         if (!isRunning) return;
         NeoLinkCoreRunner.requestStop();
@@ -637,7 +627,7 @@ public class MainWindowController {
             } catch (Exception ignored) {
             }
         }
-        neoproject.neolink.threads.CheckAliveThread.stopThread();
+        CheckAliveThread.stopThread();
         if (currentTask != null) {
             currentTask.cancel(true);
             currentTask = null;

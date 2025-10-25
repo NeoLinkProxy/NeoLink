@@ -4,6 +4,7 @@ import javafx.application.Application;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Stage;
+import neoproject.neolink.NeoLink;
 
 /**
  * NeoLink GUI 应用的主启动类。
@@ -25,6 +26,7 @@ public class AppStart extends Application {
     public void start(Stage primaryStage) {
         try {
             MainWindowController controller = new MainWindowController(primaryStage);
+            NeoLink.mainWindowController=controller;
             controller.show();
         } catch (Exception e) {
             e.printStackTrace();

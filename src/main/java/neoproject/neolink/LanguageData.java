@@ -8,6 +8,7 @@ import static neoproject.neolink.NeoLink.say;
  * 语言数据封装类，用于支持多语言。
  */
 public class LanguageData implements Serializable {
+    public String PLEASE_UPDATE_MANUALLY = "The current version is outdated, please manually download the update.";
     public String A_UDP_CONNECTION = "A UDP connection ";
     public String SERVER_IS_OFFLINE = "The server is offline.";
     public String IT_MUST_BE_INT = "This should be an integer.";
@@ -48,7 +49,7 @@ public class LanguageData implements Serializable {
         languageData.CONNECT_TO = "连接 ";
         languageData.OMITTED = " ...";
         languageData.A_TCP_CONNECTION = "一个 TCP 连接 ";
-        languageData.A_UDP_CONNECTION="一个 UDP 连接 ";
+        languageData.A_UDP_CONNECTION = "一个 UDP 连接 ";
         languageData.BUILD_UP = " 的通道建立";
         languageData.ENTER_PORT_MSG = "请输入你想进行内网穿透的内网端口：";
         languageData.USE_THE_ADDRESS = "使用链接地址： ";
@@ -65,6 +66,7 @@ public class LanguageData implements Serializable {
         languageData.AS_A_CERTIFICATE = " 作为证书。";
         languageData.LISTEN_AT = "监听端口： ";
         languageData.NO_FLOW_LEFT = "没有多余的流量了。";
+        languageData.PLEASE_UPDATE_MANUALLY = "当前版本过旧，请手动下载更新。";
         return languageData;
     }
 

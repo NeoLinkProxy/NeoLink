@@ -34,6 +34,7 @@ public class ConfigOperator {
                 NeoLink.hostHookPort = Integer.parseInt(lineConfigReader.get("HOST_HOOK_PORT"));
                 NeoLink.hostConnectPort = Integer.parseInt(lineConfigReader.get("HOST_CONNECT_PORT"));
                 NeoLink.enableAutoReconnect = Boolean.parseBoolean(lineConfigReader.get("ENABLE_AUTO_RECONNECT"));
+                NeoLink.enableAutoUpdate = Boolean.parseBoolean(lineConfigReader.get("ENABLE_AUTO_UPDATE"));
                 NeoLink.reconnectionIntervalSeconds = Integer.parseInt(lineConfigReader.get("RECONNECTION_INTERVAL"));
                 ProxyOperator.PROXY_IP_TO_NEO_SERVER = lineConfigReader.get("PROXY_IP_TO_NEO_SERVER");
                 ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = lineConfigReader.get("PROXY_IP_TO_LOCAL_SERVER");
@@ -54,9 +55,13 @@ public class ConfigOperator {
             BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(CONFIG_FILE, StandardCharsets.UTF_8));
 
             bufferedWriter.write("""
-                    #把你要连接的NeoServer的域名或者公网ip放到这里来
+                    #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
                     #Put the domain name or public network ip of the NeoServer you want to connect to here
-                    REMOTE_DOMAIN_NAME=127.0.0.1
+                    REMOTE_DOMAIN_NAME=localhost
+                    
+                    #设置是否启用自动更新
+                    #Enable or disable automatic updates
+                    ENABLE_AUTO_UPDATE=true
                     
                     #如果你不知道以下的设置意味着什么，请你不要改变它
                     #If you don't know what the following setting means, please don't change it
