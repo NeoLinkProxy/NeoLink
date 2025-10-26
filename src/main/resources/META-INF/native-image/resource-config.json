@@ -105,6 +105,8 @@
   }, {
     "pattern":"\\Qcom/sun/prism/d3d/hlsl/FillPgram_LinearGradient_PAD.obj\\E"
   }, {
+    "pattern":"\\Qcom/sun/prism/d3d/hlsl/FillRoundRect_Color.obj\\E"
+  }, {
     "pattern":"\\Qcom/sun/prism/d3d/hlsl/Solid_TextureFirstPassLCD.obj\\E"
   }, {
     "pattern":"\\Qcom/sun/prism/d3d/hlsl/Solid_TextureRGB.obj\\E"
@@ -114,6 +116,8 @@
     "pattern":"\\Qcom/sun/prism/d3d/hlsl/Texture_Color.obj\\E"
   }, {
     "pattern":"\\Qcom/sun/prism/d3d/hlsl/Texture_LinearGradient_PAD.obj\\E"
+  }, {
+    "pattern":"\\Qcom/sun/scenario/effect/impl/hw/d3d/hlsl/LinearConvolveShadow_64.obj\\E"
   }, {
     "pattern":"\\Qcom/sun/scenario/effect/impl/hw/d3d/hlsl/LinearConvolveShadow_8.obj\\E"
   }, {

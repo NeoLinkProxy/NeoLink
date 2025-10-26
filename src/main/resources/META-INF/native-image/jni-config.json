@@ -3,6 +3,9 @@
   "name":"[Lcom.sun.glass.ui.Screen;"
 },
 {
+  "name":"[Ljava.lang.String;"
+},
+{
   "name":"com.sun.glass.ui.Application",
   "methods":[{"name":"notifyThemeChanged","parameterTypes":["java.lang.String"] }, {"name":"reportException","parameterTypes":["java.lang.Throwable"] }]
 },
