@@ -52,12 +52,12 @@ java -jar NeoLink-XXXX.jar
 # 可选参数追加到后面
 # --output-file=path/to/logfile.log   将日志写入指定文件
 # --key=...                           访问密钥（必填）
-# ***--local-port=...                   本地要被穿透的端口（必填）
+# --local-port=...                    本地要被穿透的端口（必填）
 # --debug                             打印调试信息（异常栈）
 # --no-color                          关闭 ANSI 颜色输出
 # --en-us / --zh-ch                   指定语言
-# ***--nogui***                           禁用 JavaFX GUI 启动
-# ***--gui***                             使用 JavaFX GUI 启动 （默认启用）
+# --nogui                             禁用 JavaFX GUI 启动
+# --gui                               使用 JavaFX GUI 启动 （默认启用）
 ```
 或者
 ```bash
