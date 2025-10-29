@@ -391,10 +391,10 @@ public class UpdateManager {
                 command.append(" --nogui");
             }
             if (isDebugMode){
-                command.append("--debug");
+                command.append(" --debug");
             }
             if (outputFilePath!=null){
-                command.append("--output-file=").append(outputFilePath);
+                command.append(" --output-file=").append(outputFilePath);
             }
 
             say(languageData.STARTING_NEW_VERSION + command);
