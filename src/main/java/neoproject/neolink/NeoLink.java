@@ -60,7 +60,6 @@ public class NeoLink {
     private static boolean shouldAutoStartInGUI = false; // 新增标志位
     private static boolean isBackend = false;
 
-    // ==================== 主流程 ====================
     public static void main(String[] args) {
         parseCommandLineArgs(args);
 
