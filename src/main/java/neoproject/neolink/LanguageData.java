@@ -4,9 +4,6 @@ import java.io.Serializable;
 
 import static neoproject.neolink.NeoLink.say;
 
-/**
- * 语言数据封装类，用于支持多语言。
- */
 public class LanguageData implements Serializable {
     public String PLEASE_UPDATE_MANUALLY = "The current version is outdated, please manually download the update.";
     public String A_UDP_CONNECTION = "A UDP connection ";
@@ -40,8 +37,6 @@ public class LanguageData implements Serializable {
     public String FAILED_TO_DOWNLOAD_UPDATE_FILE = "Failed to download update file.";
     public String FAILED_TO_EXTRACT_7Z_FILE = "Failed to extract 7z file.";
     public String NEOLINK_EXE_NOT_FOUND = "NeoLink.exe not found in extracted files.";
-    public String FAILED_TO_BACKUP_EXISTING_EXE = "Failed to backup existing exe file.";
-    public String FAILED_TO_DELETE_EXISTING_EXE = "Failed to delete existing exe file.";
     public String FAILED_TO_BACKUP_EXISTING_JAR = "Failed to backup existing jar file.";
     public String FAILED_TO_DELETE_EXISTING_JAR = "Failed to delete existing jar file.";
     public String FAILED_TO_CHECK_UPDATES = "Failed to check updates: ";
@@ -51,8 +46,6 @@ public class LanguageData implements Serializable {
     public String CONNECTION_CLOSED_PREMATURELY = "Connection closed prematurely";
     public String DOWNLOAD_PROGRESS = "Download progress: ";
     public String FILE_SIZE_MISMATCH = "File size mismatch. Expected: ";
-    public String FILE_INTEGRITY_CHECK_FAILED = "File integrity check failed. Expected: ";
-    public String FILE_INTEGRITY_VERIFIED = "File integrity verified successfully.";
     public String ERROR_WHILE_DOWNLOADING_FILE = "Error while downloading file: ";
     public String ERROR_RECEIVING_FILE = "Error receiving file: ";
     public String SEVENZ_FILE_EXTRACTED_SUCCESSFULLY = "7z file extracted successfully to: ";
@@ -66,10 +59,6 @@ public class LanguageData implements Serializable {
     public String ERROR_DELETING_FILE = "Error deleting file: ";
     public String FILE_DOWNLOAD_COMPLETED = "File download completed successfully.";
     public String ERROR_CLOSING_7Z_FILE = "Error closing 7z file: ";
-    public String MISSING_XZ_LIBRARY = "Missing XZ library required for 7z extraction. Please add org.tukaani:xz dependency.";
-    public String UNSUPPORTED_7Z_FORMAT = "Unsupported 7z format. The file may use compression methods not supported by Apache Commons Compress.";
-    public String FAILED_TO_BACKUP_EXISTING_FOLDER = "Failed to backup existing version folder.";
-    public String FAILED_TO_MOVE_EXTRACTED_FOLDER = "Failed to move extracted folder to current directory.";
 
     private String currentLanguage = "en";
 
@@ -108,8 +97,6 @@ public class LanguageData implements Serializable {
         languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE = "下载更新文件失败。";
         languageData.FAILED_TO_EXTRACT_7Z_FILE = "解压7z文件失败。";
         languageData.NEOLINK_EXE_NOT_FOUND = "在解压的文件中未找到NeoLink.exe。";
-        languageData.FAILED_TO_BACKUP_EXISTING_EXE = "备份现有exe文件失败。";
-        languageData.FAILED_TO_DELETE_EXISTING_EXE = "删除现有exe文件失败。";
         languageData.FAILED_TO_BACKUP_EXISTING_JAR = "备份现有jar文件失败。";
         languageData.FAILED_TO_DELETE_EXISTING_JAR = "删除现有jar文件失败。";
         languageData.FAILED_TO_CHECK_UPDATES = "检查更新失败：";
@@ -119,8 +106,6 @@ public class LanguageData implements Serializable {
         languageData.CONNECTION_CLOSED_PREMATURELY = "连接意外关闭";
         languageData.DOWNLOAD_PROGRESS = "下载进度：";
         languageData.FILE_SIZE_MISMATCH = "文件大小不匹配。预期：";
-        languageData.FILE_INTEGRITY_CHECK_FAILED = "文件完整性检查失败。预期：";
-        languageData.FILE_INTEGRITY_VERIFIED = "文件完整性验证成功。";
         languageData.ERROR_WHILE_DOWNLOADING_FILE = "下载文件时出错：";
         languageData.ERROR_RECEIVING_FILE = "接收文件时出错：";
         languageData.SEVENZ_FILE_EXTRACTED_SUCCESSFULLY = "7z文件成功解压到：";
@@ -134,10 +119,6 @@ public class LanguageData implements Serializable {
         languageData.ERROR_DELETING_FILE = "删除文件时出错：";
         languageData.FILE_DOWNLOAD_COMPLETED = "文件下载成功完成。";
         languageData.ERROR_CLOSING_7Z_FILE = "关闭7z文件时出错：";
-        languageData.MISSING_XZ_LIBRARY = "缺少7z解压所需的XZ库。请添加org.tukaani:xz依赖。";
-        languageData.UNSUPPORTED_7Z_FORMAT = "不支持的7z格式。文件可能使用了Apache Commons Compress不支持的压缩方法。";
-        languageData.FAILED_TO_BACKUP_EXISTING_FOLDER = "备份现有版本文件夹失败。";
-        languageData.FAILED_TO_MOVE_EXTRACTED_FOLDER = "移动解压后的文件夹到当前目录失败。";
 
         return languageData;
     }
