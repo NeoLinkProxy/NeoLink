@@ -4,13 +4,16 @@ import plethora.management.bufferedFile.BufferedFile;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 
 import static neoproject.neolink.NeoLink.debugOperation;
 
 
 public class VersionInfo {
-    public static final String VERSION = "4.7.2";
+    public static final String VERSION = getAppVersion();
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {
@@ -38,5 +41,27 @@ public class VersionInfo {
                 debugOperation(e);
             }
         }
+    }
+
+    private static String getAppVersion() {
+        Properties props = new Properties();
+        try (InputStream is = NeoLink.class.getClassLoader()
+                .getResourceAsStream("app.properties")) {
+            if (is == null) {
+                throw new IllegalStateException(
+                        "Missing resource: " + "app.properties" + " (ensure it's in src/main/resources)");
+            }
+            props.load(is); // Java 9+ 默认 UTF-8，安全读取中文/特殊字符
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read " + "app.properties", e);
+        }
+
+        String version = props.getProperty("app.version");
+        if (version == null || version.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Property '" + "app.version" + "' is missing or empty in " + "app.properties");
+        }
+
+        return version.trim();
     }
 }
