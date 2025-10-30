@@ -11,9 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
-import static neoproject.neolink.InternetOperator.receiveBytes;
-import static neoproject.neolink.InternetOperator.receiveStr;
-import static neoproject.neolink.InternetOperator.sendStr;
+import static neoproject.neolink.InternetOperator.*;
 import static neoproject.neolink.NeoLink.*;
 
 public class UpdateManager {
@@ -390,10 +388,10 @@ public class UpdateManager {
             if (!isGUIMode) {
                 command.append(" --nogui");
             }
-            if (isDebugMode){
+            if (isDebugMode) {
                 command.append(" --debug");
             }
-            if (outputFilePath!=null){
+            if (outputFilePath != null) {
                 command.append(" --output-file=").append(outputFilePath);
             }
 
