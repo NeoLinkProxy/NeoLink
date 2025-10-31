@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="NeoLink NoDebugGUI" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="neoproject.neolink.NeoLink" />
+    <module name="NeoLink" />
+    <option name="PROGRAM_PARAMETERS" value="--nogui" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

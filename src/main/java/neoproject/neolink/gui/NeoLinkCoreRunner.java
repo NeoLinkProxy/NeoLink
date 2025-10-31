@@ -3,7 +3,9 @@ package neoproject.neolink.gui;
 import neoproject.neolink.*;
 import neoproject.neolink.threads.CheckAliveThread;
 import plethora.net.SecureSocket;
-import plethora.print.log.LogType;
+
+import static neoproject.neolink.NeoLink.debugOperation;
+import static neoproject.neolink.NeoLink.enableAutoReconnect;
 
 /**
  * NeoLink 核心逻辑运行器 (支持可中断的自动重连)。
@@ -47,36 +49,22 @@ public class NeoLinkCoreRunner {
                     hookSocket = new SecureSocket(remoteDomain, NeoLink.hostHookPort);
                 }
                 NeoLink.hookSocket = hookSocket;
-                String clientInfo = NeoLink.formatClientInfoString(NeoLink.languageData, accessKey);
-                InternetOperator.sendStr(clientInfo);
-                String serverResponse = InternetOperator.receiveStr();
-                if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
-                    String versions = serverResponse.split(":")[1];
-                    String[] versionArray = versions.split("\\|");
-                    String latestVersion = versionArray[versionArray.length - 1];
-                    UpdateManager.checkUpdate(NeoLink.CLIENT_FILE_PREFIX + latestVersion);
-                    return;
-                } else if (serverResponse.contains("exit") || serverResponse.contains("退") || serverResponse.contains("错误")
-                        || serverResponse.contains("denied") || serverResponse.contains("already")
-                        || serverResponse.contains("过期") || serverResponse.contains("占")) {
-                    NeoLink.say(serverResponse);
-                    return;
-                } else {
-                    NeoLink.say(serverResponse);
-                }
+                NeoLink.exchangeClientInfoWithServer();
                 CheckAliveThread.startThread();
                 NeoLink.listenForServerCommands();
             } catch (Exception e) {
-                // 【关键修复】仅在非用户主动停止时才输出错误
-                if (!shouldStop) {
-                    NeoLink.say("ERROR: " + e.getMessage(), LogType.ERROR);
+                if (!enableAutoReconnect){
+                    NeoLink.mainWindowController.stopService();
                 }
+                debugOperation(e);
+                // 【关键修复】仅在非用户主动停止时才输出错误
+//                if (!shouldStop) {
+//                    NeoLink.say("ERROR: " + e.getMessage(), LogType.ERROR);
+//                }
                 // 如果是用户停止，静默退出
             } finally {
                 try {
-                    if (hookSocket != null && !hookSocket.isClosed()) {
-                        hookSocket.close();
-                    }
+                    InternetOperator.close(hookSocket);
                     CheckAliveThread.stopThread();
                     NeoLink.hookSocket = null;
                     NeoLink.remotePort = 0;

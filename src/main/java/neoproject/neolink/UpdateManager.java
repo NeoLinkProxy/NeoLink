@@ -16,26 +16,20 @@ import static neoproject.neolink.NeoLink.*;
 
 public class UpdateManager {
     private static final String tempUpdateDir = CURRENT_DIR_PATH; // 临时更新目录，默认为程序自身目录
-    private static final int CHUNK_SIZE = 8192; // 8KB块大小，与服务端一致
 
     public static void checkUpdate(String fileName) {
-        if (!enableAutoUpdate) {
-            say(languageData.PLEASE_UPDATE_MANUALLY, LogType.ERROR);
-            if (isGUIMode) {
-                mainWindowController.stopService();
-                return;
-            } else {
-                exitAndFreeze(2);
-            }
-        }
-
         try {
             boolean isWindows = OSDetector.isWindows();
-            // 告知服务端客户端类型 (exe 或 jar)
-            sendStr(isWindows ? "exe" : "jar");
+            // 告知服务端客户端类型 (7z 或 jar)
+            sendStr(isWindows ? "7z" : "jar");
             boolean canDownload = Boolean.parseBoolean(receiveStr());
             if (!canDownload) {
-                exitAndFreeze(-1);
+                if (isGUIMode){
+                    say(languageData.PLEASE_UPDATE_MANUALLY);
+                    mainWindowController.stopService();
+                }else{
+                    exitAndFreeze(-1);
+                }
                 return;
             }
 
