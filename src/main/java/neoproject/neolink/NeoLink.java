@@ -204,20 +204,36 @@ public class NeoLink {
         }
     }
 
-    private static void exchangeClientInfoWithServer() throws IOException {
+    public static void exchangeClientInfoWithServer() throws IOException {
         String clientInfo = formatClientInfoString(languageData, key);
         sendStr(clientInfo);
         String serverResponse = receiveStr();
         if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
-            String versions = serverResponse.split(":")[1];
-            String[] versionArray = versions.split("\\|");
-            String latestVersion = versionArray[versionArray.length - 1];
-            checkUpdate(CLIENT_FILE_PREFIX + latestVersion);
+            say(serverResponse);
+            if (enableAutoUpdate){
+                sendStr("true");
+                String versions = serverResponse.split(":")[1];
+                String[] versionArray = versions.split("\\|");
+                String latestVersion = versionArray[versionArray.length - 1];
+                checkUpdate(CLIENT_FILE_PREFIX + latestVersion);//it will stop
+            }else {
+                sendStr("false");
+                hookSocket.close();
+                say(languageData.PLEASE_UPDATE_MANUALLY);
+                if (isGUIMode) {
+                    mainWindowController.stopService();
+                } else {
+                    exitAndFreeze(2);
+                }
+            }
+
         } else if (serverResponse.contains("exit") || serverResponse.contains("退") || serverResponse.contains("错误")
                 || serverResponse.contains("denied") || serverResponse.contains("already")
                 || serverResponse.contains("过期") || serverResponse.contains("占")) {
             say(serverResponse);
-            exitAndFreeze(0);
+            if (!isGUIMode){
+                exitAndFreeze(0);
+            }
         } else {
             if (OSDetector.isWindows()) {
                 int latency = NetworkUtils.getLatency(remoteDomainName);
