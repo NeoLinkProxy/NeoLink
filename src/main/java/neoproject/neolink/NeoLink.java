@@ -210,13 +210,13 @@ public class NeoLink {
         String serverResponse = receiveStr();
         if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
             say(serverResponse);
-            if (enableAutoUpdate){
+            if (enableAutoUpdate) {
                 sendStr("true");
                 String versions = serverResponse.split(":")[1];
                 String[] versionArray = versions.split("\\|");
                 String latestVersion = versionArray[versionArray.length - 1];
                 checkUpdate(CLIENT_FILE_PREFIX + latestVersion);//it will stop
-            }else {
+            } else {
                 sendStr("false");
                 hookSocket.close();
                 say(languageData.PLEASE_UPDATE_MANUALLY);
@@ -231,7 +231,7 @@ public class NeoLink {
                 || serverResponse.contains("denied") || serverResponse.contains("already")
                 || serverResponse.contains("过期") || serverResponse.contains("占")) {
             say(serverResponse);
-            if (!isGUIMode){
+            if (!isGUIMode) {
                 exitAndFreeze(0);
             }
         } else {

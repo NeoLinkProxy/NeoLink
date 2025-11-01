@@ -18,7 +18,7 @@ public class VersionInfo {
 
     public static void outPutEula() {
         BufferedFile bufferedFile = new BufferedFile(System.getProperty("user.dir") + BufferedFile.separator + "eula.txt");
-        if (bufferedFile.exists()){
+        if (bufferedFile.exists()) {
             bufferedFile.delete();
         }
         if (!bufferedFile.exists()) {

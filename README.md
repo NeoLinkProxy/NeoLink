@@ -44,10 +44,11 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP UDP 服
 ## **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 命令行模式（Terminal）
-将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：
-
+将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：<br>
+使用 JVM 参数 ``-Djdk.virtualThreadScheduler.parallelism=1`` 防止 CPU 占用过高<br>
+如果没有这个参数，该程序会最大限度利用 CPU
 ```bash
-java -jar NeoLink-XXXX.jar --nogui
+java -Djdk.virtualThreadScheduler.parallelism=1 -jar NeoLink-XXXX.jar --nogui
 
 # 可选参数追加到后面
 # --output-file=path/to/logfile.log  将日志写入指定文件

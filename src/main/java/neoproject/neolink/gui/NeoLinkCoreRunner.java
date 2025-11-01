@@ -1,6 +1,9 @@
 package neoproject.neolink.gui;
 
-import neoproject.neolink.*;
+import neoproject.neolink.ConfigOperator;
+import neoproject.neolink.InternetOperator;
+import neoproject.neolink.NeoLink;
+import neoproject.neolink.ProxyOperator;
 import neoproject.neolink.threads.CheckAliveThread;
 import plethora.net.SecureSocket;
 
@@ -53,7 +56,7 @@ public class NeoLinkCoreRunner {
                 CheckAliveThread.startThread();
                 NeoLink.listenForServerCommands();
             } catch (Exception e) {
-                if (!enableAutoReconnect){
+                if (!enableAutoReconnect) {
                     NeoLink.mainWindowController.stopService();
                 }
                 debugOperation(e);
