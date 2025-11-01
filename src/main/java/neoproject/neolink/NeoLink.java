@@ -61,8 +61,8 @@ public class NeoLink {
     private static boolean isBackend = false;
 
     public static void main(String[] args) {
+        System.setProperty("jdk.virtualThreadScheduler.parallelism", "1");
         parseCommandLineArgs(args);
-
         killCmdWindowIfNeeded(args);
 
         if (isGUIMode) {
@@ -71,6 +71,7 @@ public class NeoLink {
             System.exit(0);
         }
         initializeLogger();
+        printPropertiesIfDebug();
         detectLanguage();
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
@@ -88,6 +89,17 @@ public class NeoLink {
             listenForServerCommands();
         } catch (Exception e) {
             handleConnectionFailure(e);
+        }
+    }
+
+    public static void printPropertiesIfDebug() {
+        if(isDebugMode){
+            String parallelism = System.getProperty("jdk.virtualThreadScheduler.parallelism");
+            if (parallelism != null) {
+                say("jdk.virtualThreadScheduler.parallelism = " + parallelism);
+            } else {
+                say("jdk.virtualThreadScheduler.parallelism is null !");
+            }
         }
     }
 
