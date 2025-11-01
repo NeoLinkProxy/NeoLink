@@ -33,6 +33,8 @@ import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static neoproject.neolink.NeoLink.printPropertiesIfDebug;
+
 /**
  * NeoLink GUI 主窗口控制器 (最终修正版)
  * - 标题栏高度 32px，视觉宽松
@@ -110,11 +112,11 @@ public class MainWindowController {
         // --- 最后，创建 QueueBasedLoggist 并赋值给 NeoLink.loggist ---
         // 这个实例会将日志发送到队列（供 GUI 显示），并委托给 fileLoggist 写入文件
         NeoLink.loggist = new QueueBasedLoggist(fileLoggist);
-
         // --- 继续执行其他初始化逻辑 ---
         NeoLink.detectLanguage();
         NeoLink.inputScanner = new Scanner(new ByteArrayInputStream(new byte[0]));
         ConfigOperator.readAndSetValue();
+        printPropertiesIfDebug();
         NeoLink.printLogo(); // 这个调用的日志现在会写入指定文件（如果 --output-file 被使用）和 GUI
         NeoLink.printBasicInfo(); // 这个调用的日志现在会写入指定文件（如果 --output-file 被使用）和 GUI
 
