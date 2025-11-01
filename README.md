@@ -47,7 +47,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP UDP 服
 将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：
 
 ```bash
-java -jar NeoLink-XXXX.jar
+java -jar NeoLink-XXXX.jar --nogui
 
 # 可选参数追加到后面
 # --output-file=path/to/logfile.log  将日志写入指定文件
