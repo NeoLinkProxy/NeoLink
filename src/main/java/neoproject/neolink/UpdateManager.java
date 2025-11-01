@@ -24,10 +24,10 @@ public class UpdateManager {
             sendStr(isWindows ? "7z" : "jar");
             boolean canDownload = Boolean.parseBoolean(receiveStr());
             if (!canDownload) {
-                if (isGUIMode){
+                if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
                     mainWindowController.stopService();
-                }else{
+                } else {
                     exitAndFreeze(-1);
                 }
                 return;

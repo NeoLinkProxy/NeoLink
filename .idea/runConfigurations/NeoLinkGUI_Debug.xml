@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="NeoLinkGUI" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="neoproject.neolink.gui.AppStart" />
+  <configuration default="false" name="NeoLinkGUI Debug" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="neoproject.neolink.NeoLink" />
     <module name="NeoLink" />
     <option name="PROGRAM_PARAMETERS" value="--debug" />
     <method v="2">

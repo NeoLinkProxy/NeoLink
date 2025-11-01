@@ -27,7 +27,9 @@ import plethora.print.log.Loggist;
 import java.io.ByteArrayInputStream;
 import java.util.Objects;
 import java.util.Scanner;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,7 +61,7 @@ public class MainWindowController {
 
     private final Stage primaryStage;
     private final ExecutorService coreExecutor = Executors.newSingleThreadExecutor();
-    private ScheduledExecutorService logConsumerExecutor;
+    private ExecutorService logConsumerExecutor;
     private Future<?> currentTask = null;
     private TextField remoteDomainField;
     private TextField localPortField;
@@ -568,19 +570,23 @@ public class MainWindowController {
         return buttonBox;
     }
 
-    // ========== 原有逻辑保持不变 ==========
     private void startLogConsumer() {
-        logConsumerExecutor = new ScheduledThreadPoolExecutor(1);
-        logConsumerExecutor.scheduleAtFixedRate(() -> {
+        // 使用一个单线程的 ExecutorService 即可，不再需要 ScheduledExecutorService
+        logConsumerExecutor = Executors.newSingleThreadExecutor();
+        logConsumerExecutor.submit(() -> {
             try {
-                while (!LogMessageQueue.isEmpty()) {
+                while (!Thread.currentThread().isInterrupted()) {
+                    // 👉 关键改动：使用 take() 阻塞等待新日志
+                    // 当队列为空时，线程会在这里休眠，不消耗CPU
+                    // 当有新日志时，线程会被唤醒，继续执行
                     String message = LogMessageQueue.take();
                     appendLogToWebView(message);
                 }
             } catch (InterruptedException e) {
+                // 这是正常的退出方式（通过 executor.shutdownNow()）
                 Thread.currentThread().interrupt();
             }
-        }, 0, 100, TimeUnit.MILLISECONDS);
+        });
     }
 
     private void startService() {
