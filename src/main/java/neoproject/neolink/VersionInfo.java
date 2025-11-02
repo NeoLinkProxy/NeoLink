@@ -1,11 +1,6 @@
 package neoproject.neolink;
 
-import plethora.management.bufferedFile.BufferedFile;
-
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
@@ -17,14 +12,19 @@ public class VersionInfo {
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {
-        BufferedFile bufferedFile = new BufferedFile(System.getProperty("user.dir") + BufferedFile.separator + "eula.txt");
-        if (bufferedFile.exists()) {
-            bufferedFile.delete();
+        File eulaTXT = new File(System.getProperty("user.dir") + File.separator + "eula.txt");
+        if (eulaTXT.exists()) {
+            eulaTXT.delete();
         }
-        if (!bufferedFile.exists()) {
-            bufferedFile.createNewFile();
+        if (!eulaTXT.exists()) {
             try {
-                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(bufferedFile, StandardCharsets.UTF_8));
+                eulaTXT.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.exit(-3);
+            }
+            try {
+                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(eulaTXT, StandardCharsets.UTF_8));
                 bufferedWriter.write("""
                         NeoLink 最终用户许可协议 (EULA)
                         
