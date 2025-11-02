@@ -61,7 +61,6 @@ public class NeoLink {
     private static boolean isBackend = false;
 
     public static void main(String[] args) {
-        System.setProperty("jdk.virtualThreadScheduler.parallelism", "1");
         parseCommandLineArgs(args);
         killCmdWindowIfNeeded(args);
 
@@ -71,7 +70,6 @@ public class NeoLink {
             System.exit(0);
         }
         initializeLogger();
-        printPropertiesIfDebug();
         detectLanguage();
         ConfigOperator.readAndSetValue();
         ProxyOperator.init();
@@ -89,17 +87,6 @@ public class NeoLink {
             listenForServerCommands();
         } catch (Exception e) {
             handleConnectionFailure(e);
-        }
-    }
-
-    public static void printPropertiesIfDebug() {
-        if(isDebugMode){
-            String parallelism = System.getProperty("jdk.virtualThreadScheduler.parallelism");
-            if (parallelism != null) {
-                say("jdk.virtualThreadScheduler.parallelism = " + parallelism);
-            } else {
-                say("jdk.virtualThreadScheduler.parallelism is null !");
-            }
         }
     }
 
@@ -428,10 +415,10 @@ public class NeoLink {
             TCPTransformer serverToNeoThread = new TCPTransformer(localServerSocket, neoTransferSocket);
             TCPTransformer neoToServerThread = new TCPTransformer(neoTransferSocket, localServerSocket);
             ThreadManager threadManager = new ThreadManager(serverToNeoThread, neoToServerThread);
-            threadManager.start();
-            close(localServerSocket);
-            close(neoTransferSocket);
-            say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+            threadManager.startAsyncWithCallback(result -> {
+                // 当两个数据流都结束时，这个回调会被执行
+                say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+            });
         } catch (Exception e) {
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
@@ -440,8 +427,8 @@ public class NeoLink {
     }
 
     public static void createNewUDPConnection(String remoteAddress) {
-        SecureSocket neoTransferSocket = null;
-        DatagramSocket datagramSocket = null;
+        SecureSocket neoTransferSocket;
+        DatagramSocket datagramSocket;
         try {
             // 1. 建立到服务端B的加密控制通道
             neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
@@ -462,17 +449,13 @@ public class NeoLink {
 
             // 6. 【关键修复】使用 ThreadManager 管理线程和资源
             ThreadManager threadManager = new ThreadManager(neoToLocal, localToNeo);
-            threadManager.start(); // 等待两个线程完成
-
-            // 7. 线程结束后，关闭资源并打印日志
-            say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
-
+            threadManager.startAsyncWithCallback(result -> {
+                // 当两个数据流都结束时，这个回调会被执行
+                say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+            });
         } catch (Exception e) {
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
-        } finally {
-            // 8. 【关键修复】在 finally 块中确保资源被关闭
-            InternetOperator.close(neoTransferSocket, datagramSocket);
         }
     }
 

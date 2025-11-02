@@ -2,9 +2,9 @@ package neoproject.neolink;
 
 import neoproject.neolink.threads.CheckAliveThread;
 import neoproject.neolink.threads.TCPTransformer;
-import plethora.management.bufferedFile.BufferedFile;
 import plethora.utils.config.LineConfigReader;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,7 +12,7 @@ import java.nio.file.StandardOpenOption;
 
 public final class ConfigOperator {
 
-    public static final BufferedFile CONFIG_FILE = new BufferedFile(NeoLink.CURRENT_DIR_PATH + java.io.File.separator + "config.cfg");
+    public static final File CONFIG_FILE = new File(NeoLink.CURRENT_DIR_PATH + java.io.File.separator + "config.cfg");
     private static final Path CONFIG_PATH = CONFIG_FILE.toPath();
 
     /**
