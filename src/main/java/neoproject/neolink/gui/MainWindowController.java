@@ -1219,6 +1219,18 @@ public class MainWindowController {
             } else {
                 checkBox.setStyle("-fx-background-color: #202020; -fx-border-color: #555555; -fx-border-width: 2px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
             }
+
+            // 实时更新NeoLink类的布尔值
+            if (text.contains("TCP")) {
+                NeoLink.isDisableTCP = !newState; // 选中表示启用TCP，所以isDisableTCP为false
+                NeoLink.say("TCP协议已" + (newState ? "启用" : "禁用"));
+            } else if (text.contains("UDP")) {
+                NeoLink.isDisableUDP = !newState; // 选中表示启用UDP，所以isDisableUDP为false
+                NeoLink.say("UDP协议已" + (newState ? "启用" : "禁用"));
+            } else if (text.contains("自动重连")) {
+                NeoLink.enableAutoReconnect = newState;
+                NeoLink.say("自动重连已" + (newState ? "启用" : "禁用"));
+            }
         });
 
         // 添加悬停效果

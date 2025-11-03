@@ -6,7 +6,7 @@
 
     <groupId>neoproject</groupId>
     <artifactId>NeoLink</artifactId>
-    <version>4.8.4</version>
+    <version>4.8.5</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
