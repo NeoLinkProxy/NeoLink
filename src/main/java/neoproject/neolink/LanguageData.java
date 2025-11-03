@@ -59,6 +59,8 @@ public class LanguageData implements Serializable {
     public String ERROR_DELETING_FILE = "Error deleting file: ";
     public String FILE_DOWNLOAD_COMPLETED = "File download completed successfully.";
     public String ERROR_CLOSING_7Z_FILE = "Error closing 7z file: ";
+    public String WARNING_TCP_DISABLED = "TCP service is disabled !";
+    public String WARNING_UDP_DISABLED = "UDP service is disabled !";
 
     private String currentLanguage = "en";
 
@@ -119,6 +121,8 @@ public class LanguageData implements Serializable {
         languageData.ERROR_DELETING_FILE = "删除文件时出错：";
         languageData.FILE_DOWNLOAD_COMPLETED = "文件下载成功完成。";
         languageData.ERROR_CLOSING_7Z_FILE = "关闭7z文件时出错：";
+        languageData.WARNING_TCP_DISABLED = "TCP 服务已禁用！";
+        languageData.WARNING_UDP_DISABLED = "UDP 服务已禁用！";
 
         return languageData;
     }

@@ -1,6 +1,6 @@
 # NeoLink
 
-> **内网穿透客户端（NeoLink）** — 使用 Java 21 开发，所有类型的内网穿透。
+> **内网穿透客户端（NeoLink）** — 使用 Java 21 开发，支持 TCP 和 UDP 协议的内网穿透。
 > 自 4.7.0 版本开始，同步支持 TCP UDP
 > 推荐的场景：RDP 内网穿透，MC 服务器内网穿透，HTTP FileServer 等等
 
@@ -15,25 +15,26 @@
 
 ## 说明（概览）
 
-NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP UDP 服务（例如 Minecraft 服务器）暴露给公网 NeoServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP / SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
+NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服务（例如 Minecraft 服务器）暴露给公网 NeoServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
-> **重点**：请仔细阅读 eula.txt 中声明的限制**不支持 HTTPS 隧道** <br>
-> EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
+> **重点**：请仔细阅读 eula.txt 中声明的限制<br>
+>EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
 ---
 
-![图片](/image.jpg "Magic Gardens")
+![图片](/image.png "Magic Gardens")
 
 ## ✨ 特性
 
 - **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
-- **通用 TCP UDP 支持**：几乎所有类型的服务均可穿透。
+- **通用 TCP/UDP 支持**：几乎所有类型的服务均可穿透。
 - **双模式运行**：命令行（CLI）适合服务器部署，图形界面（GUI）适合新手。
 - **自动重连**：连接断开后自动重试，保障服务高可用。
-- **代理支持**：支持 HTTP / SOCKS5 代理连接 NeoProxyServer 或本地服务。
+- **代理支持**：支持 HTTP/SOCKS5 代理连接 NeoProxyServer 或本地服务。
 - **多语言**：自动识别系统语言（中/英），也可通过参数强制指定。
 - **自动更新**：服务端可推送新版本，Windows 下自动下载并重启。
 - **日志记录**：所有操作自动记录到 `logs/` 目录。
 - **心跳保活**：维持长连接，防止 NAT 超时断开。
+- **参数化启动**：支持通过命令行参数直接指定密钥和端口，实现一键启动。
 
 ---
 
@@ -41,14 +42,14 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP UDP 服
 *   Windows11 支持 EXE 启动（采用 Graalvm 构建，无需 Java 环境）
 *   Release 界面提供了环境捆绑版（仅支持 Windows），是电脑小白使用 NeoLink 最方便的选择，避免折腾
 *   其他平台仅支持 Java 21 以上的版本启动
-## **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
+*   支持通过命令行参数直接指定密钥和本地端口，实现一键启动
+
+### **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 命令行模式（Terminal）
-将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：<br>
-使用 JVM 参数 ``-Djdk.virtualThreadScheduler.parallelism=1`` 防止 CPU 占用过高<br>
-如果没有这个参数，该程序会最大限度利用 CPU
+将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：
 ```bash
-java -Djdk.virtualThreadScheduler.parallelism=1 -jar NeoLink-XXXX.jar --nogui
+java -jar NeoLink-XXXX.jar --nogui
 
 # 可选参数追加到后面
 # --output-file=path/to/logfile.log  将日志写入指定文件
@@ -59,12 +60,25 @@ java -Djdk.virtualThreadScheduler.parallelism=1 -jar NeoLink-XXXX.jar --nogui
 # --en-us / --zh-ch                  指定语言
 # --nogui                            禁用 JavaFX GUI 启动
 # --gui                              使用 JavaFX GUI 启动 （默认启用）
+# --disable-tcp                      禁用 TCP 连接
+# --disable-udp                      禁用 UDP 连接
 ```
-或者
+
+### 一键启动（GUI模式）
 ```bash
-# 使用 GUI
-NeoLink-XXXX.exe
+# 使用 GUI 并直接指定密钥和端口，实现一键启动
+java -jar NeoLink-XXXX.jar --key=你的访问密钥 --local-port=本地端口号
+
+# 或者使用 EXE 文件
+NeoLink-XXXX.exe --key=你的访问密钥 --local-port=本地端口号
 ```
+
+### 一键启动（命令行模式）
+```bash
+# 使用命令行模式并直接指定密钥和端口，实现一键启动
+java -jar NeoLink-XXXX.jar --nogui --key=你的访问密钥 --local-port=本地端口号
+```
+
 ### 🖥️构建项目
 ```bash
 git clone https://github.com/CeroxeAnivie/PlethoraAPI
@@ -74,6 +88,7 @@ git clone https://github.com/NeoLinkProxy/NeoLink.git
 cd NeoProxyServer
 mvn clean package
 ```
+
 ### 📁配置文件（`config.cfg`）
 
 第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。默认内容如下（也可直接在仓库中保存此文件）：
@@ -120,8 +135,8 @@ BUFFER_LEN=4096
 
 #### 代理字段格式说明
 - 支持 2 种代理类型前缀：`socks` 或 `http`（不区分大小写）。示例：
-  - `socks->127.0.0.1:7890`（无认证）
-  - `http->10.10.10.1:8080@user;pass`（带认证）
+    - `socks->127.0.0.1:7890`（无认证）
+    - `http->10.10.10.1:8080@user;pass`（带认证）
 - `PROXY_IP_TO_LOCAL_SERVER`：当访问本地服务（localDomainName/localPort）时，先走这个代理（可为空）
 - `PROXY_IP_TO_NEO_SERVER`：当访问 NeoServer 时，走此代理（可为空）
 
@@ -147,8 +162,8 @@ BUFFER_LEN=4096
 Q: 为什么连接不上 NeoProxyServer？  
 A:
 1. 检查 ***config.cfg*** 中 **REMOTE_DOMAIN_NAME** 与 **HOST_HOOK_PORT** 和 **HOST_CONNECT_PORT** 的值是否跟服务端匹配。
-2. 确认服务器防火墙/云服务安全组已放通对应端口。  
-3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。  
+2. 确认服务器防火墙/云服务安全组已放通对应端口。
+3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。
 4. 使用 `--debug` 获取更多异常栈信息。
 
 Q: 如何使用 HTTPS 协议<br>
@@ -165,6 +180,12 @@ A: 在 `config.cfg` 中将 `ENABLE_AUTO_RECONNECT=false`。
 Q: GUI 启动但无法显示日志或乱码？  
 A: GUI 使用 WebView 渲染日志，程序已经做了中文编码/ANSI 转换的处理；如仍异常，请检查 JavaFX 版本与系统环境编码设置。
 
+Q: 如何禁用 TCP 或 UDP 连接？
+A: UI 下高级设置可以调节，或者使用启动参数 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接。
+
+Q: RDP 总是断开连接怎么回事？
+A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的RDP即可完美解决。
+
 ---
 
 ## 🔐许可证
@@ -176,11 +197,13 @@ A: GUI 使用 WebView 渲染日志，程序已经做了中文编码/ANSI 转换�
 
 - 启用 `--debug` 获取更多堆栈信息（会写入日志文件）。
 - 查看 `logs/` 目录中的最近日志文件以定位问题。
-- 若出现“延迟大于 200ms”的提示，请考虑更换更稳定的网络或 NeoProxyServer 节点。
+- 若出现"延迟大于 200ms"的提示，请考虑更换更稳定的网络或 NeoProxyServer 节点。
+- 使用 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接，以排查特定协议的问题。
+
 ---
 
 ## ⚠️附件 《最终用户许可协议》 EULA 内容
 
 - 始终以最新的为准，旧的内容自动失效。作者对其任意内容具有最终解释权。<br>
-[eula.txt](eula.txt)
+  [eula.txt](eula.txt)
 ---

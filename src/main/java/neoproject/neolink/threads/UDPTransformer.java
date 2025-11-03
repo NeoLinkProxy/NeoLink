@@ -53,6 +53,36 @@ public class UDPTransformer implements Runnable {
     }
 
     /**
+     * 这个方法可以保持为静态，因为它不依赖实例状态。
+     */
+    public static DatagramPacket deserializeToDatagramPacket(byte[] serializedData) {
+        ByteBuffer buffer = ByteBuffer.wrap(serializedData);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+
+        int magic = buffer.getInt();
+        if (magic != 0xDEADBEEF) {
+            throw new IllegalArgumentException("Invalid magic number in serialized data");
+        }
+
+        int dataLen = buffer.getInt();
+        int ipLen = buffer.getInt();
+        byte[] ipBytes = new byte[ipLen];
+        buffer.get(ipBytes);
+        InetAddress address;
+        try {
+            address = InetAddress.getByAddress(ipBytes);
+        } catch (Exception e) {
+            debugOperation(e);
+            return null;
+        }
+        int port = buffer.getShort() & 0xFFFF;
+        byte[] data = new byte[dataLen];
+        buffer.get(data);
+
+        return new DatagramPacket(data, data.length, address, port);
+    }
+
+    /**
      * 🔥【重构】改为实例方法，使用实例的 receiveBuffer。
      */
     private void transferDataToNeoServer() {
@@ -132,36 +162,6 @@ public class UDPTransformer implements Runnable {
         } catch (Exception e) {
             debugOperation(e);
         }
-    }
-
-    /**
-     * 这个方法可以保持为静态，因为它不依赖实例状态。
-     */
-    public static DatagramPacket deserializeToDatagramPacket(byte[] serializedData) {
-        ByteBuffer buffer = ByteBuffer.wrap(serializedData);
-        buffer.order(ByteOrder.BIG_ENDIAN);
-
-        int magic = buffer.getInt();
-        if (magic != 0xDEADBEEF) {
-            throw new IllegalArgumentException("Invalid magic number in serialized data");
-        }
-
-        int dataLen = buffer.getInt();
-        int ipLen = buffer.getInt();
-        byte[] ipBytes = new byte[ipLen];
-        buffer.get(ipBytes);
-        InetAddress address;
-        try {
-            address = InetAddress.getByAddress(ipBytes);
-        } catch (Exception e) {
-            debugOperation(e);
-            return null;
-        }
-        int port = buffer.getShort() & 0xFFFF;
-        byte[] data = new byte[dataLen];
-        buffer.get(data);
-
-        return new DatagramPacket(data, data.length, address, port);
     }
 
     @Override

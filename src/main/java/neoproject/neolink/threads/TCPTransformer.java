@@ -1,7 +1,5 @@
 package neoproject.neolink.threads;
 
-import neoproject.neolink.InternetOperator;
-import neoproject.neolink.NeoLink;
 import plethora.net.SecureSocket;
 
 import java.io.BufferedInputStream;

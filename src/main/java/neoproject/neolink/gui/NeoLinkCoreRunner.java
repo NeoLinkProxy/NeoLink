@@ -1,6 +1,5 @@
 package neoproject.neolink.gui;
 
-import neoproject.neolink.ConfigOperator;
 import neoproject.neolink.InternetOperator;
 import neoproject.neolink.NeoLink;
 import neoproject.neolink.ProxyOperator;
@@ -22,7 +21,6 @@ public class NeoLinkCoreRunner {
 
     public static void runCore(String remoteDomain, int localPort, String accessKey) {
         shouldStop = false;
-        ConfigOperator.readAndSetValue();
         NeoLink.remoteDomainName = remoteDomain;
         NeoLink.localPort = localPort;
         NeoLink.key = accessKey;

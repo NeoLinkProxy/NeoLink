@@ -1,7 +1,7 @@
 .root {
     -fx-font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
     -fx-font-size: 14px;
-    -fx-background-color: #1f1f1f; /* Win11 官方暗色背景 [[58]] */
+    -fx-background-color: #1f1f1f; /* Win11 官方暗色背景 */
 }
 
 .group-title,
@@ -28,7 +28,7 @@
 
 .text-field:focused,
 .password-field:focused {
-    -fx-border-color: #0078d4;        /* Fluent 强调色 [[50]] */
+    -fx-border-color: #0078d4;        /* Fluent 强调色 */
     -fx-border-width: 2px;
     -fx-background-color: #252525;    /* 聚焦时背景略亮，增强反馈 */
 }
@@ -53,59 +53,52 @@
 }
 
 .primary-button {
-    -fx-background-color: #0078d4;    /* Fluent 主色 [[50]] */
+    -fx-background-color: #0078d4;    /* Fluent 主色 */
     -fx-text-fill: white;
     -fx-border-color: transparent;
 }
 
 .primary-button:hover {
-    -fx-background-color: #106ebe;    /* Fluent hover 色 [[50]] */
+    -fx-background-color: #106ebe;    /* Fluent hover 色 */
 }
 
 .primary-button:pressed {
-    -fx-background-color: #005a9e;    /* Fluent pressed 色 [[50]] */
+    -fx-background-color: #005a9e;    /* Fluent pressed 色 */
 }
 
-/* --- CheckBox: 紧凑布局，Win11 风格 --- */
-.check-box {
-    -fx-label-padding: 0 0 0 28;
-    -fx-spacing: 8px;
+/* --- TitledPane 样式 --- */
+.titled-pane {
+    -fx-text-fill: #ffffff;
 }
-.check-box .box {
-    -fx-background-color: #202020;
-    -fx-border-color: #555555;
-    -fx-border-width: 2px;
-    -fx-border-radius: 4px;
-    -fx-background-radius: 4px;
-    -fx-padding: 6px;
-    -fx-effect: null;
+
+.titled-pane > .title {
+    -fx-background-color: #2a2a2a;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1px 0;
+    -fx-background-insets: 0;
+    -fx-padding: 8px 12px;
+    -fx-cursor: hand;
 }
-.check-box:hover .box {
-    -fx-border-color: #777777;
-}
-.check-box:selected .box {
-    -fx-background-color: #0078d4;
-    -fx-border-color: #0078d4;
-}
-.check-box .mark {
+
+.titled-pane > .title > .arrow-button {
     -fx-background-color: transparent;
-    -fx-padding: 0;
 }
-.check-box:selected .mark {
-    -fx-background-color: white;
-    -fx-shape: "M2.5 6.5L5.5 9.5L10.5 3.5";
-    -fx-scale-shape: true;
-    -fx-stroke-width: 2px;
-    -fx-padding: 2px;
+
+.titled-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: #ffffff;
 }
-.check-box .text {
-    -fx-fill: #ffffff;
+
+.titled-pane > .content {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1px 0;
 }
 
 .label {
     -fx-text-fill: #ffffff;
     -fx-font-size: 14px;
 }
+
 /* --- 修正版标题栏（不依赖系统字体）--- */
 .title-bar {
     -fx-background-color: #1a1a1a;
