@@ -26,7 +26,8 @@ import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static neoproject.neolink.InternetOperator.*;
+import static neoproject.neolink.InternetOperator.receiveStr;
+import static neoproject.neolink.InternetOperator.sendStr;
 import static neoproject.neolink.UpdateManager.checkUpdate;
 
 public class NeoLink {
@@ -57,6 +58,8 @@ public class NeoLink {
     public static Scanner inputScanner = new Scanner(System.in);
     public static MainWindowController mainWindowController = null;
     public static boolean isGUIMode = true;
+    public static boolean isDisableUDP = false;
+    public static boolean isDisableTCP = false;
     private static boolean shouldAutoStartInGUI = false; // 新增标志位
     private static boolean isBackend = false;
 
@@ -168,6 +171,8 @@ public class NeoLink {
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
             case "--backend" -> isBackend = true;
+            case "--disable-tcp" -> isDisableTCP = true;
+            case "--disable-udp" -> isDisableUDP = true;
         }
     }
 
@@ -301,9 +306,13 @@ public class NeoLink {
     private static void handleServerCommand(String command) {
         String[] parts = command.split(";", 2);
         if ("sendSocket".equals(parts[0])) {
-            new Thread(() -> createNewTCPConnection(parts[1])).start();
+            if (!isDisableTCP) {
+                new Thread(() -> createNewTCPConnection(parts[1])).start();
+            }
         } else if ("sendSocketUDP".equals(parts[0])) {
-            new Thread(() -> createNewUDPConnection(parts[1])).start();
+            if (!isDisableUDP) {
+                new Thread(() -> createNewUDPConnection(parts[1])).start();
+            }
         } else if ("exitNoFlow".equals(parts[0])) {
             say(languageData.NO_FLOW_LEFT, LogType.ERROR);
             exitAndFreeze(0);
@@ -364,6 +373,12 @@ public class NeoLink {
     public static void printBasicInfo() {
         speakAnnouncement();
         say(languageData.VERSION + VersionInfo.VERSION);
+        if (isDisableTCP) {
+            say(languageData.WARNING_TCP_DISABLED, LogType.WARNING);
+        }
+        if (isDisableUDP) {
+            say(languageData.WARNING_UDP_DISABLED, LogType.WARNING);
+        }
     }
 
     private static void speakAnnouncement() {

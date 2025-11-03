@@ -4,7 +4,8 @@ import neoproject.neolink.NeoLink;
 import plethora.utils.Sleeper;
 
 import static neoproject.neolink.InternetOperator.close;
-import static neoproject.neolink.NeoLink.*;
+import static neoproject.neolink.NeoLink.debugOperation;
+import static neoproject.neolink.NeoLink.isDebugMode;
 
 /**
  * 客户端心跳发送线程。
@@ -67,7 +68,7 @@ public class CheckAliveThread implements Runnable {
         heartbeatThreadInstance.setName("Client-CheckAliveThread"); // 设置线程名，便于调试
 //        heartbeatThreadInstance.setDaemon(true); // 设置为守护线程，主程序退出时自动结束
         heartbeatThreadInstance.start();
-        if (isDebugMode){
+        if (isDebugMode) {
             System.out.println("CheckAliveThread started.");
         }
     }
@@ -81,7 +82,7 @@ public class CheckAliveThread implements Runnable {
             return;
         }
         isRunning = false;
-        if (isDebugMode){
+        if (isDebugMode) {
             System.out.println("Stopping CheckAliveThread...");
         }
 
@@ -92,7 +93,7 @@ public class CheckAliveThread implements Runnable {
 
         // 关闭底层的 Socket 连接
         close(NeoLink.hookSocket);
-        if (isDebugMode){
+        if (isDebugMode) {
             System.out.println("CheckAliveThread stopped.");
         }
     }
@@ -107,7 +108,7 @@ public class CheckAliveThread implements Runnable {
 
             } catch (Exception e) {
                 // 2. 发送失败，通常意味着连接已断开
-                if (isDebugMode){
+                if (isDebugMode) {
                     System.err.println("Failed to send heartbeat. Connection to server is lost.");
                 }
                 debugOperation(e); // 保留您原有的调试逻辑

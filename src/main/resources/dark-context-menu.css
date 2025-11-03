@@ -39,3 +39,30 @@
 .menu-item:disabled {
     -fx-text-fill: #777777; /* 禁用时文字颜色 */
 }
+
+/* TitledPane 样式 */
+.titled-pane {
+    -fx-text-fill: #ffffff;
+}
+
+.titled-pane > .title {
+    -fx-background-color: #2a2a2a;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1px 0;
+    -fx-background-insets: 0;
+    -fx-padding: 8px 12px;
+}
+
+.titled-pane > .title > .arrow-button {
+    -fx-background-color: transparent;
+}
+
+.titled-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: #ffffff;
+}
+
+.titled-pane > .content {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1px 0;
+}
