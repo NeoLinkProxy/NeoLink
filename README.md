@@ -180,10 +180,10 @@ A: 在 `config.cfg` 中将 `ENABLE_AUTO_RECONNECT=false`。
 Q: GUI 启动但无法显示日志或乱码？  
 A: GUI 使用 WebView 渲染日志，程序已经做了中文编码/ANSI 转换的处理；如仍异常，请检查 JavaFX 版本与系统环境编码设置。
 
-Q: 如何禁用 TCP 或 UDP 连接？
+Q: 如何禁用 TCP 或 UDP 连接？<br>
 A: UI 下高级设置可以调节，或者使用启动参数 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接。
 
-Q: RDP 总是断开连接怎么回事？
+Q: RDP 总是断开连接怎么回事？<br>
 A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的RDP即可完美解决。
 
 ---
