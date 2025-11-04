@@ -21,11 +21,13 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 import neoproject.neolink.ConfigOperator;
+import neoproject.neolink.LanguageData;
 import neoproject.neolink.NeoLink;
 import neoproject.neolink.threads.CheckAliveThread;
 import plethora.print.log.Loggist;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
@@ -33,7 +35,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
-import static neoproject.neolink.NeoLink.debugOperation;
+import static neoproject.neolink.InternetOperator.sendStr;
+import static neoproject.neolink.NeoLink.*;
 
 /**
  * NeoLink GUI 主窗口控制器 (最终修正版)
@@ -870,6 +873,8 @@ public class MainWindowController {
         // 应用高级设置
         applyAdvancedSettings();
 
+        languageData=languageData.flush();//刷新语言中的变量
+
         NeoLink.say("正在启动 NeoLink 服务...");
         NeoLink.printBasicInfo();
         isRunning = true;
@@ -1034,7 +1039,7 @@ public class MainWindowController {
 
                 // 创建主布局 - 完全照抄主窗口的createMainLayout结构
                 VBox root = new VBox();
-                root.getChildren().add(createCustomTitleBarForDialog(dialogStage, "输入错误"));
+                root.getChildren().add(createCustomTitleBarForDialog(dialogStage));
 
                 BorderPane contentPane = new BorderPane();
                 contentPane.setPadding(new Insets(24));
@@ -1109,7 +1114,7 @@ public class MainWindowController {
     }
 
     // 为对话框创建自定义标题栏的方法 - 完全照抄主窗口的createCustomTitleBar方法
-    private Region createCustomTitleBarForDialog(Stage dialogStage, String title) {
+    private Region createCustomTitleBarForDialog(Stage dialogStage) {
         HBox titleBar = new HBox();
         titleBar.setPrefHeight(36);
         titleBar.getStyleClass().add("title-bar");
@@ -1125,7 +1130,7 @@ public class MainWindowController {
         } catch (Exception ignored) {
         }
 
-        Label titleLabel = new Label(title);
+        Label titleLabel = new Label("输入错误");
         titleLabel.getStyleClass().add("title-text");
 
         // 只使用关闭按钮
@@ -1210,8 +1215,23 @@ public class MainWindowController {
         HBox box = new HBox(8, checkBox, label);
         box.setAlignment(Pos.CENTER_LEFT);
 
+        // 添加冷却时间变量 - 新增
+        final long[] lastClickTime = {0};
+        final boolean isTcpOrUdp = text.contains("TCP") || text.contains("UDP");
+        final long cooldownPeriod = 500; // 500毫秒冷却时间
+
         // 添加点击事件
         box.setOnMouseClicked(e -> {
+            // 检查冷却时间 - 新增
+            if (isTcpOrUdp) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastClickTime[0] < cooldownPeriod) {
+                    // 在冷却期内，忽略点击
+                    return;
+                }
+                lastClickTime[0] = currentTime;
+            }
+
             boolean newState = !checkMark.isVisible();
             checkMark.setVisible(newState);
             if (newState) {
@@ -1223,9 +1243,11 @@ public class MainWindowController {
             // 实时更新NeoLink类的布尔值
             if (text.contains("TCP")) {
                 NeoLink.isDisableTCP = !newState; // 选中表示启用TCP，所以isDisableTCP为false
+                sendTCPandUDPState();
                 NeoLink.say("TCP协议已" + (newState ? "启用" : "禁用"));
             } else if (text.contains("UDP")) {
                 NeoLink.isDisableUDP = !newState; // 选中表示启用UDP，所以isDisableUDP为false
+                sendTCPandUDPState();
                 NeoLink.say("UDP协议已" + (newState ? "启用" : "禁用"));
             } else if (text.contains("自动重连")) {
                 NeoLink.enableAutoReconnect = newState;
@@ -1247,6 +1269,23 @@ public class MainWindowController {
         });
 
         return box;
+    }
+
+    private void sendTCPandUDPState() {
+        String command = "";
+        if (!isDisableTCP) {
+            command = command.concat("T");
+        }
+        if (!isDisableUDP) {
+            command = command.concat("U");
+        }
+        try {
+            if (isRunning && hookSocket != null) {
+                sendStr(command);
+            }
+        } catch (IOException e) {
+            debugOperation(e);//这里实际上是不可能的，因为如果服务端离线，checkAliveThread 会抢先一步抛出异常，轮不到这里
+        }
     }
 
     private void applyAdvancedSettings() {

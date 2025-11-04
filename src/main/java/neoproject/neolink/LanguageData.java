@@ -64,6 +64,13 @@ public class LanguageData implements Serializable {
 
     private String currentLanguage = "en";
 
+    public LanguageData flush(){
+        if (currentLanguage.equals("zh")){
+            return getChineseLanguage();
+        }else{
+            return new LanguageData();
+        }
+    }
     public static LanguageData getChineseLanguage() {
         LanguageData languageData = new LanguageData();
         languageData.currentLanguage = "zh";
