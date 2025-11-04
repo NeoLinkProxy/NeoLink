@@ -62,6 +62,7 @@ public class NeoLink {
     public static boolean isDisableTCP = false;
     private static boolean shouldAutoStartInGUI = false; // 新增标志位
     private static boolean isBackend = false;
+    private static boolean noColor=false;
 
     public static void main(String[] args) {
         parseCommandLineArgs(args);
@@ -166,7 +167,7 @@ public class NeoLink {
         switch (arg) {
             case "--en-us" -> languageData = new LanguageData();
             case "--zh-ch" -> languageData = LanguageData.getChineseLanguage();
-            case "--no-color" -> loggist.disableColor();
+            case "--no-color" -> noColor=true;
             case "--debug" -> isDebugMode = true;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
@@ -195,6 +196,9 @@ public class NeoLink {
             loggist = logger;
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize logger", e);
+        }
+        if(noColor){
+            loggist.disableColor();
         }
     }
 
@@ -387,7 +391,15 @@ public class NeoLink {
     }
 
     public static String formatClientInfoString(LanguageData languageData, String key) {
-        return languageData.getCurrentLanguage() + ";" + VersionInfo.VERSION + ";" + key;
+        //zh;version;key;TU
+        String info = languageData.getCurrentLanguage() + ";" + VersionInfo.VERSION + ";" + key + ";";
+        if (!isDisableTCP) {//启用了TCP
+            info = info.concat("T");
+        }
+        if (!isDisableUDP) {//启用了UDP
+            info = info.concat("U");
+        }
+        return info;
     }
 
     public static void sayInfoNoNewLine(String str) {
