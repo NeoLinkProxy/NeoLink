@@ -1,10 +1,10 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
-import neoproject.neolink.gui.AppStart;
-import neoproject.neolink.gui.MainWindowController;
-import neoproject.neolink.threads.CheckAliveThread;
-import neoproject.neolink.threads.TCPTransformer;
-import neoproject.neolink.threads.UDPTransformer;
+import neoproxy.neolink.gui.AppStart;
+import neoproxy.neolink.gui.MainWindowController;
+import neoproxy.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.threads.TCPTransformer;
+import neoproxy.neolink.threads.UDPTransformer;
 import plethora.net.NetworkUtils;
 import plethora.net.SecureSocket;
 import plethora.os.detect.OSDetector;
@@ -26,9 +26,9 @@ import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static neoproject.neolink.InternetOperator.receiveStr;
-import static neoproject.neolink.InternetOperator.sendStr;
-import static neoproject.neolink.UpdateManager.checkUpdate;
+import static neoproxy.neolink.InternetOperator.receiveStr;
+import static neoproxy.neolink.InternetOperator.sendStr;
+import static neoproxy.neolink.UpdateManager.checkUpdate;
 
 public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
@@ -45,7 +45,7 @@ public class NeoLink {
     public static int localPort = INVALID_LOCAL_PORT;
     public static Loggist loggist;
     public static String outputFilePath = null;
-    public static LanguageData languageData = new LanguageData();
+    public static LanguageData languageData = null;
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
     public static boolean enableAutoReconnect = true;
@@ -62,7 +62,7 @@ public class NeoLink {
     public static boolean isDisableTCP = false;
     private static boolean shouldAutoStartInGUI = false; // 新增标志位
     private static boolean isBackend = false;
-    private static boolean noColor=false;
+    private static boolean noColor = false;
 
     public static void main(String[] args) {
         parseCommandLineArgs(args);
@@ -118,13 +118,15 @@ public class NeoLink {
      * 如果用户通过命令行指定了语言（如 --zh-ch），则此方法不会覆盖它。
      */
     public static void detectLanguage() {
-        // 只有在 languageData 仍是默认的英文实例时才进行自动检测
-        if ("en".equals(languageData.getCurrentLanguage())) {
+        if (languageData == null) {
+            // 只有在 languageData 仍是 null 才进行自动检测
             Locale defaultLocale = Locale.getDefault();
             if (defaultLocale.getLanguage().contains("zh")) {
                 languageData = LanguageData.getChineseLanguage();
                 // 现在 loggist 已经初始化，可以安全地打印日志
                 say("使用zh-ch作为备选语言");
+            }else {
+                languageData = new LanguageData();
             }
         }
     }
@@ -166,8 +168,8 @@ public class NeoLink {
     private static void parseFlagArgument(String arg) {
         switch (arg) {
             case "--en-us" -> languageData = new LanguageData();
-            case "--zh-ch" -> languageData = LanguageData.getChineseLanguage();
-            case "--no-color" -> noColor=true;
+            case "--zh-cn" -> languageData = LanguageData.getChineseLanguage();
+            case "--no-color" -> noColor = true;
             case "--debug" -> isDebugMode = true;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
@@ -197,7 +199,7 @@ public class NeoLink {
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize logger", e);
         }
-        if(noColor){
+        if (noColor) {
             loggist.disableColor();
         }
     }

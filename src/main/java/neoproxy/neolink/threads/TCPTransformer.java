@@ -1,4 +1,4 @@
-package neoproject.neolink.threads;
+package neoproxy.neolink.threads;
 
 import plethora.net.SecureSocket;
 
@@ -6,8 +6,8 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.net.Socket;
 
-import static neoproject.neolink.InternetOperator.*;
-import static neoproject.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.InternetOperator.*;
+import static neoproxy.neolink.NeoLink.debugOperation;
 
 /**
  * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。

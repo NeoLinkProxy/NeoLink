@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>neoproject</groupId>
+    <groupId>neoproxy</groupId>
     <artifactId>NeoLink</artifactId>
     <version>4.8.6</version>
 
@@ -65,7 +65,7 @@
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>neoproject.neolink.NeoLink</mainClass>
+                                    <mainClass>neoproxy.neolink.NeoLink</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>

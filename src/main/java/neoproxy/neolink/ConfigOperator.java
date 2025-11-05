@@ -1,7 +1,7 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
-import neoproject.neolink.threads.CheckAliveThread;
-import neoproject.neolink.threads.TCPTransformer;
+import neoproxy.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.threads.TCPTransformer;
 import plethora.utils.config.LineConfigReader;
 
 import java.io.File;

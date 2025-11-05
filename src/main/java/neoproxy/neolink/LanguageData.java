@@ -1,8 +1,8 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
 import java.io.Serializable;
 
-import static neoproject.neolink.NeoLink.say;
+import static neoproxy.neolink.NeoLink.say;
 
 public class LanguageData implements Serializable {
     public String PLEASE_UPDATE_MANUALLY = "The current version is outdated, please manually download the update.";
@@ -64,13 +64,6 @@ public class LanguageData implements Serializable {
 
     private String currentLanguage = "en";
 
-    public LanguageData flush(){
-        if (currentLanguage.equals("zh")){
-            return getChineseLanguage();
-        }else{
-            return new LanguageData();
-        }
-    }
     public static LanguageData getChineseLanguage() {
         LanguageData languageData = new LanguageData();
         languageData.currentLanguage = "zh";
@@ -132,6 +125,14 @@ public class LanguageData implements Serializable {
         languageData.WARNING_UDP_DISABLED = "UDP 服务已禁用！";
 
         return languageData;
+    }
+
+    public LanguageData flush() {
+        if (currentLanguage.equals("zh")) {
+            return getChineseLanguage();
+        } else {
+            return new LanguageData();
+        }
     }
 
     public void sayReconnectMsg(int seconds) {

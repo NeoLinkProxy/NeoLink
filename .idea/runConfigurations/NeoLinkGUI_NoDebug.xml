@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="NeoLinkGUI NoDebug" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="neoproject.neolink.NeoLink" />
+    <option name="MAIN_CLASS_NAME" value="neoproxy.neolink.NeoLink" />
     <module name="NeoLink" />
     <method v="2">
       <option name="Make" enabled="true" />

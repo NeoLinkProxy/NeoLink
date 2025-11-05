@@ -1,8 +1,8 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="NeoLinkGUI Debug" type="Application" factoryName="Application">
+  <configuration default="false" name="NeoLink NoGUIDebug" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="neoproxy.neolink.NeoLink" />
     <module name="NeoLink" />
-    <option name="PROGRAM_PARAMETERS" value="--debug" />
+    <option name="PROGRAM_PARAMETERS" value="--debug --nogui" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

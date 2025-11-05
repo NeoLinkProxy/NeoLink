@@ -1,4 +1,4 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
 import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
@@ -11,8 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
-import static neoproject.neolink.InternetOperator.*;
-import static neoproject.neolink.NeoLink.*;
+import static neoproxy.neolink.InternetOperator.*;
+import static neoproxy.neolink.NeoLink.*;
 
 public class UpdateManager {
     private static final String tempUpdateDir = CURRENT_DIR_PATH; // 临时更新目录，默认为程序自身目录

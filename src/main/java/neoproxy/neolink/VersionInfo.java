@@ -1,10 +1,10 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
-import static neoproject.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.NeoLink.debugOperation;
 
 
 public class VersionInfo {

@@ -1,10 +1,10 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
 import javafx.application.Application;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Stage;
-import neoproject.neolink.NeoLink;
+import neoproxy.neolink.NeoLink;
 
 /**
  * NeoLink GUI 应用的主启动类。

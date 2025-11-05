@@ -1,4 +1,4 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -20,10 +20,9 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
-import neoproject.neolink.ConfigOperator;
-import neoproject.neolink.LanguageData;
-import neoproject.neolink.NeoLink;
-import neoproject.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.ConfigOperator;
+import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.threads.CheckAliveThread;
 import plethora.print.log.Loggist;
 
 import java.io.ByteArrayInputStream;
@@ -35,8 +34,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
-import static neoproject.neolink.InternetOperator.sendStr;
-import static neoproject.neolink.NeoLink.*;
+import static neoproxy.neolink.InternetOperator.sendStr;
+import static neoproxy.neolink.NeoLink.*;
 
 /**
  * NeoLink GUI 主窗口控制器 (最终修正版)
@@ -873,7 +872,7 @@ public class MainWindowController {
         // 应用高级设置
         applyAdvancedSettings();
 
-        languageData=languageData.flush();//刷新语言中的变量
+        languageData = languageData.flush();//刷新语言中的变量
 
         NeoLink.say("正在启动 NeoLink 服务...");
         NeoLink.printBasicInfo();
