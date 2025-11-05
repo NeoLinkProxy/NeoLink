@@ -1,4 +1,4 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
 import java.io.OutputStream;
 import java.io.PrintStream;

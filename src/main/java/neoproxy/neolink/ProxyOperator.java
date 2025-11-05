@@ -1,12 +1,12 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
 import plethora.net.SecureSocket;
 
 import java.io.IOException;
 import java.net.*;
 
-import static neoproject.neolink.NeoLink.localDomainName;
-import static neoproject.neolink.NeoLink.remoteDomainName;
+import static neoproxy.neolink.NeoLink.localDomainName;
+import static neoproxy.neolink.NeoLink.remoteDomainName;
 
 /**
  * 代理操作器，用于处理通过 HTTP 或 SOCKS 代理连接到 Neo 服务器或本地服务。

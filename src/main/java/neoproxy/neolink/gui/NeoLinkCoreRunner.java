@@ -1,13 +1,13 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
-import neoproject.neolink.InternetOperator;
-import neoproject.neolink.NeoLink;
-import neoproject.neolink.ProxyOperator;
-import neoproject.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.InternetOperator;
+import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.ProxyOperator;
+import neoproxy.neolink.threads.CheckAliveThread;
 import plethora.net.SecureSocket;
 
-import static neoproject.neolink.NeoLink.debugOperation;
-import static neoproject.neolink.NeoLink.enableAutoReconnect;
+import static neoproxy.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.NeoLink.enableAutoReconnect;
 
 /**
  * NeoLink 核心逻辑运行器 (支持可中断的自动重连)。

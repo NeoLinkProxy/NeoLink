@@ -1,4 +1,4 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;

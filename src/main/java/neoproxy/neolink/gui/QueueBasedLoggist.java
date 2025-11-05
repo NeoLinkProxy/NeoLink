@@ -1,4 +1,4 @@
-package neoproject.neolink.gui;
+package neoproxy.neolink.gui;
 
 import plethora.print.log.Loggist;
 import plethora.print.log.State;

@@ -1,4 +1,4 @@
-package neoproject.neolink;
+package neoproxy.neolink;
 
 
 import plethora.net.SecureSocket;
@@ -7,8 +7,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.Socket;
 
-import static neoproject.neolink.NeoLink.debugOperation;
-import static neoproject.neolink.NeoLink.hookSocket;
+import static neoproxy.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.NeoLink.hookSocket;
 
 public class InternetOperator {
     public static void sendStr(String str) throws IOException {

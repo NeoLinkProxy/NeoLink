@@ -1,11 +1,11 @@
-package neoproject.neolink.threads;
+package neoproxy.neolink.threads;
 
-import neoproject.neolink.NeoLink;
+import neoproxy.neolink.NeoLink;
 import plethora.utils.Sleeper;
 
-import static neoproject.neolink.InternetOperator.close;
-import static neoproject.neolink.NeoLink.debugOperation;
-import static neoproject.neolink.NeoLink.isDebugMode;
+import static neoproxy.neolink.InternetOperator.close;
+import static neoproxy.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.NeoLink.isDebugMode;
 
 /**
  * 客户端心跳发送线程。

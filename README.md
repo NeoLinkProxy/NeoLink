@@ -47,9 +47,9 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服
 ### **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 命令行模式（Terminal）
-将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行：
+将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行（强制制定中文）：
 ```bash
-java -jar NeoLink-XXXX.jar --nogui
+java -jar NeoLink-XXXX.jar --nogui --zh-cn
 
 # 可选参数追加到后面
 # --output-file=path/to/logfile.log  将日志写入指定文件
@@ -57,7 +57,7 @@ java -jar NeoLink-XXXX.jar --nogui
 # --local-port=...                   本地要被穿透的端口
 # --debug                            打印调试信息（异常栈）
 # --no-color                         关闭 ANSI 颜色输出
-# --en-us / --zh-ch                  指定语言
+# --en-us / --zh-cn                  指定语言
 # --nogui                            禁用 JavaFX GUI 启动
 # --gui                              使用 JavaFX GUI 启动 （默认启用）
 # --disable-tcp                      禁用 TCP 连接
@@ -67,16 +67,16 @@ java -jar NeoLink-XXXX.jar --nogui
 ### 一键启动（GUI模式）
 ```bash
 # 使用 GUI 并直接指定密钥和端口，实现一键启动
-java -jar NeoLink-XXXX.jar --key=你的访问密钥 --local-port=本地端口号
+java -jar NeoLink-XXXX.jar --zh-cn --key=你的访问密钥 --local-port=本地端口号
 
 # 或者使用 EXE 文件
-NeoLink-XXXX.exe --key=你的访问密钥 --local-port=本地端口号
+NeoLink-XXXX.exe --zh-cn --key=你的访问密钥 --local-port=本地端口号
 ```
 
 ### 一键启动（命令行模式）
 ```bash
 # 使用命令行模式并直接指定密钥和端口，实现一键启动
-java -jar NeoLink-XXXX.jar --nogui --key=你的访问密钥 --local-port=本地端口号
+java -jar NeoLink-XXXX.jar --nogui --zh-cn --key=你的访问密钥 --local-port=本地端口号
 ```
 
 ### 🖥️构建项目
