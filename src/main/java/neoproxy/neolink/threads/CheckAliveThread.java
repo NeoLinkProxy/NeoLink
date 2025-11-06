@@ -3,123 +3,140 @@ package neoproxy.neolink.threads;
 import neoproxy.neolink.NeoLink;
 import plethora.utils.Sleeper;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static neoproxy.neolink.InternetOperator.close;
 import static neoproxy.neolink.NeoLink.debugOperation;
 import static neoproxy.neolink.NeoLink.isDebugMode;
 
 /**
- * 客户端心跳发送线程。
+ * 客户端心跳发送线程 (单例工厂版).
  * <p>
- * 该线程的唯一职责是周期性地通过 {@code NeoLink.hookSocket} 向服务端发送 "PING" 心跳包，
- * 以维持连接的活跃状态。如果发送失败，则认为连接已中断，并触发线程停止和资源清理。
- * </p>
- *
- * <p>
- * <b>工业级实践特性：</b>
- * <ul>
- *   <li>协议明确：使用常量定义心跳包内容，避免硬编码和拼写错误。</li>
- *   <li>可配置性：心跳发送间隔可通过静态变量 {@code HEARTBEAT_PACKET_DELAY} 配置。</li>
- *   <li>健壮的异常处理：捕获所有发送异常，并触发优雅关闭流程。</li>
- *   <li>响应中断：正确处理 {@link InterruptedException}，允许线程被外部优雅地中断。</li>
- *   <li>线程命名：为线程设置有意义的名称，便于调试和监控。</li>
- *   <li>状态管理：使用 {@code isRunning} 标志位安全地控制线程的生命周期。</li>
- * </ul>
+ * 优化点：
+ * 1. 【单例模式】确保全局只有一个心跳线程实例，避免重复创建和管理。
+ * 2. 【工厂方法】提供静态的 {@code startThread()} 和 {@code stopThread()} 方法，
+ *    作为全局唯一的入口，简化外部调用。
+ * 3. 【线程安全】使用“双重检查锁定”模式实现线程安全的懒加载单例。
+ * 4. 【职责分离】线程的职责是“检测心跳失败”，并通过关闭底层 Socket 来“通知”主循环。
  * </p>
  */
-public class CheckAliveThread implements Runnable {
+public final class CheckAliveThread implements Runnable {
 
-    /**
-     * 心跳包内容，必须与服务端期望的协议一致。
-     */
     private static final String HEARTBEAT_PACKET = "PING";
-
-    /**
-     * 心跳包发送间隔（毫秒）。
-     * 此值应为可配置项，建议根据网络环境和业务需求进行调整。
-     */
     public static int HEARTBEAT_PACKET_DELAY = 1000; // 默认1秒
 
-    /**
-     * 线程运行状态标志。
-     * 使用 volatile 确保多线程环境下的可见性。
-     */
-    private static volatile boolean isRunning = false;
+    // --- 单例实现 ---
+    private static volatile CheckAliveThread instance; // volatile 保证多线程下的可见性
+
+    // --- 实例字段 ---
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private Thread heartbeatThreadInstance;
 
     /**
-     * 持有当前运行线程的引用，以便于管理和中断。
+     * 私有构造函数，防止外部实例化。
      */
-    private static Thread heartbeatThreadInstance;
-
     private CheckAliveThread() {
-        // 私有构造方法，防止外部直接实例化，强制通过 startThread() 启动
     }
+
+    /**
+     * 【工厂方法】获取 CheckAliveThread 的单例实例。
+     * 使用双重检查锁定模式，确保线程安全和高效的懒加载。
+     *
+     * @return 全局唯一的 CheckAliveThread 实例。
+     */
+    private static CheckAliveThread getInstance() {
+        if (instance == null) {
+            synchronized (CheckAliveThread.class) {
+                if (instance == null) {
+                    instance = new CheckAliveThread();
+                }
+            }
+        }
+        return instance;
+    }
+
+    /**
+     * 【工厂方法】启动全局唯一的心跳线程。
+     * 如果线程已经启动，则不会重复启动。
+     */
+    public static void startThread() {
+        getInstance().start();
+    }
+
+    /**
+     * 【工厂方法】停止全局唯一的心跳线程。
+     * 此方法是线程安全的。
+     */
+    public static void stopThread() {
+        if (instance != null) {
+            instance.stop();
+        }
+    }
+
+    // --- 以下为实例方法，负责实际的线程控制 ---
 
     /**
      * 启动心跳线程。
-     * 如果线程已在运行，则不会重复启动。
+     * @return 启动的线程实例，便于外部管理（如中断）。
      */
-    public static synchronized void startThread() {
-        if (isRunning) {
-            debugOperation(new Exception("CheckAliveThread is already started !"));
-            return;
-        }
-        isRunning = true;
-        heartbeatThreadInstance = new Thread(new CheckAliveThread());
-        heartbeatThreadInstance.setName("Client-CheckAliveThread"); // 设置线程名，便于调试
-//        heartbeatThreadInstance.setDaemon(true); // 设置为守护线程，主程序退出时自动结束
-        heartbeatThreadInstance.start();
-        if (isDebugMode) {
-            System.out.println("CheckAliveThread started.");
+    private Thread start() {
+        if (isRunning.compareAndSet(false, true)) {
+            heartbeatThreadInstance = new Thread(this, "Client-CheckAliveThread");
+            heartbeatThreadInstance.setDaemon(true); // 设置为守护线程，主程序退出时自动结束
+            heartbeatThreadInstance.start();
+            if (isDebugMode) {
+                System.out.println("CheckAliveThread started.");
+            }
+            return heartbeatThreadInstance;
+        } else {
+            if (isDebugMode) {
+                System.err.println("CheckAliveThread is already running.");
+            }
+            return heartbeatThreadInstance;
         }
     }
 
     /**
-     * 停止心跳线程并关闭相关连接。
-     * 此方法是线程安全的，可以被多次调用。
+     * 停止心跳线程。
+     * 此方法是线程安全的。
      */
-    public static synchronized void stopThread() {
-        if (!isRunning) {
-            return;
-        }
-        isRunning = false;
-        if (isDebugMode) {
-            System.out.println("Stopping CheckAliveThread...");
-        }
-
-        // 中断线程，使其能从 sleep 或阻塞状态中立即醒来
-        if (heartbeatThreadInstance != null) {
-            heartbeatThreadInstance.interrupt();
-        }
-
-        // 关闭底层的 Socket 连接
-        close(NeoLink.hookSocket);
-        if (isDebugMode) {
-            System.out.println("CheckAliveThread stopped.");
+    private void stop() {
+        if (isRunning.compareAndSet(true, false)) {
+            if (isDebugMode) {
+                System.out.println("Stopping CheckAliveThread...");
+            }
+            if (heartbeatThreadInstance != null) {
+                heartbeatThreadInstance.interrupt();
+            }
         }
     }
 
     @Override
     public void run() {
-        while (isRunning) {
+        while (isRunning.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 // 1. 发送心跳包
                 NeoLink.hookSocket.sendStr(HEARTBEAT_PACKET);
-                // System.out.println("Sent PING to server."); // 可选的调试日志
-
             } catch (Exception e) {
                 // 2. 发送失败，通常意味着连接已断开
                 if (isDebugMode) {
-                    System.err.println("Failed to send heartbeat. Connection to server is lost.");
+                    System.err.println("Failed to send heartbeat. Connection to server is lost. Notifying main loop...");
                 }
-                debugOperation(e); // 保留您原有的调试逻辑
+                debugOperation(e);
 
-                // 触发停止流程，关闭连接并退出线程
-                stopThread();
+                // 3. 【关键优化】只负责关闭连接，通知主循环。
+                close(NeoLink.hookSocket);
+
+                // 4. 停止自身
+                stop();
                 break; // 退出 while 循环
             }
 
-            // 3. 等待下一次发送
+            // 5. 等待下一次发送，同时响应中断
             Sleeper.sleep(HEARTBEAT_PACKET_DELAY);
+        }
+        if (isDebugMode) {
+            System.out.println("CheckAliveThread finished.");
         }
     }
 }
