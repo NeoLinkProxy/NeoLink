@@ -32,7 +32,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服
 - **代理支持**：支持 HTTP/SOCKS5 代理连接 NeoProxyServer 或本地服务。
 - **多语言**：自动识别系统语言（中/英），也可通过参数强制指定。
 - **自动更新**：服务端可推送新版本，Windows 下自动下载并重启。
-- **日志记录**：所有操作自动记录到 `logs/` 目录。
+- **日志记录**：所有操作自动记录到 ***logs/*** 目录。
 - **心跳保活**：维持长连接，防止 NAT 超时断开。
 - **参数化启动**：支持通过命令行参数直接指定密钥和端口，实现一键启动。
 
@@ -47,7 +47,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服
 ### **获取客户端:** 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 命令行模式（Terminal）
-将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行（强制制定中文）：
+将构建后的 JAR（举例 ***NeoLink-XXXX.jar***）放到工作目录并运行（强制制定中文）：
 ```bash
 java -jar NeoLink-XXXX.jar --nogui --zh-cn
 
@@ -89,9 +89,9 @@ cd NeoProxyServer
 mvn clean package
 ```
 
-### 📁配置文件（`config.cfg`）
+### 📁配置文件（***config.cfg***）
 
-第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。默认内容如下（也可直接在仓库中保存此文件）：
+第一次运行时程序会在当前工作目录创建 ***config.cfg***（如果不存在）。默认内容如下（也可直接在仓库中保存此文件）：
 
 ```
 #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
@@ -134,26 +134,26 @@ BUFFER_LEN=4096
 ```
 
 #### 代理字段格式说明
-- 支持 2 种代理类型前缀：`socks` 或 `http`（不区分大小写）。示例：
-    - `socks->127.0.0.1:7890`（无认证）
-    - `http->10.10.10.1:8080@user;pass`（带认证）
-- `PROXY_IP_TO_LOCAL_SERVER`：当访问本地服务（localDomainName/localPort）时，先走这个代理（可为空）
-- `PROXY_IP_TO_NEO_SERVER`：当访问 NeoServer 时，走此代理（可为空）
+- 支持 2 种代理类型前缀：***socks*** 或 ***http***（不区分大小写）。示例：
+    - ***socks->127.0.0.1:7890***（无认证）
+    - ***http->10.10.10.1:8080@user;pass***（带认证）
+- ***PROXY_IP_TO_LOCAL_SERVER***：当访问本地服务（localDomainName/localPort）时，先走这个代理（可为空）
+- ***PROXY_IP_TO_NEO_SERVER***：当访问 NeoServer 时，走此代理（可为空）
 
 ---
 
 ## 📜日志
 
-- 默认输出目录：`./logs/`（程序会在当前工作目录创建并写入文件）
-- 可使用 `--output-file` 指定日志文件路径
+- 默认输出目录：***./logs/***（程序会在当前工作目录创建并写入文件）
+- 可使用 ***--output-file*** 指定日志文件路径
 - GUI 模式会使用内部队列将日志显示在 WebView 中
 
 ---
 
 ## 📞EULA & 联系方式
 
-程序会在首次运行写出 `eula.txt`，内容包含使用限制与作者联系方式（QQ 群 / QQ）。请阅读并遵守 EULA 要求。  
-联系方式（出现在 EULA）：QQ群 `304509047`，作者 QQ `1591117599`。
+程序会在首次运行写出 ***eula.txt***，内容包含使用限制与作者联系方式（QQ 群 / QQ）。请阅读并遵守 EULA 要求。  
+联系方式（出现在 EULA）：QQ群 ***304509047***，作者 QQ ***1591117599***。
 
 ---
 
@@ -163,25 +163,25 @@ Q: 为什么连接不上 NeoProxyServer？
 A:
 1. 检查 ***config.cfg*** 中 **REMOTE_DOMAIN_NAME** 与 **HOST_HOOK_PORT** 和 **HOST_CONNECT_PORT** 的值是否跟服务端匹配。
 2. 确认服务器防火墙/云服务安全组已放通对应端口。
-3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。
-4. 使用 `--debug` 获取更多异常栈信息。
+3. 若使用代理，检查 ***PROXY_IP_TO_NEO_SERVER*** 配置是否正确并可达。
+4. 使用 ***--debug*** 获取更多异常栈信息。
 
 Q: 如何使用 HTTPS 协议<br>
 A:
 1. 想要在后端使用 HTTPS ，你必须持有 REMOTE_DOMAIN_NAME 域名的证书，也就是 NeoProxyServer 所在的服务器域名的证书，一般来说需要服务器管理员授权
 2. 在后端使用 nginx 加载证书套壳在你的 http 端口上即可
 
-Q: 本地端口无法连接（`Fail to connect to localhost`）？  
-A: 确认本地服务（如 Minecraft）已经在 `LOCAL_DOMAIN_NAME:localPort` 上监听，并且程序有权限访问该端口。
+Q: 本地端口无法连接（***Fail to connect to localhost***）？  
+A: 确认本地服务（如 Minecraft）已经在 ***LOCAL_DOMAIN_NAME:localPort*** 上监听，并且程序有权限访问该端口。
 
 Q: 如何关闭自动重连？  
-A: 在 `config.cfg` 中将 `ENABLE_AUTO_RECONNECT=false`。
+A: 在 ***config.cfg*** 中将 ***ENABLE_AUTO_RECONNECT=false***。
 
 Q: GUI 启动但无法显示日志或乱码？  
 A: GUI 使用 WebView 渲染日志，程序已经做了中文编码/ANSI 转换的处理；如仍异常，请检查 JavaFX 版本与系统环境编码设置。
 
 Q: 如何禁用 TCP 或 UDP 连接？<br>
-A: UI 下高级设置可以调节，或者使用启动参数 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接。
+A: UI 下高级设置可以调节，或者使用启动参数 ***--disable-tcp*** 或 ***--disable-udp*** 参数可以分别禁用 TCP 或 UDP 连接。
 
 Q: RDP 总是断开连接怎么回事？<br>
 A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的RDP即可完美解决。
@@ -195,10 +195,10 @@ A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且�
 
 ## 🛠️故障排查 & 调试建议
 
-- 启用 `--debug` 获取更多堆栈信息（会写入日志文件）。
-- 查看 `logs/` 目录中的最近日志文件以定位问题。
+- 启用 ***--debug*** 获取更多堆栈信息（会写入日志文件）。
+- 查看 ***logs/*** 目录中的最近日志文件以定位问题。
 - 若出现"延迟大于 200ms"的提示，请考虑更换更稳定的网络或 NeoProxyServer 节点。
-- 使用 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接，以排查特定协议的问题。
+- 使用 ***--disable-tcp*** 或 ***--disable-udp*** 参数可以分别禁用 TCP 或 UDP 连接，以排查特定协议的问题。
 
 ---
 
