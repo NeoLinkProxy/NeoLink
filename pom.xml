@@ -6,7 +6,7 @@
 
     <groupId>neoproxy</groupId>
     <artifactId>NeoLink</artifactId>
-    <version>4.8.8</version>
+    <version>4.8.9</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -19,7 +19,7 @@
         <dependency>
             <groupId>fun.ceroxe</groupId>
             <artifactId>plethora-api</artifactId>
-            <version>0.2.2</version>
+            <version>0.2.3</version>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>

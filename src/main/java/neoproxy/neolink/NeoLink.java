@@ -64,8 +64,6 @@ public class NeoLink {
     private static boolean isBackend = false;
     private static boolean noColor = false;
 
-    private static CheckAliveThread checkAliveThread;
-
     public static void main(String[] args) {
         parseCommandLineArgs(args);
         killCmdWindowIfNeeded(args);
