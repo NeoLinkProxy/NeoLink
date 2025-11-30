@@ -55,11 +55,7 @@ public final class ConfigOperator {
             
             #数据包数组的长度
             #The length of the packet array
-            BUFFER_LEN=4096
-            
-            #设置 Socket 的超时时间，单位为毫秒
-            #Set the Socket timeout in milliseconds
-            SO_TIMEOUT=5000""";
+            BUFFER_LEN=4096""";
 
     private ConfigOperator() {
         // 工具类，禁止实例化
@@ -110,7 +106,6 @@ public final class ConfigOperator {
         NeoLink.enableAutoReconnect = reader.getOptional("ENABLE_AUTO_RECONNECT").map(Boolean::parseBoolean).orElse(true);
         NeoLink.enableAutoUpdate = reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true);
         NeoLink.reconnectionIntervalSeconds = reader.getOptional("RECONNECTION_INTERVAL").map(Integer::parseInt).orElse(30);
-        NeoLink.SO_TIMEOUT=reader.getOptional("SO_TIMEOUT").map(Integer::parseInt).orElse(5000);
         ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
         ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
         CheckAliveThread.HEARTBEAT_PACKET_DELAY = reader.getOptional("HEARTBEAT_PACKET_DELAY").map(Integer::parseInt).orElse(1000);
