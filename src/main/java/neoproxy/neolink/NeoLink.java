@@ -34,7 +34,6 @@ public class NeoLink {
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static final int INVALID_LOCAL_PORT = -1;
     private static final File currentFile = getCurrentFile();
-    public static int SO_TIMEOUT = 5000;
     public static int remotePort;
     public static String remoteDomainName = "localhost";
     public static String localDomainName = "localhost";
@@ -433,7 +432,6 @@ public class NeoLink {
             } else {
                 neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             }
-            localServerSocket.setSoTimeout(SO_TIMEOUT);
 
             // 2. 与服务器握手
             neoTransferSocket.sendStr("TCP");
