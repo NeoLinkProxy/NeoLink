@@ -18,8 +18,6 @@ import plethora.utils.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.BindException;
-import java.net.ConnectException;
 import java.net.DatagramSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +25,6 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Semaphore;
 
 import static neoproxy.neolink.InternetOperator.*;
 import static neoproxy.neolink.UpdateManager.checkUpdate;
@@ -36,9 +33,6 @@ public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static final int INVALID_LOCAL_PORT = -1;
-
-    private static final int MAX_CONCURRENT_CONNECTIONS = 4000;
-    private static final Semaphore connectionLimiter = new Semaphore(MAX_CONCURRENT_CONNECTIONS);
     private static final File currentFile = getCurrentFile();
     public static volatile long lastReceivedTime = System.currentTimeMillis();
     public static int remotePort;
@@ -54,6 +48,7 @@ public class NeoLink {
     public static LanguageData languageData = null;
     public static boolean isReconnectedOperation = false;
     public static boolean isDebugMode = false;
+    public static boolean showConnection = true;
     public static boolean enableAutoReconnect = true;
     public static boolean enableAutoUpdate = true;
     public static int reconnectionIntervalSeconds = 30;
@@ -167,6 +162,7 @@ public class NeoLink {
             case "--zh-cn" -> languageData = LanguageData.getChineseLanguage();
             case "--no-color" -> noColor = true;
             case "--debug" -> isDebugMode = true;
+            case "--no-show-conn" -> showConnection = false;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
             case "--backend" -> isBackend = true;
@@ -303,38 +299,28 @@ public class NeoLink {
     }
 
     private static void handleServerCommand(String command) {
-        String[] parts = command.split(";", 2);
-
-        if ("sendSocket".equals(parts[0])) {
-            if (!isDisableTCP) {
-                if (connectionLimiter.tryAcquire()) {
+        String[] parts = command.split(";");
+        //服务端指令 sendCommand    sendSocketTCP;socketID;getInternetAddressAndPort(client))
+        switch (parts[0]) {
+            case "sendSocketTCP" -> {
+                if (!isDisableTCP) {
                     ThreadManager.runAsync(() -> {
-                        try {
-                            createNewTCPConnection(parts[1]);
-                        } finally {
-                            connectionLimiter.release();
-                        }
-                    });
-                }
-                // else: 熔断丢弃，不阻塞
-            }
-        } else if ("sendSocketUDP".equals(parts[0])) {
-            if (!isDisableUDP) {
-                if (connectionLimiter.tryAcquire()) {
-                    ThreadManager.runAsync(() -> {
-                        try {
-                            createNewUDPConnection(parts[1]);
-                        } finally {
-                            connectionLimiter.release();
-                        }
+                        createNewTCPConnection(parts[1], parts[2]);
                     });
                 }
             }
-        } else if ("exitNoFlow".equals(parts[0])) {
-            say(languageData.NO_FLOW_LEFT, LogType.ERROR);
-            exitAndFreeze(0);
-        } else {
-            remotePort = Integer.parseInt(parts[0]);
+            case "sendSocketUDP" -> {
+                if (!isDisableUDP) {
+                    ThreadManager.runAsync(() -> {
+                        createNewUDPConnection(parts[1], parts[2]);
+                    });
+                }
+            }
+            case "exitNoFlow" -> {
+                say(languageData.NO_FLOW_LEFT, LogType.ERROR);
+                exitAndFreeze(0);
+            }
+            case null, default -> remotePort = Integer.parseInt(parts[0]);
         }
     }
 
@@ -433,7 +419,7 @@ public class NeoLink {
         loggist.say(new State(logType, "HOST-CLIENT", str));
     }
 
-    public static void createNewTCPConnection(String remoteAddress) {
+    public static void createNewTCPConnection(String socketID, String remoteAddress) {
         Socket localServerSocket = null;
         SecureSocket neoTransferSocket = null;
         try {
@@ -447,51 +433,63 @@ public class NeoLink {
             } else {
                 neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             }
+            // 客户端发送标识
+            //格式：TCP;ID   或者 UDP;ID
+            neoTransferSocket.sendStr("TCP" + ";" + socketID);
 
-            neoTransferSocket.sendStr("TCP");
-            neoTransferSocket.sendInt(remotePort);
-            say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+            // 修改：单独控制是否显示TCP连接建立
+            if (showConnection) {
+                say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+            }
 
             TCPTransformer serverToNeoTask = new TCPTransformer(neoTransferSocket, localServerSocket);
             TCPTransformer neoToServerTask = new TCPTransformer(localServerSocket, neoTransferSocket);
             ThreadManager connectionThreadManager = new ThreadManager(serverToNeoTask, neoToServerTask);
 
             connectionThreadManager.startAsyncWithCallback(result -> {
-                say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+                // 修改：单独控制是否显示TCP连接销毁
+                if (showConnection) {
+                    say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+                }
                 connectionThreadManager.close();
             });
 
-        } catch (BindException | ConnectException e) {
-            close(localServerSocket, neoTransferSocket);
         } catch (Exception e) {
             debugOperation(e);
-            say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
+            if (showConnection) {
+                say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
+            }
             close(localServerSocket, neoTransferSocket);
         }
     }
 
-    public static void createNewUDPConnection(String remoteAddress) {
+    public static void createNewUDPConnection(String socketID, String remoteAddress) {
         SecureSocket neoTransferSocket = null;
         DatagramSocket datagramSocket = null;
         try {
             neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             datagramSocket = new DatagramSocket();
+            // 客户端发送标识
+            //格式：TCP;ID   或者 UDP;ID
+            neoTransferSocket.sendStr("UDP" + ";" + socketID);
 
-            neoTransferSocket.sendStr("UDP");
-            neoTransferSocket.sendInt(remotePort);
-            say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+            // 修改：单独控制是否显示UDP连接建立
+            if (showConnection) {
+                say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
+            }
 
             UDPTransformer localToNeoTask = new UDPTransformer(datagramSocket, neoTransferSocket);
             UDPTransformer neoToLocalTask = new UDPTransformer(neoTransferSocket, datagramSocket);
             ThreadManager connectionThreadManager = new ThreadManager(localToNeoTask, neoToLocalTask);
 
             connectionThreadManager.startAsyncWithCallback(result -> {
-                say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+                // 修改：单独控制是否显示UDP连接销毁
+                if (showConnection) {
+                    say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
+                }
                 connectionThreadManager.close();
             });
 
-        } catch (BindException | ConnectException e) {
-            close(datagramSocket, neoTransferSocket);
         } catch (Exception e) {
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
