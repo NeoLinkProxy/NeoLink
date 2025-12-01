@@ -42,23 +42,16 @@ import static neoproxy.neolink.InternetOperator.sendStr;
 import static neoproxy.neolink.NeoLink.*;
 
 /**
- * NeoLink GUI 主窗口控制器 (性能优化修复版)
- * 修复了大量日志涌入导致UI卡顿的问题：
- * 1. 引入 pendingLogBuffer 进行日志缓冲
- * 2. 使用 requestUiUpdate 进行批处理渲染
- * 3. 在 JS 端控制最大行数 (1000行)
+ * NeoLink GUI 主窗口控制器 (UI增强版)
+ * 新增功能：在高级设置中添加“调试模式”和“显示连接”控制开关
  */
 public class MainWindowController {
     private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
-    // 最大日志显示条数
     private static final int MAX_LOG_ENTRIES = 1000;
     private static boolean shouldAutoStart = false;
     private final Stage primaryStage;
     private final ExecutorService coreExecutor = Executors.newSingleThreadExecutor();
-    // ==================== 性能优化新增变量 ====================
-    // 缓存待显示的 HTML 片段队列
     private final ConcurrentLinkedQueue<String> pendingLogBuffer = new ConcurrentLinkedQueue<>();
-    // 原子标记，防止 UI 线程被 runLater 淹没
     private final AtomicBoolean isUpdatePending = new AtomicBoolean(false);
     private ExecutorService logConsumerExecutor;
     private Future<?> currentTask = null;
@@ -66,7 +59,7 @@ public class MainWindowController {
     private TextField localPortField;
     private PasswordField accessKeyField;
     private WebView logWebView;
-    private WebEngine webEngine; // 缓存 WebEngine 引用
+    private WebEngine webEngine;
     private Button startButton;
     private Button stopButton;
     private volatile boolean isRunning = false;
@@ -76,10 +69,14 @@ public class MainWindowController {
     private TextField localDomainField;
     private TextField hostHookPortField;
     private TextField hostConnectPortField;
+
+    // UI CheckMarks references
     private Label tcpCheckMark;
     private Label udpCheckMark;
     private Label reconnectCheckMark;
-    // =======================================================
+    // 🔥 新增的复选框引用
+    private Label debugCheckMark;
+    private Label showConnCheckMark;
 
     public MainWindowController(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -138,7 +135,6 @@ public class MainWindowController {
         primaryStage.setOnCloseRequest(e -> handleExit());
         primaryStage.show();
 
-        // 滚动条处理保持不变
         Platform.runLater(this::hideWebViewScrollBars);
         Timeline scrollbarHider = new Timeline(new KeyFrame(Duration.millis(500), e -> {
             if (logWebView != null) {
@@ -175,10 +171,7 @@ public class MainWindowController {
         }
     }
 
-    // ... (setupWindowResizeHandlers, createCustomTitleBar, toggleMaximize 等 UI 代码保持不变) ...
-    // 为了节省篇幅，这里省略了未修改的UI布局代码，请保留你原有的 createCustomTitleBar 等方法
     private void setupWindowResizeHandlers(Scene scene) {
-        // [保持原样]
         final double[] startX = new double[1];
         final double[] startY = new double[1];
         final double[] initialWidth = new double[1];
@@ -274,13 +267,7 @@ public class MainWindowController {
         };
     }
 
-    // 请将 createCustomTitleBar, createTitleBarButton, toggleMaximize, createMainLayout,
-    // createTitledGroup, createConnectionGroup, createAdvancedSettingsGroup, createLabeledField
-    // 等方法保持原样粘贴在这里...
-    // (为了代码完整性，我这里只写出结构，实际使用时请保留你的原代码)
-
     private Region createCustomTitleBar() {
-        // [保持你原本的代码不变]
         HBox titleBar = new HBox();
         titleBar.setPrefHeight(36);
         titleBar.getStyleClass().add("title-bar");
@@ -416,28 +403,47 @@ public class MainWindowController {
         advancedGrid.setHgap(15);
         advancedGrid.setVgap(15);
         advancedGrid.setPadding(new Insets(15));
+
+        // Row 0
         Label localDomainLabel = new Label("本地域名:");
         localDomainField = new TextField();
         localDomainField.setPromptText("本地域名 (默认: localhost)");
         localDomainField.setText(NeoLink.localDomainName);
         localDomainField.setPrefWidth(200);
+
+        // Row 1
         Label hostHookPortLabel = new Label("服务端口:");
         hostHookPortField = new TextField();
         hostHookPortField.setPromptText("服务端口 (默认: 44801)");
         hostHookPortField.setText(String.valueOf(NeoLink.hostHookPort));
         hostHookPortField.setPrefWidth(200);
+
+        // Row 2
         Label hostConnectPortLabel = new Label("连接端口:");
         hostConnectPortField = new TextField();
         hostConnectPortField.setPromptText("连接端口 (默认: 44802)");
         hostConnectPortField.setText(String.valueOf(NeoLink.hostConnectPort));
         hostConnectPortField.setPrefWidth(200);
+
+        // Row 3: Protocol
         Label protocolLabel = new Label("协议启用:");
         HBox protocolBox = new HBox(15);
         HBox tcpBox = createCustomCheckBox("启用TCP", !NeoLink.isDisableTCP);
         HBox udpBox = createCustomCheckBox("启用UDP", !NeoLink.isDisableUDP);
         protocolBox.getChildren().addAll(tcpBox, udpBox);
+
+        // Row 4: Auto Reconnect
         Label reconnectLabel = new Label("自动重连:");
         HBox reconnectBox = createCustomCheckBox("启用自动重连", NeoLink.enableAutoReconnect);
+
+        // 🔥 Row 5: Log Settings (New)
+        Label logSettingsLabel = new Label("日志设置:");
+        HBox logSettingsBox = new HBox(15);
+        HBox debugBox = createCustomCheckBox("调试模式", NeoLink.isDebugMode);
+        HBox showConnBox = createCustomCheckBox("显示连接", NeoLink.showConnection);
+        logSettingsBox.getChildren().addAll(debugBox, showConnBox);
+
+        // Add to Grid
         advancedGrid.add(localDomainLabel, 0, 0);
         advancedGrid.add(localDomainField, 1, 0);
         advancedGrid.add(hostHookPortLabel, 0, 1);
@@ -448,6 +454,10 @@ public class MainWindowController {
         advancedGrid.add(protocolBox, 1, 3);
         advancedGrid.add(reconnectLabel, 0, 4);
         advancedGrid.add(reconnectBox, 1, 4);
+        // 🔥 Add new row
+        advancedGrid.add(logSettingsLabel, 0, 5);
+        advancedGrid.add(logSettingsBox, 1, 5);
+
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setPrefWidth(100);
         ColumnConstraints col2 = new ColumnConstraints();
@@ -471,10 +481,9 @@ public class MainWindowController {
         logTitle.getStyleClass().add("log-title");
 
         logWebView = new WebView();
-        webEngine = logWebView.getEngine(); // 缓存 engine
+        webEngine = logWebView.getEngine();
         logWebView.setContextMenuEnabled(false);
 
-        // --- ContextMenu 逻辑 (保持不变) ---
         ContextMenu contextMenu = new ContextMenu();
         MenuItem copyItem = new MenuItem("复制");
         copyItem.setOnAction(e -> {
@@ -507,7 +516,6 @@ public class MainWindowController {
             }
         });
 
-        // 拖拽处理
         logWebView.setOnDragOver(Event::consume);
         logWebView.setOnDragEntered(Event::consume);
         logWebView.setOnDragExited(Event::consume);
@@ -516,14 +524,12 @@ public class MainWindowController {
             event.consume();
         });
 
-        // --- 修复点：使用占位符替换，避免 CSS 中的 % 符号引发 String.format 异常 ---
         String initialHtmlTemplate = """
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="UTF-8">
                     <style>
-                        /* 基本样式保持不变 */
                         html, body {
                             background-color: #0c0c0c;
                             color: #cccccc;
@@ -531,10 +537,9 @@ public class MainWindowController {
                             font-size: 13px;
                             margin: 0;
                             padding: 0;
-                            height: 100%; /* 这里的 % 不会再报错了 */
+                            height: 100%;
                             overflow: hidden;
                         }
-                
                         #scroll-container {
                             height: 100vh;
                             overflow-y: auto;
@@ -546,27 +551,18 @@ public class MainWindowController {
                             margin-right: -17px;
                             padding-right: 17px;
                         }
-                
-                        /* 你的滚动条隐藏 CSS */
                         ::-webkit-scrollbar { display: none !important; width: 0px; height: 0px; visibility: hidden; opacity: 0; }
                         * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
                     </style>
                     <script>
-                        // 核心优化：批量追加日志并在 JS 端截断 DOM
                         function appendLogBatch(htmlBatch) {
                             var container = document.getElementById('scroll-container');
                             if (!container) return;
-                
-                            // 创建临时容器解析 HTML
                             var tempDiv = document.createElement('div');
                             tempDiv.innerHTML = htmlBatch;
-                
-                            // 将新节点移动到主容器
                             while (tempDiv.firstChild) {
                                 container.appendChild(tempDiv.firstChild);
                             }
-                
-                            // 保持最多 MAX_ENTRIES_PLACEHOLDER 条
                             var maxEntries = MAX_ENTRIES_PLACEHOLDER;
                             var totalNodes = container.children.length;
                             if (totalNodes > maxEntries) {
@@ -576,8 +572,6 @@ public class MainWindowController {
                                     }
                                 }
                             }
-                
-                            // 滚动到底部
                             container.scrollTop = container.scrollHeight;
                         }
                     </script>
@@ -587,12 +581,9 @@ public class MainWindowController {
                 </body>
                 </html>""";
 
-        // 使用 replace 替换占位符，这是处理包含 CSS 代码的模板最安全的方法
         String initialHtml = initialHtmlTemplate.replace("MAX_ENTRIES_PLACEHOLDER", String.valueOf(MAX_LOG_ENTRIES));
-
         webEngine.loadContent(initialHtml);
 
-        // 页面加载完成后移除滚动条的逻辑保持不变
         webEngine.getLoadWorker().stateProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == javafx.concurrent.Worker.State.SUCCEEDED) {
                 webEngine.executeScript(
@@ -620,22 +611,14 @@ public class MainWindowController {
         return buttonBox;
     }
 
-    // ================== 消费者线程优化 ==================
     private void startLogConsumer() {
         logConsumerExecutor = Executors.newSingleThreadExecutor();
         logConsumerExecutor.submit(() -> {
             try {
                 while (!Thread.currentThread().isInterrupted()) {
-                    // 1. 阻塞等待新日志
                     String message = LogMessageQueue.take();
-
-                    // 2. 预处理 HTML (在后台线程完成，减轻 UI 线程负担)
                     String logHtml = buildLogEntryHtml(message);
-
-                    // 3. 加入 UI 缓冲队列
                     pendingLogBuffer.offer(logHtml);
-
-                    // 4. 请求 UI 更新 (节流)
                     requestUiUpdate();
                 }
             } catch (InterruptedException e) {
@@ -644,7 +627,6 @@ public class MainWindowController {
         });
     }
 
-    // 将单条日志预处理为 HTML 字符串
     private String buildLogEntryHtml(String ansiText) {
         StringBuilder sb = new StringBuilder();
         sb.append("<div style='white-space: pre-wrap; word-wrap: break-word;'>");
@@ -657,15 +639,12 @@ public class MainWindowController {
         return sb.toString();
     }
 
-    // 请求在 JavaFX 线程执行更新
     private void requestUiUpdate() {
-        // 如果已经有更新任务在排队，就不再提交，防止 flood
         if (isUpdatePending.compareAndSet(false, true)) {
             Platform.runLater(this::processLogQueue);
         }
     }
 
-    // 实际执行更新的方法 (运行在 JavaFX Application Thread)
     private void processLogQueue() {
         try {
             if (pendingLogBuffer.isEmpty()) return;
@@ -673,39 +652,25 @@ public class MainWindowController {
             StringBuilder batchHtml = new StringBuilder();
             String htmlFragment;
 
-            // 一次性取出所有积压的日志，拼成一个大字符串
             while ((htmlFragment = pendingLogBuffer.poll()) != null) {
                 batchHtml.append(htmlFragment);
             }
 
             if (webEngine != null && webEngine.getLoadWorker().getState() == Worker.State.SUCCEEDED) {
-                // 调用 JS 函数进行批量添加
-                // 注意：这里需要再次转义 batchHtml 因为它现在是 JS 函数的参数
-                // 但由于我们拼接的是 HTML，我们可以用特定方式传递，或者简单转义
-                // 为了保险，我们将 HTML 内容转义为 JS 字符串
                 String jsCode = "appendLogBatch(`" + batchHtml.toString().replace("`", "\\`").replace("$", "\\$") + "`);";
                 webEngine.executeScript(jsCode);
             }
-
-            // 更新完后尝试隐藏滚动条
             hideWebViewScrollBars();
 
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            // 释放锁
             isUpdatePending.set(false);
-
-            // 双重检查：如果在处理期间又来了新日志，再次调度
             if (!pendingLogBuffer.isEmpty()) {
                 requestUiUpdate();
             }
         }
     }
-
-    // ========================================================
-
-    // 不再需要旧的 appendLogToWebView 方法，已被 requestUiUpdate 和 processLogQueue 替代
 
     private void startService() {
         if (isRunning) return;
@@ -772,7 +737,6 @@ public class MainWindowController {
     }
 
     private boolean validateForm() {
-        // [保持原样]
         StringBuilder errors = new StringBuilder();
         if (remoteDomainField.getText().trim().isEmpty()) {
             errors.append("• 请输入远程服务器地址。 \n");
@@ -828,8 +792,8 @@ public class MainWindowController {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t")
-                .replace("'", "\\'")  // 额外增加单引号转义
-                .replace("\"", "\\\""); // 额外增加双引号转义
+                .replace("'", "\\'")
+                .replace("\"", "\\\"");
     }
 
     private String parseAnsiToHtml(String ansiText) {
@@ -846,7 +810,6 @@ public class MainWindowController {
     }
 
     private void showAlert(String message) {
-        // [保持原样]
         Platform.runLater(() -> {
             try {
                 Stage dialogStage = new Stage();
@@ -903,7 +866,6 @@ public class MainWindowController {
     }
 
     private Region createCustomTitleBarForDialog(Stage dialogStage) {
-        // [保持原样]
         HBox titleBar = new HBox();
         titleBar.setPrefHeight(36);
         titleBar.getStyleClass().add("title-bar");
@@ -956,7 +918,6 @@ public class MainWindowController {
     }
 
     private HBox createCustomCheckBox(String text, boolean selected) {
-        // [保持原样]
         StackPane checkBox = new StackPane();
         checkBox.setMinSize(18, 18);
         checkBox.setMaxSize(18, 18);
@@ -969,21 +930,30 @@ public class MainWindowController {
         Label checkMark = new Label("✔");
         checkMark.setStyle("-fx-font-family: 'Segoe UI Symbol', 'Arial', sans-serif; -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white;");
         checkMark.setVisible(selected);
+
+        // 🔥 关联 CheckMarks 引用
         if (text.contains("TCP")) {
             tcpCheckMark = checkMark;
         } else if (text.contains("UDP")) {
             udpCheckMark = checkMark;
         } else if (text.contains("自动重连")) {
             reconnectCheckMark = checkMark;
+        } else if (text.contains("调试模式")) {
+            debugCheckMark = checkMark;
+        } else if (text.contains("显示连接")) {
+            showConnCheckMark = checkMark;
         }
+
         checkBox.getChildren().add(checkMark);
         Label label = new Label(text);
         label.setStyle("-fx-text-fill: #ffffff; -fx-font-size: 14px;");
         HBox box = new HBox(8, checkBox, label);
         box.setAlignment(Pos.CENTER_LEFT);
+
         final long[] lastClickTime = {0};
         final boolean isTcpOrUdp = text.contains("TCP") || text.contains("UDP");
         final long cooldownPeriod = 500;
+
         box.setOnMouseClicked(e -> {
             if (isTcpOrUdp) {
                 long currentTime = System.currentTimeMillis();
@@ -999,6 +969,8 @@ public class MainWindowController {
             } else {
                 checkBox.setStyle("-fx-background-color: #202020; -fx-border-color: #555555; -fx-border-width: 2px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
             }
+
+            // 🔥 新增点击事件处理逻辑
             if (text.contains("TCP")) {
                 NeoLink.isDisableTCP = !newState;
                 sendTCPandUDPState();
@@ -1010,6 +982,12 @@ public class MainWindowController {
             } else if (text.contains("自动重连")) {
                 NeoLink.enableAutoReconnect = newState;
                 NeoLink.say("自动重连已" + (newState ? "启用" : "禁用"));
+            } else if (text.contains("调试模式")) {
+                NeoLink.isDebugMode = newState;
+                NeoLink.say("调试模式已" + (newState ? "启用" : "禁用"));
+            } else if (text.contains("显示连接")) {
+                NeoLink.showConnection = newState;
+                NeoLink.say("连接日志显示已" + (newState ? "启用" : "禁用"));
             }
         });
         box.setOnMouseEntered(e -> {
@@ -1026,7 +1004,6 @@ public class MainWindowController {
     }
 
     private void sendTCPandUDPState() {
-        // [保持原样]
         String command = "";
         if (!isDisableTCP) command = command.concat("T");
         if (!isDisableUDP) command = command.concat("U");
@@ -1040,7 +1017,6 @@ public class MainWindowController {
     }
 
     private void applyAdvancedSettings() {
-        // [保持原样]
         String localDomain = localDomainField.getText().trim();
         if (!localDomain.isEmpty()) NeoLink.localDomainName = localDomain;
         String hookPortStr = hostHookPortField.getText().trim();
@@ -1056,8 +1032,15 @@ public class MainWindowController {
         boolean tcpEnabled = (tcpCheckMark != null && tcpCheckMark.isVisible());
         boolean udpEnabled = (udpCheckMark != null && udpCheckMark.isVisible());
         boolean autoReconnectEnabled = (reconnectCheckMark != null && reconnectCheckMark.isVisible());
+
+        // 🔥 应用新增设置
+        boolean debugEnabled = (debugCheckMark != null && debugCheckMark.isVisible());
+        boolean showConnEnabled = (showConnCheckMark != null && showConnCheckMark.isVisible());
+
         NeoLink.isDisableTCP = !tcpEnabled;
         NeoLink.isDisableUDP = !udpEnabled;
         NeoLink.enableAutoReconnect = autoReconnectEnabled;
+        NeoLink.isDebugMode = debugEnabled;
+        NeoLink.showConnection = showConnEnabled;
     }
 }
