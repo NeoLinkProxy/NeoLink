@@ -2,7 +2,7 @@
 
 > **内网穿透客户端（NeoLink）** — 使用 Java 21 开发，支持 TCP 和 UDP 协议的内网穿透。
 > 自 4.7.0 版本开始，同步支持 TCP UDP
-> 推荐的场景：RDP 内网穿透，MC 服务器内网穿透，HTTP FileServer 等等
+> 推荐的场景：RDP 内网穿透，MC 服务器内网穿透，HTTP FileServer，以及需要获取真实 IP 的 Web 服务。
 
 ![Java](https://img.shields.io/badge/Java-21%2B-orange?logo=openjdk&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#许可证)
@@ -17,6 +17,8 @@
 
 NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服务（例如 Minecraft 服务器）暴露给公网 NeoProxyServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
+**新功能**：支持 Proxy Protocol v2 (PPv2)，可将外部访客的真实 IP 透传给后端 Web 服务（如 Nginx）。
+
 > **重点**：请仔细阅读 eula.txt 中声明的限制<br>
 >EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
 ---
@@ -27,6 +29,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服
 
 - **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
 - **通用 TCP/UDP 支持**：几乎所有类型的服务均可穿透。
+- **真实 IP 透传**：支持 Proxy Protocol v2 协议，配合 Nginx 等后端可获取用户真实 IP。
 - **双模式运行**：命令行（CLI）适合服务器部署，图形界面（GUI）适合新手。
 - **自动重连**：连接断开后自动重试，保障服务高可用。
 - **代理支持**：支持 HTTP/SOCKS5 代理连接 NeoProxyServer 或本地服务。
@@ -55,6 +58,7 @@ java -jar NeoLink-XXXX.jar --nogui --zh-cn
 # --output-file=path/to/logfile.log  将日志写入指定文件
 # --key=...                          访问密钥
 # --local-port=...                   本地要被穿透的端口
+# --enable-pp                        启用 Proxy Protocol v2（透传真实 IP，仅限 Web 等支持的后端）
 # --debug                            打印调试信息（异常栈）
 # --no-color                         关闭 ANSI 颜色输出
 # --en-us / --zh-cn                  指定语言
@@ -75,8 +79,8 @@ NeoLink-XXXX.exe --zh-cn --key=你的访问密钥 --local-port=本地端口号
 
 ### 一键启动（命令行模式）
 ```bash
-# 使用命令行模式并直接指定密钥和端口，实现一键启动
-java -jar NeoLink-XXXX.jar --nogui --zh-cn --key=你的访问密钥 --local-port=本地端口号
+# 使用命令行模式并直接指定密钥和端口，以及开启 IP 透传
+java -jar NeoLink-XXXX.jar --nogui --zh-cn --key=你的访问密钥 --local-port=80 --enable-pp
 ```
 
 ### 🖥️构建项目
@@ -93,7 +97,7 @@ mvn clean package
 
 第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。默认内容如下（也可直接在仓库中保存此文件）：
 
-```
+```properties
 #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
 #Put the domain name or public network ip of the NeoServer you want to connect to here
 REMOTE_DOMAIN_NAME=localhost
@@ -101,6 +105,11 @@ REMOTE_DOMAIN_NAME=localhost
 #设置是否启用自动更新
 #Enable or disable automatic updates
 ENABLE_AUTO_UPDATE=true
+
+#是否向后端服务透传真实 IP (Proxy Protocol v2)
+#注意：仅当你的后端服务(如Nginx)配置了 accept_proxy 才可以开启，否则会导致连接失败。
+#普通应用(SSH, RDP, Minecraft)请保持 false
+ENABLE_PROXY_PROTOCOL=false
 
 #如果你不知道以下的设置意味着什么，请你不要改变它
 #If you don't know what the following setting means, please don't change it
@@ -165,6 +174,25 @@ A:
 2. 确认服务器防火墙/云服务安全组已放通对应端口。
 3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。
 4. 使用 `--debug` 获取更多异常栈信息。
+
+Q: 如何获取访问者的真实 IP？（Proxy Protocol）
+A:
+1. 客户端开启透传功能：
+    - **GUI**：在“高级设置”中勾选“透传真实IP (PPv2)”。
+    - **命令行**：添加参数 `--enable-pp`。
+    - **配置文件**：设置 `ENABLE_PROXY_PROTOCOL=true`。
+2. 后端服务（如 Nginx）必须配置接收 Proxy Protocol，否则会报错。示例 Nginx 配置：
+   ```nginx
+   server {
+       listen 80 proxy_protocol; # 必须加 proxy_protocol
+       location / {
+           proxy_pass http://127.0.0.1:8080;
+           proxy_set_header X-Real-IP $proxy_protocol_addr;
+           proxy_set_header X-Forwarded-For $proxy_protocol_addr;
+       }
+   }
+   ```
+   **注意**：不要对 SSH、RDP 或 Minecraft 开启此功能，否则会导致连接失败！
 
 Q: 如何使用 HTTPS 协议<br>
 A:
