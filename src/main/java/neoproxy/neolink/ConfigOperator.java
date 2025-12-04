@@ -16,7 +16,7 @@ public final class ConfigOperator {
     private static final Path CONFIG_PATH = CONFIG_FILE.toPath();
 
     /**
-     * 默认配置内容，提取为常量以提高可读性。
+     * 默认配置内容
      */
     private static final String DEFAULT_CONFIG_CONTENT = """
             #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
@@ -26,6 +26,11 @@ public final class ConfigOperator {
             #设置是否启用自动更新
             #Enable or disable automatic updates
             ENABLE_AUTO_UPDATE=true
+            
+            #是否向后端服务透传真实 IP (Proxy Protocol v2)
+            #注意：仅当你的后端服务(如Nginx)配置了 accept_proxy 才可以开启，否则会导致连接失败。
+            #普通应用(SSH, RDP, Minecraft)请保持 false
+            ENABLE_PROXY_PROTOCOL=false
             
             #如果你不知道以下的设置意味着什么，请你不要改变它
             #If you don't know what the following setting means, please don't change it
@@ -106,6 +111,10 @@ public final class ConfigOperator {
         NeoLink.enableAutoReconnect = reader.getOptional("ENABLE_AUTO_RECONNECT").map(Boolean::parseBoolean).orElse(true);
         NeoLink.enableAutoUpdate = reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true);
         NeoLink.reconnectionIntervalSeconds = reader.getOptional("RECONNECTION_INTERVAL").map(Integer::parseInt).orElse(30);
+
+        // 【新增】读取配置
+        NeoLink.enableProxyProtocol = reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false);
+
         ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
         ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
         CheckAliveThread.HEARTBEAT_PACKET_DELAY = reader.getOptional("HEARTBEAT_PACKET_DELAY").map(Integer::parseInt).orElse(1000);

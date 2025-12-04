@@ -43,7 +43,9 @@ import static neoproxy.neolink.NeoLink.*;
 
 /**
  * NeoLink GUI 主窗口控制器 (UI增强版)
- * 新增功能：在高级设置中添加“调试模式”和“显示连接”控制开关
+ * 新增功能：
+ * 1. 在高级设置中添加“调试模式”和“显示连接”控制开关
+ * 2. 添加“透传真实IP (PPv2)”控制开关，用于向后端透传 Proxy Protocol
  */
 public class MainWindowController {
     private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
@@ -77,6 +79,7 @@ public class MainWindowController {
     // 🔥 新增的复选框引用
     private Label debugCheckMark;
     private Label showConnCheckMark;
+    private Label ppCheckMark; // Proxy Protocol 复选框引用
 
     public MainWindowController(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -425,18 +428,20 @@ public class MainWindowController {
         hostConnectPortField.setText(String.valueOf(NeoLink.hostConnectPort));
         hostConnectPortField.setPrefWidth(200);
 
-        // Row 3: Protocol
+        // Row 3: Protocol & Features
+        // 🔥 在此处添加 Proxy Protocol 复选框
         Label protocolLabel = new Label("协议启用:");
         HBox protocolBox = new HBox(15);
         HBox tcpBox = createCustomCheckBox("启用TCP", !NeoLink.isDisableTCP);
         HBox udpBox = createCustomCheckBox("启用UDP", !NeoLink.isDisableUDP);
-        protocolBox.getChildren().addAll(tcpBox, udpBox);
+        HBox ppBox = createCustomCheckBox("透传真实IP (PPv2)", NeoLink.enableProxyProtocol);
+        protocolBox.getChildren().addAll(tcpBox, udpBox, ppBox);
 
         // Row 4: Auto Reconnect
         Label reconnectLabel = new Label("自动重连:");
         HBox reconnectBox = createCustomCheckBox("启用自动重连", NeoLink.enableAutoReconnect);
 
-        // 🔥 Row 5: Log Settings (New)
+        // Row 5: Log Settings (New)
         Label logSettingsLabel = new Label("日志设置:");
         HBox logSettingsBox = new HBox(15);
         HBox debugBox = createCustomCheckBox("调试模式", NeoLink.isDebugMode);
@@ -454,14 +459,13 @@ public class MainWindowController {
         advancedGrid.add(protocolBox, 1, 3);
         advancedGrid.add(reconnectLabel, 0, 4);
         advancedGrid.add(reconnectBox, 1, 4);
-        // 🔥 Add new row
         advancedGrid.add(logSettingsLabel, 0, 5);
         advancedGrid.add(logSettingsBox, 1, 5);
 
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setPrefWidth(100);
         ColumnConstraints col2 = new ColumnConstraints();
-        col2.setPrefWidth(300);
+        col2.setPrefWidth(450); // 稍微加宽以容纳3个复选框
         advancedGrid.getColumnConstraints().addAll(col1, col2);
         advancedSettingsPane.setContent(advancedGrid);
         VBox group = new VBox(5);
@@ -942,6 +946,8 @@ public class MainWindowController {
             debugCheckMark = checkMark;
         } else if (text.contains("显示连接")) {
             showConnCheckMark = checkMark;
+        } else if (text.contains("PPv2")) {
+            ppCheckMark = checkMark;
         }
 
         checkBox.getChildren().add(checkMark);
@@ -970,7 +976,7 @@ public class MainWindowController {
                 checkBox.setStyle("-fx-background-color: #202020; -fx-border-color: #555555; -fx-border-width: 2px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
             }
 
-            // 🔥 新增点击事件处理逻辑
+            // 🔥 点击事件处理逻辑
             if (text.contains("TCP")) {
                 NeoLink.isDisableTCP = !newState;
                 sendTCPandUDPState();
@@ -988,6 +994,9 @@ public class MainWindowController {
             } else if (text.contains("显示连接")) {
                 NeoLink.showConnection = newState;
                 NeoLink.say("连接日志显示已" + (newState ? "启用" : "禁用"));
+            } else if (text.contains("PPv2")) {
+                NeoLink.enableProxyProtocol = newState;
+                NeoLink.say("Proxy Protocol (真实IP透传) 已" + (newState ? "启用" : "禁用"));
             }
         });
         box.setOnMouseEntered(e -> {
@@ -1032,15 +1041,16 @@ public class MainWindowController {
         boolean tcpEnabled = (tcpCheckMark != null && tcpCheckMark.isVisible());
         boolean udpEnabled = (udpCheckMark != null && udpCheckMark.isVisible());
         boolean autoReconnectEnabled = (reconnectCheckMark != null && reconnectCheckMark.isVisible());
-
-        // 🔥 应用新增设置
         boolean debugEnabled = (debugCheckMark != null && debugCheckMark.isVisible());
         boolean showConnEnabled = (showConnCheckMark != null && showConnCheckMark.isVisible());
+        // 🔥 获取 PPv2 复选框状态
+        boolean ppEnabled = (ppCheckMark != null && ppCheckMark.isVisible());
 
         NeoLink.isDisableTCP = !tcpEnabled;
         NeoLink.isDisableUDP = !udpEnabled;
         NeoLink.enableAutoReconnect = autoReconnectEnabled;
         NeoLink.isDebugMode = debugEnabled;
         NeoLink.showConnection = showConnEnabled;
+        NeoLink.enableProxyProtocol = ppEnabled;
     }
 }
