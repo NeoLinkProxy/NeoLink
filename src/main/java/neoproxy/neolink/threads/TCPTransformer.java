@@ -12,41 +12,52 @@ import static neoproxy.neolink.NeoLink.debugOperation;
 /**
  * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
  * 【优化版】通过复用实例缓冲区来减少GC压力。
+ * 【新功能】支持 Proxy Protocol v2 的剥离或透传。
  */
 public class TCPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;
     public static final int MODE_LOCAL_TO_NEO = 1;
+    // Proxy Protocol v2 的 12 字节固定签名
+    private static final byte[] PPV2_SIG = new byte[]{
+            (byte) 0x0D, (byte) 0x0A, (byte) 0x0D, (byte) 0x0A,
+            (byte) 0x00, (byte) 0x0D, (byte) 0x0A, (byte) 0x51,
+            (byte) 0x55, (byte) 0x49, (byte) 0x54, (byte) 0x0A
+    };
     public static int BUFFER_LENGTH = 4096; // 可以保持为静态常量
-
     private final Socket plainSocket;
     private final SecureSocket secureSocket;
     private final int mode;
+    private final boolean enableProxyProtocol;
 
     // 🔥【性能优化】为每个实例创建一个独立的、可复用的缓冲区
-    // 避免在每次数据传输时都创建新的 byte[]，从而减少GC压力
     private final byte[] buffer = new byte[BUFFER_LENGTH];
 
     /**
      * 构造函数：用于从 Neo 服务器接收数据并转发到本地服务。
+     *
+     * @param enableProxyProtocol 是否允许透传 Proxy Protocol 头
      */
-    public TCPTransformer(SecureSocket secureSender, Socket localReceiver) {
+    public TCPTransformer(SecureSocket secureSender, Socket localReceiver, boolean enableProxyProtocol) {
         this.secureSocket = secureSender;
         this.plainSocket = localReceiver;
         this.mode = MODE_NEO_TO_LOCAL;
+        this.enableProxyProtocol = enableProxyProtocol;
     }
 
     /**
      * 构造函数：用于从本地服务接收数据并转发到 Neo 服务器。
+     *
+     * @param enableProxyProtocol 此方向通常不使用，可传 false
      */
-    public TCPTransformer(Socket localSender, SecureSocket secureReceiver) {
+    public TCPTransformer(Socket localSender, SecureSocket secureReceiver, boolean enableProxyProtocol) {
         this.plainSocket = localSender;
         this.secureSocket = secureReceiver;
         this.mode = MODE_LOCAL_TO_NEO;
+        this.enableProxyProtocol = enableProxyProtocol;
     }
 
     /**
-     * 🔥【重构】将静态方法改为实例方法，用于从本地服务转发数据到 Neo 服务器。
-     * 现在使用实例的 buffer，而不是每次创建新的。
+     * 将本地数据转发到 Neo 服务器 (Local -> Neo)
      */
     private void transferDataToNeoServer() {
         try (BufferedInputStream inputFromLocal = new BufferedInputStream(plainSocket.getInputStream())) {
@@ -65,13 +76,39 @@ public class TCPTransformer implements Runnable {
     }
 
     /**
-     * 🔥【重构】将静态方法改为实例方法，用于从 Neo 服务器转发数据到本地服务。
+     * 将 Neo 服务器数据转发到本地 (Neo -> Local)
+     * 【核心逻辑】在此处检测并处理 Proxy Protocol 头
      */
     private void transferDataToLocalServer() {
         try (BufferedOutputStream outputToLocal = new BufferedOutputStream(plainSocket.getOutputStream())) {
             byte[] data;
+            boolean isFirstPacket = true;
+
             while ((data = secureSocket.receiveByte()) != null) {
-                outputToLocal.write(data);
+                if (data.length == 0) continue;
+
+                if (isFirstPacket) {
+                    isFirstPacket = false;
+
+                    // 检测是否是 Proxy Protocol v2 头
+                    if (isProxyProtocolV2Signature(data)) {
+                        if (this.enableProxyProtocol) {
+                            // 配置为开启：透传给本地后端
+                            outputToLocal.write(data);
+                        } else {
+                            // 配置为关闭：丢弃该数据包
+                            // 假设服务端是单独发送的这个包，直接跳过本次循环
+                            continue;
+                        }
+                    } else {
+                        // 不是 PP 头（可能是旧版服务端），正常写入
+                        outputToLocal.write(data);
+                    }
+                } else {
+                    // 后续数据正常写入
+                    outputToLocal.write(data);
+                }
+
                 outputToLocal.flush();
             }
             shutdownInput(secureSocket);
@@ -81,6 +118,21 @@ public class TCPTransformer implements Runnable {
             shutdownInput(secureSocket);
             shutdownOutput(plainSocket);
         }
+    }
+
+    /**
+     * 检查数据包是否以 Proxy Protocol v2 签名开头
+     */
+    private boolean isProxyProtocolV2Signature(byte[] data) {
+        if (data == null || data.length < 12) {
+            return false;
+        }
+        for (int i = 0; i < 12; i++) {
+            if (data[i] != PPV2_SIG[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -94,8 +146,7 @@ public class TCPTransformer implements Runnable {
         } catch (Exception e) {
             debugOperation(e);
         } finally {
-            // 最终修复：无论正常结束还是异常结束，都确保关闭资源
-            // 这会通知另一个方向的流，使其也快速退出
+            // 无论正常结束还是异常结束，都确保关闭资源
             close(plainSocket, secureSocket);
         }
     }

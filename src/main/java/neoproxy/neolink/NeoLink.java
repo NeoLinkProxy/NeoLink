@@ -51,6 +51,10 @@ public class NeoLink {
     public static boolean showConnection = true;
     public static boolean enableAutoReconnect = true;
     public static boolean enableAutoUpdate = true;
+
+    // 【新增】是否向后端透传 Proxy Protocol
+    public static boolean enableProxyProtocol = false;
+
     public static int reconnectionIntervalSeconds = 30;
     public static double savedWindowX = 100;
     public static double savedWindowY = 100;
@@ -168,6 +172,8 @@ public class NeoLink {
             case "--backend" -> isBackend = true;
             case "--disable-tcp" -> isDisableTCP = true;
             case "--disable-udp" -> isDisableUDP = true;
+            // 【新增】支持命令行开启 Proxy Protocol
+            case "--enable-pp" -> enableProxyProtocol = true;
         }
     }
 
@@ -437,17 +443,20 @@ public class NeoLink {
             //格式：TCP;ID   或者 UDP;ID
             neoTransferSocket.sendStr("TCP" + ";" + socketID);
 
-            // 修改：单独控制是否显示TCP连接建立
             if (showConnection) {
                 say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
             }
 
-            TCPTransformer serverToNeoTask = new TCPTransformer(neoTransferSocket, localServerSocket);
-            TCPTransformer neoToServerTask = new TCPTransformer(localServerSocket, neoTransferSocket);
+            // 【核心修改】传入 enableProxyProtocol 参数
+            // 方向：Server -> Local (需要处理 Proxy Protocol)
+            TCPTransformer serverToNeoTask = new TCPTransformer(neoTransferSocket, localServerSocket, enableProxyProtocol);
+
+            // 方向：Local -> Server (不需要处理)
+            TCPTransformer neoToServerTask = new TCPTransformer(localServerSocket, neoTransferSocket, false);
+
             ThreadManager connectionThreadManager = new ThreadManager(serverToNeoTask, neoToServerTask);
 
             connectionThreadManager.startAsyncWithCallback(result -> {
-                // 修改：单独控制是否显示TCP连接销毁
                 if (showConnection) {
                     say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
                 }
@@ -473,7 +482,6 @@ public class NeoLink {
             //格式：TCP;ID   或者 UDP;ID
             neoTransferSocket.sendStr("UDP" + ";" + socketID);
 
-            // 修改：单独控制是否显示UDP连接建立
             if (showConnection) {
                 say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
             }
@@ -483,7 +491,6 @@ public class NeoLink {
             ThreadManager connectionThreadManager = new ThreadManager(localToNeoTask, neoToLocalTask);
 
             connectionThreadManager.startAsyncWithCallback(result -> {
-                // 修改：单独控制是否显示UDP连接销毁
                 if (showConnection) {
                     say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
                 }
