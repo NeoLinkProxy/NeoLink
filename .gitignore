@@ -40,3 +40,5 @@ build/
 logs
 
 eula.txt
+
+node11.json
