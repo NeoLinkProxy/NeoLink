@@ -18,7 +18,10 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.*;
+import javafx.scene.shape.Circle;
+import javafx.scene.shape.Polygon;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.SVGPath;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
@@ -27,24 +30,27 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 import neoproxy.neolink.ConfigOperator;
+import neoproxy.neolink.Debugger;
 import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.threads.CheckAliveThread;
-import plethora.print.log.Loggist;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXParseException;
+import plethora.print.log.Loggist;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,7 +60,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static neoproxy.neolink.InternetOperator.sendStr;
-import static neoproxy.neolink.NeoLink.*;
+import static neoproxy.neolink.NeoLink.languageData;
 
 public class MainWindowController {
     private static final Pattern PORT_PATTERN = Pattern.compile("^\\d{1,5}$");
@@ -65,33 +71,27 @@ public class MainWindowController {
     private final ExecutorService coreExecutor = Executors.newSingleThreadExecutor();
     private final ConcurrentLinkedQueue<String> pendingLogBuffer = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean isUpdatePending = new AtomicBoolean(false);
-
+    private final List<NeoNode> nodeList = new ArrayList<>();
+    private final ExecutorService stopExecutor = Executors.newSingleThreadExecutor();
     private ExecutorService logConsumerExecutor;
     private Future<?> currentTask = null;
-
     private TextField remoteDomainField;
     private HBox nodeSelectorContainer;
     private Label selectorDisplayLabel;
     private Pane selectorIconPane;
-
-    private List<NeoNode> nodeList = new ArrayList<>();
-
     private TextField localPortField;
     private PasswordField accessKeyField;
     private WebView logWebView;
     private WebEngine webEngine;
     private Button startButton;
     private Button stopButton;
-
     private volatile boolean isRunning = false;
     private boolean isMaximized = false;
     private double xOffset = 0;
     private double yOffset = 0;
-
     private TextField localDomainField;
     private TextField hostHookPortField;
     private TextField hostConnectPortField;
-
     private Label tcpCheckMark;
     private Label udpCheckMark;
     private Label reconnectCheckMark;
@@ -108,6 +108,7 @@ public class MainWindowController {
     }
 
     public void show() {
+        Debugger.debugOperation("Showing MainWindowController.");
         try {
             NeoLink.initializeLogger();
         } catch (Exception e) {
@@ -125,6 +126,7 @@ public class MainWindowController {
         NeoLink.printLogo();
         NeoLink.printBasicInfo();
 
+        Debugger.debugOperation("Loading nodes configuration...");
         loadNodes();
 
         primaryStage.initStyle(StageStyle.UNDECORATED);
@@ -135,7 +137,8 @@ public class MainWindowController {
                 scene.getStylesheets().add(MainWindowController.class.getResource("/dark-theme-webview.css").toExternalForm());
             if (MainWindowController.class.getResource("/dark-context-menu.css") != null)
                 scene.getStylesheets().add(MainWindowController.class.getResource("/dark-context-menu.css").toExternalForm());
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {
+        }
 
         scene.setOnDragOver(Event::consume);
         scene.setOnDragEntered(Event::consume);
@@ -148,7 +151,8 @@ public class MainWindowController {
         try {
             Image appIcon = new Image(Objects.requireNonNull(MainWindowController.class.getResourceAsStream("/logo.png")));
             primaryStage.getIcons().add(appIcon);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         primaryStage.setScene(scene);
         primaryStage.setOnCloseRequest(e -> handleExit());
@@ -165,6 +169,7 @@ public class MainWindowController {
         setupWindowResizeHandlers(scene);
 
         if (shouldAutoStart) {
+            Debugger.debugOperation("Auto-start enabled via GUI.");
             Platform.runLater(() -> {
                 if (NeoLink.key != null) accessKeyField.setText(NeoLink.key);
                 if (NeoLink.localPort != -1) localPortField.setText(String.valueOf(NeoLink.localPort));
@@ -176,25 +181,24 @@ public class MainWindowController {
     private void loadNodes() {
         nodeList.clear();
         File nodeFile = ConfigOperator.NODE_FILE;
-        if (!nodeFile.exists()) return;
+        if (!nodeFile.exists()) {
+            Debugger.debugOperation("Node file not found at " + nodeFile.getAbsolutePath());
+            return;
+        }
 
         try {
             String content = Files.readString(nodeFile.toPath(), StandardCharsets.UTF_8);
-            // 去除BOM头
             content = content.replace("\uFEFF", "");
 
-            // 【关键修复】
-            // 原来的正则 "//.*" 会误删 "http://..."。
-            // 现在的正则只移除 /*...*/ 块注释，以及位于行首(允许缩进)的 // 行注释
             String jsonClean = content.replaceAll("/\\*[\\s\\S]*?\\*/", "")
                     .replaceAll("(?m)^\\s*//.*", "")
                     .trim();
 
             if (jsonClean.startsWith("[") && jsonClean.endsWith("]")) {
-                // 简单的对象分割逻辑：找到 {...}
                 Pattern objectPattern = Pattern.compile("\\{([^{}]+)\\}");
                 Matcher matcher = objectPattern.matcher(jsonClean);
 
+                int count = 0;
                 while (matcher.find()) {
                     String objStr = matcher.group(1);
                     String name = extractJsonValue(objStr, "name");
@@ -208,17 +212,17 @@ public class MainWindowController {
 
                     if (name != null && address != null && !name.isBlank() && !address.isBlank()) {
                         nodeList.add(new NeoNode(name, address, icon, hookPort, connPort));
+                        count++;
                     }
                 }
+                Debugger.debugOperation("Loaded " + count + " nodes.");
             }
         } catch (IOException e) {
-            System.err.println("读取 node11.json 失败: " + e.getMessage());
+            System.err.println("Reading node file failed: " + e.getMessage());
+            Debugger.debugOperation(e);
         }
     }
-    /**
-     * 手动解析 JSON 值，比正则更稳定。
-     * 能正确处理包含 < > / ' 等特殊字符的 SVG 字符串，以及转义的双引号。
-     */
+
     private String extractJsonValue(String jsonContent, String key) {
         if (jsonContent == null || key == null) return null;
         String searchKey = "\"" + key + "\"";
@@ -271,26 +275,12 @@ public class MainWindowController {
     }
 
     private int parseIntSafe(String val, int def) {
-        try { return Integer.parseInt(val); } catch (Exception e) { return def; }
+        try {
+            return Integer.parseInt(val);
+        } catch (Exception e) {
+            return def;
+        }
     }
-// =========================================================================
-    //  SVG 解析引擎 (增强调试版)
-    // =========================================================================
-
-// =========================================================================
-    //  SVG 解析引擎 (修复版：解决单引号报错 & 控制台乱码)
-    // =========================================================================
-// =========================================================================
-    //  SVG 解析引擎 (精准切割版：彻底解决 XML 结构错误)
-    // =========================================================================
-
-// =========================================================================
-    //  SVG 解析引擎 (最终容错版)
-    // =========================================================================
-
-// =========================================================================
-    //  SVG 解析引擎 (最终清洗版)
-    // =========================================================================
 
     private Node createIconFromSvg(String svgContent, double targetSize) {
         if (svgContent == null || svgContent.trim().isEmpty()) {
@@ -298,23 +288,15 @@ public class MainWindowController {
         }
 
         try {
+            // Debugger.debugOperation("Parsing SVG icon..."); // Commented out to prevent flood
             String cleanSvg = svgContent.trim();
-
-            // 1. 去除 JSON 外部引号（如果提取时有残留）
             if (cleanSvg.startsWith("\"") && cleanSvg.endsWith("\"") && cleanSvg.length() > 2) {
                 cleanSvg = cleanSvg.substring(1, cleanSvg.length() - 1);
             }
-
-            // 2. 处理转义
             cleanSvg = cleanSvg.replace("\\\"", "\"").replace("\\\\", "\\");
-
-            // 3. 修复换行符问题 (将 \r \n 替换为空格，防止属性断裂)
             cleanSvg = cleanSvg.replace("\n", " ").replace("\r", " ");
-
-            // 4. 标准化引号
             cleanSvg = cleanSvg.replaceAll("='([^']*)'", "=\"$1\"");
 
-            // 5. 查找标签并截取
             String lowerSvg = cleanSvg.toLowerCase();
             int startIndex = lowerSvg.indexOf("<svg");
             int endIndex = lowerSvg.lastIndexOf("</svg>");
@@ -323,25 +305,32 @@ public class MainWindowController {
                 if (endIndex > startIndex) {
                     cleanSvg = cleanSvg.substring(startIndex, endIndex + 6);
                 } else {
-                    // 如果只有 <svg 没有 </svg>，尝试自动闭合（容错）
                     cleanSvg = cleanSvg.substring(startIndex) + "</svg>";
                 }
             }
 
-            // XML 解析
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             try {
                 factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            } catch(Exception ignored){}
+            } catch (Exception ignored) {
+            }
             factory.setIgnoringComments(true);
             factory.setNamespaceAware(false);
 
             DocumentBuilder builder = factory.newDocumentBuilder();
-            // 静默错误
             builder.setErrorHandler(new org.xml.sax.ErrorHandler() {
-                @Override public void warning(SAXParseException e) {}
-                @Override public void error(SAXParseException e) {}
-                @Override public void fatalError(SAXParseException e) throws SAXParseException { throw e; }
+                @Override
+                public void warning(SAXParseException e) {
+                }
+
+                @Override
+                public void error(SAXParseException e) {
+                }
+
+                @Override
+                public void fatalError(SAXParseException e) throws SAXParseException {
+                    throw e;
+                }
             });
 
             Document doc = builder.parse(new InputSource(new ByteArrayInputStream(cleanSvg.getBytes(StandardCharsets.UTF_8))));
@@ -350,7 +339,6 @@ public class MainWindowController {
 
             parseSvgNode(root, svgGroup);
 
-            // 缩放
             double width = 640;
             double height = 480;
 
@@ -384,8 +372,7 @@ public class MainWindowController {
             return container;
 
         } catch (Exception e) {
-            // 如果修复了 loadNodes，这里应该不会再进来了
-            // System.out.println("SVG 解析最终失败: " + e.getMessage());
+            Debugger.debugOperation("SVG Parse Error: " + e.getMessage());
             return new Circle(targetSize / 2, Color.GRAY);
         }
     }
@@ -430,8 +417,10 @@ public class MainWindowController {
                                         parseDouble(elem.getAttribute("y")),
                                         w, h
                                 );
-                                if (elem.hasAttribute("rx")) ((Rectangle)fxShape).setArcWidth(parseDouble(elem.getAttribute("rx")) * 2);
-                                if (elem.hasAttribute("ry")) ((Rectangle)fxShape).setArcHeight(parseDouble(elem.getAttribute("ry")) * 2);
+                                if (elem.hasAttribute("rx"))
+                                    ((Rectangle) fxShape).setArcWidth(parseDouble(elem.getAttribute("rx")) * 2);
+                                if (elem.hasAttribute("ry"))
+                                    ((Rectangle) fxShape).setArcHeight(parseDouble(elem.getAttribute("ry")) * 2);
                             }
                             break;
                         case "polygon":
@@ -452,9 +441,12 @@ public class MainWindowController {
                         String fill = elem.getAttribute("fill");
                         if ("none".equalsIgnoreCase(fill)) fxShape.setFill(Color.TRANSPARENT);
                         else if (fill != null && !fill.isEmpty()) {
-                            try { fxShape.setFill(Color.web(fill)); } catch (Exception e) { fxShape.setFill(Color.BLACK); }
+                            try {
+                                fxShape.setFill(Color.web(fill));
+                            } catch (Exception e) {
+                                fxShape.setFill(Color.BLACK);
+                            }
                         } else {
-                            // 默认填充黑色
                             fxShape.setFill(Color.BLACK);
                         }
 
@@ -466,12 +458,14 @@ public class MainWindowController {
                             Matcher m = Pattern.compile("translate\\s*\\(\\s*([\\d.\\-eE]+)[\\s,]*([\\d.\\-eE]*)\\s*\\)").matcher(transform);
                             if (m.find()) {
                                 fxShape.setTranslateX(parseDouble(m.group(1)));
-                                if (m.groupCount() > 1 && !m.group(2).isEmpty()) fxShape.setTranslateY(parseDouble(m.group(2)));
+                                if (m.groupCount() > 1 && !m.group(2).isEmpty())
+                                    fxShape.setTranslateY(parseDouble(m.group(2)));
                             }
                         }
                         parentGroup.getChildren().add(fxShape);
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         }
     }
@@ -480,7 +474,6 @@ public class MainWindowController {
         if (val == null || val.isBlank()) return 0;
         try {
             val = val.trim();
-            // 正则匹配：支持 负号、小数、科学计数法(e/E)，并自动忽略末尾的 px/em 等单位
             Matcher matcher = Pattern.compile("^-?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?").matcher(val);
             if (matcher.find()) {
                 return Double.parseDouble(matcher.group());
@@ -645,6 +638,7 @@ public class MainWindowController {
             if (hostConnectPortField != null) hostConnectPortField.setText(String.valueOf(node.getConnectPort()));
             NeoLink.hostHookPort = node.getHookPort();
             NeoLink.hostConnectPort = node.getConnectPort();
+            Debugger.debugOperation("Node selected: " + node.getName());
         });
     }
 
@@ -747,6 +741,7 @@ public class MainWindowController {
         webEngine = logWebView.getEngine();
         logWebView.setContextMenuEnabled(false);
 
+        // ... ContextMenu 代码保持不变 ...
         ContextMenu contextMenu = new ContextMenu();
         MenuItem copyItem = new MenuItem("复制");
         copyItem.setOnAction(e -> {
@@ -781,6 +776,7 @@ public class MainWindowController {
 
         logWebView.setOnDragOver(Event::consume);
 
+        // --- 修复开始：优化的 HTML 模板 ---
         String initialHtmlTemplate = """
                 <!DOCTYPE html>
                 <html>
@@ -795,40 +791,52 @@ public class MainWindowController {
                             margin: 0;
                             padding: 0;
                             height: 100%;
-                            overflow: hidden;
+                            overflow: hidden; /* 禁用 body 滚动，由 container 接管 */
                         }
                         #scroll-container {
                             height: 100vh;
+                            width: 100vw; /* 强制宽度适配视口 */
                             overflow-y: auto;
                             overflow-x: hidden;
-                            padding: 12px;
-                            box-sizing: border-box;
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                            margin-right: -17px;
-                            padding-right: 17px;
+                            padding: 10px; /* 正常的内边距 */
+                            box-sizing: border-box; /* 确保 padding 不会撑大宽度 */
+                
+                            /* 文本换行核心修复 */
+                            white-space: pre-wrap;       /* 保留空格和换行 */
+                            word-wrap: break-word;       /* 旧版兼容 */
+                            overflow-wrap: break-word;   /* 标准换行 */
+                            word-break: break-all;       /* 强制打断长单词(如密钥)，防止溢出 */
+                            tab-size: 4;                 /* 修复制表符对齐问题 */
                         }
+                
+                        /* 独立的日志行样式，减少内联样式开销 */
+                        .log-entry {
+                            line-height: 1.4;
+                            border-bottom: 1px solid transparent; /* 占位，防止抖动 */
+                        }
+                
                         ::-webkit-scrollbar { display: none !important; width: 0px; height: 0px; visibility: hidden; opacity: 0; }
-                        * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
                     </style>
                     <script>
                         function appendLogBatch(htmlBatch) {
                             var container = document.getElementById('scroll-container');
                             if (!container) return;
-                            var tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = htmlBatch;
-                            while (tempDiv.firstChild) {
-                                container.appendChild(tempDiv.firstChild);
-                            }
+                
+                            // 使用 insertAdjacentHTML 性能通常优于创建 div 再 appendChild
+                            container.insertAdjacentHTML('beforeend', htmlBatch);
+                
                             var maxEntries = MAX_ENTRIES_PLACEHOLDER;
                             var totalNodes = container.children.length;
+                
+                            // 批量删除多余节点
                             if (totalNodes > maxEntries) {
-                                for (var i = 0; i < (totalNodes - maxEntries); i++) {
-                                    if (container.firstChild) {
-                                        container.removeChild(container.firstChild);
-                                    }
+                                var removeCount = totalNodes - maxEntries;
+                                for (var i = 0; i < removeCount; i++) {
+                                    container.removeChild(container.firstChild);
                                 }
                             }
+                
+                            // 强制滚动到底部
                             container.scrollTop = container.scrollHeight;
                         }
                     </script>
@@ -837,12 +845,13 @@ public class MainWindowController {
                     <div id="scroll-container"></div>
                 </body>
                 </html>""";
+        // --- 修复结束 ---
 
         String initialHtml = initialHtmlTemplate.replace("MAX_ENTRIES_PLACEHOLDER", String.valueOf(MAX_LOG_ENTRIES));
 
-        // 修改点：显式指定 MIME 类型为 text/html，这能确保 WebView 使用 UTF-8 正确解析中文字符
         webEngine.loadContent(initialHtml, "text/html");
 
+        // 依然保留这个监听器以防万一
         webEngine.getLoadWorker().stateProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == javafx.concurrent.Worker.State.SUCCEEDED) {
                 webEngine.executeScript(
@@ -888,7 +897,8 @@ public class MainWindowController {
 
     private String buildLogEntryHtml(String ansiText) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<div style='white-space: pre-wrap; word-wrap: break-word;'>");
+        // 使用 CSS 类 .log-entry，去除内联样式，解决 text-indent 或 padding 导致的错位
+        sb.append("<div class='log-entry'>");
         if (ansiText.contains("\033[")) {
             sb.append(parseAnsiToHtml(ansiText));
         } else {
@@ -930,27 +940,55 @@ public class MainWindowController {
     private void startService() {
         if (isRunning) return;
         if (!validateForm()) return;
+
+        Debugger.debugOperation("Starting NeoLink Service...");
+
+        // 1. 设置标志位
+        isRunning = true;
+
+        // 2. 立即更新 UI 状态：Start 禁用，Stop 启用
+        updateButtonState(true);
+
+        // 3. 准备数据
         resetNeoLinkState();
         NeoLink.remoteDomainName = remoteDomainField.getText().trim();
         NeoLink.localPort = Integer.parseInt(localPortField.getText().trim());
         NeoLink.key = accessKeyField.getText();
         applyAdvancedSettings();
-        languageData = languageData.flush();
+
+        if (languageData != null) languageData = languageData.flush();
         NeoLink.say("正在启动 NeoLink 服务...");
         NeoLink.printBasicInfo();
-        isRunning = true;
-        updateButtonState();
+
+        // 4. 提交任务
         currentTask = coreExecutor.submit(() -> {
             try {
+                // 将 MainWindowController 的引用传递给 NeoLink 全局对象，以便 Runner 回调
+                NeoLink.mainWindowController = this;
                 NeoLinkCoreRunner.runCore(NeoLink.remoteDomainName, NeoLink.localPort, NeoLink.key);
-            } finally {
-                resetState();
+            } catch (Exception e) {
+                Debugger.debugOperation("Critical error in runCore submission: " + e.getMessage());
+                // 如果提交本身失败，确保 UI 重置
+                Platform.runLater(this::resetUIStateToStopped);
             }
         });
     }
 
+    public void resetUIStateToStopped() {
+        isRunning = false;
+        startButton.setDisable(false);
+        stopButton.setDisable(true);
+        currentTask = null; // 清除任务引用
+        resetNeoLinkState();
+    }
+
+    public void forceStopUIState() {
+        stopService();
+    }
+
     private void resetNeoLinkState() {
         NeoLink.hookSocket = null;
+        NeoLink.connectingSocket = null; // 确保清理
         NeoLink.remotePort = 0;
         NeoLink.isReconnectedOperation = false;
         NeoLink.inputScanner = new Scanner(new ByteArrayInputStream(new byte[0]));
@@ -958,29 +996,62 @@ public class MainWindowController {
     }
 
     public void stopService() {
-        NeoLink.say("正在关闭 NeoLink 服务...");
-        if (!isRunning) return;
-        NeoLinkCoreRunner.requestStop();
-        if (NeoLink.hookSocket != null) {
+        if (!isRunning) return; // 防止重复点击
+
+        NeoLink.say("正在停止 NeoLink 服务...");
+        Debugger.debugOperation("Stopping NeoLink Service (Forced)...");
+
+        // 1. 立即禁用所有按钮，防止用户狂点
+        startButton.setDisable(true);
+        stopButton.setDisable(true);
+
+        // 2. 异步执行清理，避免冻结界面
+        stopExecutor.submit(() -> {
             try {
-                NeoLink.hookSocket.close();
-            } catch (Exception ignored) {
+                // A. 通知 Runner 停止循环
+                NeoLinkCoreRunner.requestStop();
+
+                // B. 暴力关闭连接中 Socket (打断 socket.connect)
+                if (NeoLink.connectingSocket != null && !NeoLink.connectingSocket.isClosed()) {
+                    try {
+                        Debugger.debugOperation("Force closing connecting socket...");
+                        NeoLink.connectingSocket.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                // C. 暴力关闭已建立的 SecureSocket (打断 socket.read)
+                if (NeoLink.hookSocket != null) {
+                    try {
+                        Debugger.debugOperation("Force closing hook socket...");
+                        NeoLink.hookSocket.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                // D. 停止保活线程
+                CheckAliveThread.stopThread();
+
+                // E. 取消任务
+                if (currentTask != null) {
+                    Debugger.debugOperation("Cancelling core task...");
+                    currentTask.cancel(true);
+                }
+
+            } finally {
+                // F. 确保 UI 恢复。注意：这里其实 NeoLinkCoreRunner 的 finally 也会调用 resetUIStateToStopped
+                // 双重保险：如果 runCore 已经卡死，这里也会重置 UI
+                Platform.runLater(() -> {
+                    resetUIStateToStopped();
+                    NeoLink.say("服务已停止");
+                });
             }
-        }
-        CheckAliveThread.stopThread();
-        if (currentTask != null) {
-            currentTask.cancel(true);
-            currentTask = null;
-        }
-        resetState();
-        NeoLink.say("成功关闭 NeoLink 服务");
+        });
     }
 
-    private void updateButtonState() {
-        Platform.runLater(() -> {
-            startButton.setDisable(true);
-            stopButton.setDisable(false);
-        });
+    private void updateButtonState(boolean running) {
+        startButton.setDisable(running);
+        stopButton.setDisable(!running);
     }
 
     private void resetState() {
@@ -1087,7 +1158,8 @@ public class MainWindowController {
                 try {
                     if (MainWindowController.class.getResource("/dark-theme-webview.css") != null)
                         scene.getStylesheets().add(MainWindowController.class.getResource("/dark-theme-webview.css").toExternalForm());
-                } catch(Exception ignored){}
+                } catch (Exception ignored) {
+                }
                 dialogStage.setScene(scene);
                 dialogStage.setOnShown(event -> {
                     dialogStage.setX(primaryStage.getX() + primaryStage.getWidth() / 2 - dialogStage.getWidth() / 2);
@@ -1113,7 +1185,8 @@ public class MainWindowController {
                     node.resize(0, 0);
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private void setupWindowResizeHandlers(Scene scene) {
@@ -1327,14 +1400,15 @@ public class MainWindowController {
     }
 
     private void handleExit() {
+        Debugger.debugOperation("App exit requested.");
+        // 先尝试优雅停止
         stopService();
-        if (logConsumerExecutor != null) {
-            logConsumerExecutor.shutdownNow();
-        }
-        if (currentTask != null) {
-            currentTask.cancel(true);
-        }
+
+        if (logConsumerExecutor != null) logConsumerExecutor.shutdownNow();
+        if (stopExecutor != null) stopExecutor.shutdownNow(); // 关闭停止线程池
+        if (currentTask != null) currentTask.cancel(true);
         coreExecutor.shutdownNow();
+
         Platform.exit();
         System.exit(0);
     }
@@ -1397,22 +1471,28 @@ public class MainWindowController {
                 NeoLink.isDisableTCP = !newState;
                 sendTCPandUDPState();
                 NeoLink.say("TCP协议已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("TCP enabled: " + newState);
             } else if (text.contains("UDP")) {
                 NeoLink.isDisableUDP = !newState;
                 sendTCPandUDPState();
                 NeoLink.say("UDP协议已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("UDP enabled: " + newState);
             } else if (text.contains("自动重连")) {
                 NeoLink.enableAutoReconnect = newState;
                 NeoLink.say("自动重连已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("AutoReconnect enabled: " + newState);
             } else if (text.contains("调试模式")) {
                 NeoLink.isDebugMode = newState;
                 NeoLink.say("调试模式已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("DebugMode enabled: " + newState);
             } else if (text.contains("显示连接")) {
                 NeoLink.showConnection = newState;
                 NeoLink.say("连接日志显示已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("ShowConnection enabled: " + newState);
             } else if (text.contains("PPv2")) {
                 NeoLink.enableProxyProtocol = newState;
                 NeoLink.say("Proxy Protocol (真实IP透传) 已" + (newState ? "启用" : "禁用"));
+                Debugger.debugOperation("ProxyProtocol enabled: " + newState);
             }
         });
         box.setOnMouseEntered(e -> {
@@ -1435,12 +1515,15 @@ public class MainWindowController {
         try {
             if (isRunning && NeoLink.hookSocket != null) {
                 sendStr(command);
+                Debugger.debugOperation("Synced TCP/UDP state to server: " + command);
             }
         } catch (IOException e) {
+            Debugger.debugOperation("Failed to sync TCP/UDP state: " + e.getMessage());
         }
     }
 
     private void applyAdvancedSettings() {
+        Debugger.debugOperation("Applying advanced settings from GUI...");
         String localDomain = localDomainField.getText().trim();
         if (!localDomain.isEmpty()) NeoLink.localDomainName = localDomain;
         String hookPortStr = hostHookPortField.getText().trim();

@@ -7,7 +7,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.Socket;
 
-import static neoproxy.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.Debugger.debugOperation;
 import static neoproxy.neolink.NeoLink.hookSocket;
 
 public class InternetOperator {

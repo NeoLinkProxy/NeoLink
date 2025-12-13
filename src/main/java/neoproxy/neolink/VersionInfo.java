@@ -4,7 +4,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
-import static neoproxy.neolink.NeoLink.debugOperation;
+import static neoproxy.neolink.Debugger.debugOperation;
 
 
 public class VersionInfo {

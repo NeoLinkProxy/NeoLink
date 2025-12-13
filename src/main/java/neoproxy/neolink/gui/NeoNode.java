@@ -15,9 +15,23 @@ public class NeoNode {
         this.connectPort = connectPort;
     }
 
-    public String getName() { return name; }
-    public String getAddress() { return address; }
-    public String getIconSvg() { return iconSvg; }
-    public int getHookPort() { return hookPort; }
-    public int getConnectPort() { return connectPort; }
+    public String getName() {
+        return name;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getIconSvg() {
+        return iconSvg;
+    }
+
+    public int getHookPort() {
+        return hookPort;
+    }
+
+    public int getConnectPort() {
+        return connectPort;
+    }
 }
