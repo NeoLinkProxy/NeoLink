@@ -11,18 +11,22 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
+import static neoproxy.neolink.Debugger.debugOperation;
 import static neoproxy.neolink.InternetOperator.*;
 import static neoproxy.neolink.NeoLink.*;
 
 public class UpdateManager {
-    private static final String tempUpdateDir = CURRENT_DIR_PATH; // 临时更新目录，默认为程序自身目录
+    private static final String tempUpdateDir = CURRENT_DIR_PATH;
 
     public static void checkUpdate(String fileName) {
+        debugOperation("Checking for updates: " + fileName);
         try {
             boolean isWindows = OSDetector.isWindows();
-            // 告知服务端客户端类型 (7z 或 jar)
+            debugOperation("OS is Windows: " + isWindows);
             sendStr(isWindows ? "7z" : "jar");
             boolean canDownload = Boolean.parseBoolean(receiveStr());
+            debugOperation("Server response for download availability: " + canDownload);
+
             if (!canDownload) {
                 if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
@@ -33,14 +37,15 @@ public class UpdateManager {
                 return;
             }
 
-            // 确定新客户端文件的完整路径
             String fileExtension = isWindows ? ".7z" : ".jar";
             File clientFile = new File(tempUpdateDir, fileName + fileExtension);
+            debugOperation("Target update file: " + clientFile.getAbsolutePath());
 
             say(languageData.START_TO_DOWNLOAD_UPDATE);
 
-            // 分块接收文件
             boolean downloadSuccess = receiveFileInChunks(clientFile);
+            debugOperation("Download success: " + downloadSuccess);
+
             if (!downloadSuccess) {
                 say(languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE, LogType.ERROR);
                 exitAndFreeze(-1);
@@ -50,7 +55,7 @@ public class UpdateManager {
             say(languageData.DOWNLOAD_SUCCESS);
 
             if (isWindows) {
-                // 处理7z文件 - 直接解压到当前目录
+                debugOperation("Extracting 7z file...");
                 boolean extractionSuccess = extractSevenZFile(clientFile, new File(CURRENT_DIR_PATH));
                 if (!extractionSuccess) {
                     say(languageData.FAILED_TO_EXTRACT_7Z_FILE, LogType.ERROR);
@@ -58,21 +63,20 @@ public class UpdateManager {
                     return;
                 }
 
-                // 查找解压后的NeoLink.exe
                 File extractedExe = findExtractedExe(new File(CURRENT_DIR_PATH));
                 if (extractedExe == null) {
+                    debugOperation("Extracted EXE not found.");
                     say(languageData.NEOLINK_EXE_NOT_FOUND, LogType.ERROR);
                     exitAndFreeze(-1);
                     return;
                 }
 
-                // 删除7z文件
                 deleteFileOrDirectory(clientFile);
+                debugOperation("Deleted temporary archive.");
 
-                // 启动新版本
                 startNewVersion(extractedExe);
             } else {
-                // 非Windows系统处理jar文件
+                debugOperation("Updating JAR file...");
                 File finalJar = new File(CURRENT_DIR_PATH, fileName + fileExtension);
                 if (finalJar.exists()) {
                     File backupFile = new File(CURRENT_DIR_PATH, fileName + " - copy" + fileExtension);
@@ -92,8 +96,6 @@ public class UpdateManager {
                 }
 
                 Files.copy(clientFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-
-                // 只删除临时jar文件
                 deleteFileOrDirectory(clientFile);
 
                 say(languageData.PLEASE_RUN + finalJar.getAbsolutePath());
@@ -101,26 +103,21 @@ public class UpdateManager {
 
             exitAndFreeze(0);
         } catch (IOException e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.FAILED_TO_CHECK_UPDATES + e.getMessage(), LogType.ERROR);
             exitAndFreeze(0);
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.UNEXPECTED_ERROR_DURING_UPDATE + e.getMessage(), LogType.ERROR);
             exitAndFreeze(0);
         }
     }
 
-    /**
-     * 分块接收文件
-     *
-     * @param outputFile 输出文件
-     * @return 是否接收成功
-     */
     private static boolean receiveFileInChunks(File outputFile) {
+        debugOperation("Starting file reception in chunks.");
         try {
-            // 接收文件大小（使用字符串形式）
             String fileSizeStr = receiveStr();
+            debugOperation("Received file size string: " + fileSizeStr);
             long fileSize;
             try {
                 fileSize = Long.parseLong(fileSizeStr);
@@ -136,12 +133,10 @@ public class UpdateManager {
 
             say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
 
-            // 创建输出文件
             try (BufferedOutputStream fileOutputStream = new BufferedOutputStream(new FileOutputStream(outputFile))) {
                 long totalBytesRead = 0;
                 int progress = 0;
 
-                // 循环接收数据块
                 while (totalBytesRead < fileSize) {
                     byte[] chunk = receiveBytes();
                     if (chunk == null) {
@@ -152,42 +147,34 @@ public class UpdateManager {
                     fileOutputStream.write(chunk);
                     totalBytesRead += chunk.length;
 
-                    // 显示进度（每10%更新一次）
                     int newProgress = (int) (totalBytesRead * 100 / fileSize);
                     if (newProgress > progress) {
                         progress = newProgress;
                         say(languageData.DOWNLOAD_PROGRESS + progress + "%");
+                        // debugOperation("Download progress: " + progress + "%"); // Too chatty
                     }
                 }
 
-                // 确保接收了所有数据
                 if (totalBytesRead != fileSize) {
                     say(languageData.FILE_SIZE_MISMATCH + fileSize + ", Received: " + totalBytesRead, LogType.ERROR);
                     return false;
                 }
 
-                // 文件接收完成，不再尝试接收MD5校验和
                 say(languageData.FILE_DOWNLOAD_COMPLETED);
             } catch (Exception e) {
-                debugOperation(e);
+                Debugger.debugOperation(e);
                 say(languageData.ERROR_WHILE_DOWNLOADING_FILE + e.getMessage(), LogType.ERROR);
                 return false;
             }
 
             return true;
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.ERROR_RECEIVING_FILE + e.getMessage(), LogType.ERROR);
             return false;
         }
     }
 
-    /**
-     * 格式化文件大小为可读字符串
-     *
-     * @param bytes 字节数
-     * @return 格式化后的字符串
-     */
     private static String formatFileSize(long bytes) {
         if (bytes < 1024) {
             return bytes + " B";
@@ -200,32 +187,21 @@ public class UpdateManager {
         }
     }
 
-    /**
-     * 使用7-Zip-JBinding解压7z文件
-     *
-     * @param sevenZFile  7z文件
-     * @param destination 目标目录
-     * @return 解压是否成功
-     */
     private static boolean extractSevenZFile(File sevenZFile, File destination) {
+        debugOperation("Starting 7z extraction.");
         RandomAccessFile randomAccessFile = null;
         IInArchive inArchive = null;
 
         try {
-            // 初始化7-Zip-JBinding库
             SevenZip.initSevenZipFromPlatformJAR();
-
-            // 打开7z文件
             randomAccessFile = new RandomAccessFile(sevenZFile, "r");
             inArchive = SevenZip.openInArchive(null, new RandomAccessFileInStream(randomAccessFile));
 
-            // 获取归档中的文件数量
             int[] in = new int[inArchive.getNumberOfItems()];
             for (int i = 0; i < in.length; i++) {
                 in[i] = i;
             }
 
-            // 提取所有文件
             IInArchive finalInArchive = inArchive;
             inArchive.extract(in, false, new IArchiveExtractCallback() {
                 private FileOutputStream outputStream;
@@ -236,8 +212,6 @@ public class UpdateManager {
                     if (extractAskMode != ExtractAskMode.EXTRACT) {
                         return null;
                     }
-
-                    // 获取文件路径
                     String path = finalInArchive.getStringProperty(index, PropID.PATH);
                     boolean isFolder = (Boolean) finalInArchive.getProperty(index, PropID.IS_FOLDER);
 
@@ -245,7 +219,6 @@ public class UpdateManager {
                         return null;
                     }
 
-                    // 创建目标文件
                     currentFile = new File(destination, path);
                     File parent = currentFile.getParentFile();
                     if (parent != null && !parent.exists()) {
@@ -272,7 +245,6 @@ public class UpdateManager {
 
                 @Override
                 public void prepareOperation(ExtractAskMode extractAskMode) throws SevenZipException {
-                    // 准备操作
                 }
 
                 @Override
@@ -285,7 +257,6 @@ public class UpdateManager {
                             throw new SevenZipException(e);
                         }
                     }
-
                     if (extractOperationResult != ExtractOperationResult.OK) {
                         throw new SevenZipException("Extraction failed for file: " + currentFile.getAbsolutePath());
                     }
@@ -293,43 +264,30 @@ public class UpdateManager {
 
                 @Override
                 public void setCompleted(long completeValue) throws SevenZipException {
-                    // 完成进度
                 }
 
                 @Override
                 public void setTotal(long total) throws SevenZipException {
-                    // 总进度
                 }
             });
 
             say(languageData.SEVENZ_FILE_EXTRACTED_SUCCESSFULLY + destination.getAbsolutePath());
             return true;
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.FAILED_TO_EXTRACT_7Z_FILE + e.getMessage(), LogType.ERROR);
             return false;
         } finally {
-            // 确保资源被正确关闭
             try {
-                if (inArchive != null) {
-                    inArchive.close();
-                }
-                if (randomAccessFile != null) {
-                    randomAccessFile.close();
-                }
+                if (inArchive != null) inArchive.close();
+                if (randomAccessFile != null) randomAccessFile.close();
             } catch (IOException e) {
-                debugOperation(e);
+                Debugger.debugOperation(e);
                 say(languageData.ERROR_CLOSING_7Z_FILE + e.getMessage(), LogType.WARNING);
             }
         }
     }
 
-    /**
-     * 查找解压后的NeoLink.exe文件
-     *
-     * @param directory 搜索目录
-     * @return 找到的exe文件，如果未找到则返回null
-     */
     private static File findExtractedExe(File directory) {
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
             return null;
@@ -342,7 +300,6 @@ public class UpdateManager {
 
         for (File file : files) {
             if (file.isDirectory()) {
-                // 递归搜索子目录
                 File result = findExtractedExe(file);
                 if (result != null) {
                     return result;
@@ -355,24 +312,17 @@ public class UpdateManager {
         return null;
     }
 
-    /**
-     * 启动新版本
-     *
-     * @param exeFile 新版本exe文件
-     */
     private static void startNewVersion(File exeFile) {
+        debugOperation("Preparing to start new version: " + exeFile.getName());
         try {
-            // 确保文件存在且可执行
             if (!exeFile.exists() || !exeFile.isFile()) {
                 say(languageData.EXECUTABLE_NOT_FOUND + exeFile.getAbsolutePath(), LogType.ERROR);
                 return;
             }
 
-            // 构建命令，确保路径被正确引用
             StringBuilder command = new StringBuilder("cmd.exe /c start \"\" \"");
             command.append(exeFile.getAbsolutePath()).append("\"");
 
-            // 传递原有参数
             if (key != null) {
                 command.append(" --key=").append(key);
             }
@@ -390,10 +340,10 @@ public class UpdateManager {
             }
 
             say(languageData.STARTING_NEW_VERSION + command);
+            debugOperation("Executing command: " + command);
             WindowsOperation.run(command.toString());
             say(languageData.NEW_VERSION_STARTED);
 
-            // 给新版本一些时间启动
             try {
                 TimeUnit.SECONDS.sleep(2);
             } catch (InterruptedException e) {
@@ -402,20 +352,16 @@ public class UpdateManager {
 
             System.exit(0);
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.FAILED_TO_START_NEW_VERSION + e.getMessage(), LogType.ERROR);
         }
     }
 
-    /**
-     * 删除文件或目录（仅删除指定的文件，不删除其他任何东西）
-     *
-     * @param fileOrDirectory 要删除的文件或目录
-     */
     private static void deleteFileOrDirectory(File fileOrDirectory) {
         if (fileOrDirectory == null || !fileOrDirectory.exists()) {
             return;
         }
+        debugOperation("Deleting: " + fileOrDirectory.getAbsolutePath());
 
         try {
             if (fileOrDirectory.isDirectory()) {
@@ -433,7 +379,7 @@ public class UpdateManager {
                 say(languageData.SUCCESSFULLY_DELETED + fileOrDirectory.getAbsolutePath());
             }
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             say(languageData.ERROR_DELETING_FILE + e.getMessage(), LogType.WARNING);
         }
     }

@@ -14,18 +14,21 @@ import plethora.print.log.State;
 import plethora.thread.ThreadManager;
 import plethora.time.Time;
 import plethora.utils.Sleeper;
-import plethora.utils.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import static neoproxy.neolink.Debugger.debugOperation;
 import static neoproxy.neolink.InternetOperator.*;
 import static neoproxy.neolink.UpdateManager.checkUpdate;
 
@@ -40,7 +43,8 @@ public class NeoLink {
     public static String localDomainName = "localhost";
     public static int hostHookPort = 44801;
     public static int hostConnectPort = 44802;
-    public static SecureSocket hookSocket;
+    public static volatile SecureSocket hookSocket;
+    public static volatile Socket connectingSocket = null;
     public static String key = null;
     public static int localPort = INVALID_LOCAL_PORT;
     public static Loggist loggist;
@@ -51,10 +55,7 @@ public class NeoLink {
     public static boolean showConnection = true;
     public static boolean enableAutoReconnect = true;
     public static boolean enableAutoUpdate = true;
-
-    // 【新增】是否向后端透传 Proxy Protocol
     public static boolean enableProxyProtocol = false;
-
     public static int reconnectionIntervalSeconds = 30;
     public static double savedWindowX = 100;
     public static double savedWindowY = 100;
@@ -65,44 +66,158 @@ public class NeoLink {
     public static boolean isGUIMode = true;
     public static boolean isDisableUDP = false;
     public static boolean isDisableTCP = false;
+    // New variable for storing the node name from command line
+    public static String specifiedNodeName = null;
     private static boolean shouldAutoStartInGUI = false;
     private static boolean isBackend = false;
     private static boolean noColor = false;
 
     public static void main(String[] args) {
+        // [DEBUG] Entry point
+        // Note: isDebugMode might not be set yet until args are parsed,
+        // but we can't log before checking args.
+
         parseCommandLineArgs(args);
+        debugOperation("Entering main() method.");
+        debugOperation("Command line arguments parsed. Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
+
         killCmdWindowIfNeeded(args);
 
         if (isGUIMode) {
+            debugOperation("GUI Mode detected. Delegating to AppStart.main().");
             AppStart.main(args, shouldAutoStartInGUI);
+            debugOperation("AppStart returned. Exiting system with code 0.");
             System.exit(0);
         }
+
+        debugOperation("CLI Mode proceeding. Initializing logger.");
         initializeLogger();
+
+        debugOperation("Detecting language...");
         detectLanguage();
+
+        debugOperation("Reading configuration values...");
         ConfigOperator.readAndSetValue();
+
+        // [New Logic] Load Node Config if specified
+        if (specifiedNodeName != null) {
+            loadNodeConfiguration();
+        }
+
+        debugOperation("Initializing ProxyOperator...");
         ProxyOperator.init();
+
         if (!isReconnectedOperation) {
+            debugOperation("Not a reconnection operation. Printing logo and info.");
             printLogo();
             printBasicInfo();
+        } else {
+            debugOperation("This is a reconnection operation.");
         }
+
         try {
+            debugOperation("Prompting for access key (if null).");
             promptForAccessKey();
+
+            debugOperation("Attempting to connect to NeoServer at " + remoteDomainName + ":" + hostHookPort);
             connectToNeoServer();
+            debugOperation("Connection established. Exchanging client info.");
+
             exchangeClientInfoWithServer();
 
-            // 启动智能心跳线程
+            debugOperation("Starting CheckAliveThread.");
             CheckAliveThread.startThread();
 
+            debugOperation("Prompting for local port (if invalid).");
             promptForLocalPort();
+
+            debugOperation("Entering main loop: listening for server commands.");
             listenForServerCommands();
         } catch (Exception e) {
+            debugOperation("Exception occurred in main execution flow.");
+            debugOperation(e);
             handleConnectionFailure(e);
         }
     }
 
+    /**
+     * Tries to load node configuration from node.json based on specifiedNodeName.
+     * Falls back to existing configuration (GUI mode defaults) if any error occurs.
+     */
+    private static void loadNodeConfiguration() {
+        debugOperation("Attempting to load configuration for node: " + specifiedNodeName);
+        File nodeFile = new File(CURRENT_DIR_PATH, "node.json");
+
+        try {
+            if (!nodeFile.exists()) {
+                throw new IOException("node.json file not found in current directory.");
+            }
+
+            String jsonContent = new String(Files.readAllBytes(nodeFile.toPath()), StandardCharsets.UTF_8);
+
+            // Manual JSON parsing to avoid adding external dependencies.
+            // Looking for the object containing "name": "specifiedNodeName"
+            // We split by closing braces to roughly separate objects, assuming a flat array structure.
+            String[] rawObjects = jsonContent.split("}");
+            boolean nodeFound = false;
+
+            for (String obj : rawObjects) {
+                // Check if this object contains the name we are looking for
+                // Regex matches: "name"\s*:\s*"specifiedNodeName"
+                Pattern namePattern = Pattern.compile("\"name\"\\s*:\\s*\"" + Pattern.quote(specifiedNodeName) + "\"");
+                Matcher nameMatcher = namePattern.matcher(obj);
+
+                if (nameMatcher.find()) {
+                    // Node found, extract other fields
+                    nodeFound = true;
+                    debugOperation("Node '" + specifiedNodeName + "' found in json. Parsing details...");
+
+                    // Extract Address
+                    Pattern addressPattern = Pattern.compile("\"address\"\\s*:\\s*\"(.*?)\"");
+                    Matcher addressMatcher = addressPattern.matcher(obj);
+                    if (addressMatcher.find()) {
+                        remoteDomainName = addressMatcher.group(1);
+                    }
+
+                    // Extract Hook Port
+                    Pattern hookPortPattern = Pattern.compile("\"hookPort\"\\s*:\\s*(\\d+)");
+                    Matcher hookPortMatcher = hookPortPattern.matcher(obj);
+                    if (hookPortMatcher.find()) {
+                        hostHookPort = Integer.parseInt(hookPortMatcher.group(1));
+                    }
+
+                    // Extract Connect Port
+                    Pattern connectPortPattern = Pattern.compile("\"connectPort\"\\s*:\\s*(\\d+)");
+                    Matcher connectPortMatcher = connectPortPattern.matcher(obj);
+                    if (connectPortMatcher.find()) {
+                        hostConnectPort = Integer.parseInt(connectPortMatcher.group(1));
+                    }
+
+                    debugOperation("Node config applied. Address: " + remoteDomainName +
+                            ", HookPort: " + hostHookPort + ", ConnectPort: " + hostConnectPort);
+                    break;
+                }
+            }
+
+            if (!nodeFound) {
+                throw new IOException("Node with name '" + specifiedNodeName + "' not found in node.json.");
+            }
+
+        } catch (Exception e) {
+            // Fallback logic: Log the error in pure English and proceed with previous values (GUI/Default mode)
+            debugOperation("Failed to load node config, falling back to GUI mode. Reason: " + e.getMessage());
+            if (isDebugMode) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private static void killCmdWindowIfNeeded(String[] args) {
+        debugOperation("[DEBUG] Checking if CMD window needs killing. Backend: " + isBackend + ", GUI: " + isGUIMode);
+
         if (!isBackend && isGUIMode) {
             if (currentFile != null && currentFile.getAbsolutePath().endsWith(".exe")) {
+                debugOperation("[DEBUG] .exe detected. Spawning backend process.");
                 CopyOnWriteArrayList<String> newArgs = new CopyOnWriteArrayList<>();
                 newArgs.add(currentFile.getAbsolutePath());
                 newArgs.addAll(Arrays.asList(args));
@@ -121,16 +236,20 @@ public class NeoLink {
     public static void detectLanguage() {
         if (languageData == null) {
             Locale defaultLocale = Locale.getDefault();
+            debugOperation("Detecting language. System default: " + defaultLocale.getLanguage());
             if (defaultLocale.getLanguage().contains("zh")) {
                 languageData = LanguageData.getChineseLanguage();
                 say("使用zh-ch作为备选语言");
+                debugOperation("Language set to Chinese.");
             } else {
                 languageData = new LanguageData();
+                debugOperation("Language set to English/Default.");
             }
         }
     }
 
     private static void parseCommandLineArgs(String[] args) {
+        // Can't log here easily as Debugger relies on NeoLink.isDebugMode which is set here.
         boolean hasKey = false;
         boolean hasLocalPort = false;
 
@@ -157,6 +276,7 @@ public class NeoLink {
             case "--key" -> key = parts[1];
             case "--local-port" -> localPort = Integer.parseInt(parts[1]);
             case "--output-file" -> outputFilePath = parts[1];
+            case "--node" -> specifiedNodeName = parts[1]; // New argument handler
         }
     }
 
@@ -165,14 +285,13 @@ public class NeoLink {
             case "--en-us" -> languageData = new LanguageData();
             case "--zh-cn" -> languageData = LanguageData.getChineseLanguage();
             case "--no-color" -> noColor = true;
-            case "--debug" -> isDebugMode = true;
+            case "--debug" -> isDebugMode = true; // Flag enabled here
             case "--no-show-conn" -> showConnection = false;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
             case "--backend" -> isBackend = true;
             case "--disable-tcp" -> isDisableTCP = true;
             case "--disable-udp" -> isDisableUDP = true;
-            // 【新增】支持命令行开启 Proxy Protocol
             case "--enable-pp" -> enableProxyProtocol = true;
         }
     }
@@ -194,6 +313,7 @@ public class NeoLink {
             Loggist logger = new Loggist(logFile);
             logger.openWriteChannel();
             loggist = logger;
+            debugOperation("Logger initialized at: " + logFile.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize logger", e);
         }
@@ -203,31 +323,45 @@ public class NeoLink {
     }
 
     private static void connectToNeoServer() throws IOException {
+        debugOperation("Connecting to NeoServer (CLI context)...");
         say(languageData.CONNECT_TO + remoteDomainName + languageData.OMITTED);
+
         if (!ProxyOperator.PROXY_IP_TO_NEO_SERVER.isEmpty()) {
+            debugOperation("Using Proxy connection to NeoServer.");
             hookSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, hostHookPort);
         } else {
+            debugOperation("Direct connection to " + remoteDomainName + ":" + hostHookPort);
             hookSocket = new SecureSocket(remoteDomainName, hostHookPort);
         }
+        debugOperation("Socket connected successfully.");
     }
 
     public static void exchangeClientInfoWithServer() throws IOException {
+        debugOperation("Preparing client info string...");
         String clientInfo = formatClientInfoString(languageData, key);
+        debugOperation("Sending client info: " + clientInfo);
         sendStr(clientInfo);
+
+        debugOperation("Waiting for server response...");
         String serverResponse = receiveStr();
+        debugOperation("Received server response: " + serverResponse);
+
         if (serverResponse.contains("nsupported") || serverResponse.contains("不") || serverResponse.contains("旧")) {
             say(serverResponse);
             if (enableAutoUpdate) {
+                debugOperation("Auto-update is enabled. Sending 'true' to server.");
                 sendStr("true");
                 String versions = serverResponse.split(":")[1];
                 String[] versionArray = versions.split("\\|");
                 String latestVersion = versionArray[versionArray.length - 1];
+                debugOperation("Checking update for version: " + latestVersion);
                 checkUpdate(CLIENT_FILE_PREFIX + latestVersion);
             } else {
+                debugOperation("Auto-update disabled. Sending 'false' and exiting.");
                 sendStr("false");
                 hookSocket.close();
                 say(languageData.PLEASE_UPDATE_MANUALLY);
-                if (isGUIMode) {
+                if (isGUIMode && mainWindowController != null) {
                     mainWindowController.stopService();
                 } else {
                     exitAndFreeze(2);
@@ -236,14 +370,16 @@ public class NeoLink {
         } else if (serverResponse.contains("exit") || serverResponse.contains("退") || serverResponse.contains("错误")
                 || serverResponse.contains("denied") || serverResponse.contains("already")
                 || serverResponse.contains("过期") || serverResponse.contains("占")) {
+            debugOperation("Server denied connection. Message: " + serverResponse);
             say(serverResponse);
             if (!isGUIMode) {
                 exitAndFreeze(0);
             }
         } else {
-            // 初始化时间戳
             lastReceivedTime = System.currentTimeMillis();
+            debugOperation("Handshake successful.");
             if (OSDetector.isWindows()) {
+                debugOperation("Calculating latency...");
                 int latency = NetworkUtils.getLatency(remoteDomainName);
                 if (latency == -1) {
                     loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
@@ -259,13 +395,18 @@ public class NeoLink {
 
     private static void promptForAccessKey() {
         if (key == null) {
+            debugOperation("Key is null, prompting user input via Scanner.");
             sayInfoNoNewLine(languageData.PLEASE_ENTER_ACCESS_CODE);
             key = inputScanner.nextLine();
+            debugOperation("Key received from input.");
+        } else {
+            debugOperation("Key already provided via args.");
         }
     }
 
     private static void promptForLocalPort() {
         if (localPort == INVALID_LOCAL_PORT) {
+            debugOperation("Local port invalid (-1), prompting user input.");
             sayInfoNoNewLine(languageData.ENTER_PORT_MSG);
             String input = inputScanner.nextLine();
             try {
@@ -274,59 +415,81 @@ public class NeoLink {
                     throw new IllegalArgumentException("Port out of range");
                 }
                 localPort = port;
+                debugOperation("Local port set to: " + localPort);
             } catch (IllegalArgumentException e) {
+                debugOperation("Invalid port input: " + input);
                 say(languageData.PORT_OUT_OF_RANGE_MSG, LogType.ERROR);
                 exitAndFreeze(-1);
             }
+        } else {
+            debugOperation("Local port pre-set: " + localPort);
         }
     }
 
     public static void listenForServerCommands() throws IOException {
+        debugOperation("Entering command listening loop.");
         String message;
         while ((message = receiveStr()) != null) {
-            // 【被动心跳核心】更新活跃时间
             lastReceivedTime = System.currentTimeMillis();
+            debugOperation("Received command raw: " + message);
 
             try {
                 checkForInterruption();
             } catch (InterruptedException e) {
+                debugOperation("Thread interrupted during loop.");
                 say("隧道正在停止...");
                 return;
             }
             if (message.startsWith(":>")) {
+                debugOperation("Handling standard server command.");
                 handleServerCommand(message.substring(2));
             } else if (message.contains("This access code have") || message.contains("消耗") || message.contains("使用链接")) {
+                debugOperation("Received warning/quota message.");
                 loggist.say(new State(LogType.WARNING, "SERVER", message));
             } else {
+                debugOperation("Received generic server message.");
                 say(message);
             }
         }
+        debugOperation("Loop exited because receiveStr() returned null (connection closed).");
         throw new IOException("Connection to server was closed by remote host.");
     }
 
     private static void handleServerCommand(String command) {
+        debugOperation("Parsing command content: " + command);
         String[] parts = command.split(";");
-        //服务端指令 sendCommand    sendSocketTCP;socketID;getInternetAddressAndPort(client))
         switch (parts[0]) {
             case "sendSocketTCP" -> {
+                debugOperation("Command: sendSocketTCP. DisableTCP? " + isDisableTCP);
                 if (!isDisableTCP) {
                     ThreadManager.runAsync(() -> {
+                        debugOperation("Async: Creating new TCP connection.");
                         createNewTCPConnection(parts[1], parts[2]);
                     });
+                } else {
+                    debugOperation("TCP Disabled, ignoring command.");
                 }
             }
             case "sendSocketUDP" -> {
+                debugOperation("Command: sendSocketUDP. DisableUDP? " + isDisableUDP);
                 if (!isDisableUDP) {
                     ThreadManager.runAsync(() -> {
+                        debugOperation("Async: Creating new UDP connection.");
                         createNewUDPConnection(parts[1], parts[2]);
                     });
+                } else {
+                    debugOperation("UDP Disabled, ignoring command.");
                 }
             }
             case "exitNoFlow" -> {
+                debugOperation("Command: exitNoFlow. Exiting.");
                 say(languageData.NO_FLOW_LEFT, LogType.ERROR);
                 exitAndFreeze(0);
             }
-            case null, default -> remotePort = Integer.parseInt(parts[0]);
+            case null, default -> {
+                debugOperation("Command default case. Updating remote port to: " + parts[0]);
+                remotePort = Integer.parseInt(parts[0]);
+            }
         }
     }
 
@@ -337,28 +500,32 @@ public class NeoLink {
     }
 
     private static void handleConnectionFailure(Exception e) {
-        // 在被动心跳模式下，如果这里抛异常，说明是真的断了或者密钥错位了
+        debugOperation("Handling connection failure.");
         debugOperation(e);
         CheckAliveThread.stopThread();
         attemptReconnection();
     }
 
     private static void attemptReconnection() {
+        debugOperation("Attempting reconnection. Auto-reconnect enabled: " + enableAutoReconnect);
         say(languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + remoteDomainName, LogType.ERROR);
         if (enableAutoReconnect) {
             for (int i = 0; i < reconnectionIntervalSeconds; i++) {
                 languageData.sayReconnectMsg(reconnectionIntervalSeconds - i);
                 Sleeper.sleep(1000);
             }
+            debugOperation("Re-launching main() for reconnection.");
             isReconnectedOperation = true;
             main(new String[]{"--key=" + key, "--local-port=" + localPort});
             System.exit(0);
         } else {
+            debugOperation("Auto-reconnect disabled. Freezing.");
             exitAndFreeze(-1);
         }
     }
 
     public static void exitAndFreeze(int exitCode) {
+        debugOperation("Freezing program with exit code: " + exitCode);
         say("Press enter to exit the program...");
         inputScanner.nextLine();
         System.exit(exitCode);
@@ -402,19 +569,12 @@ public class NeoLink {
         if (!isDisableUDP) {
             info = info.concat("U");
         }
+        debugOperation("Formatted Client Info: " + info);
         return info;
     }
 
     public static void sayInfoNoNewLine(String str) {
         loggist.sayNoNewLine(new State(LogType.INFO, "HOST-CLIENT", str));
-    }
-
-    public static void debugOperation(Exception e) {
-        if (isDebugMode) {
-            String exceptionMsg = StringUtils.getExceptionMsg(e);
-            System.out.println(exceptionMsg);
-            loggist.write(exceptionMsg, true);
-        }
     }
 
     public static void say(String str) {
@@ -426,32 +586,35 @@ public class NeoLink {
     }
 
     public static void createNewTCPConnection(String socketID, String remoteAddress) {
+        debugOperation("Creating TCP Tunnel. ID: " + socketID + ", Remote: " + remoteAddress);
         Socket localServerSocket = null;
         SecureSocket neoTransferSocket = null;
         try {
             if (!ProxyOperator.PROXY_IP_TO_LOCAL_SERVER.isEmpty()) {
+                debugOperation("Using Proxy for local server connection.");
                 localServerSocket = ProxyOperator.getHandledSocket(ProxyOperator.Type.TO_LOCAL, localPort);
             } else {
+                debugOperation("Connecting to local service: " + localDomainName + ":" + localPort);
                 localServerSocket = new Socket(localDomainName, localPort);
             }
+
             if (!ProxyOperator.PROXY_IP_TO_NEO_SERVER.isEmpty()) {
+                debugOperation("Using Proxy for NeoServer data transfer connection.");
                 neoTransferSocket = ProxyOperator.getHandledSecureSocket(ProxyOperator.Type.TO_NEO, hostConnectPort);
             } else {
+                debugOperation("Connecting to NeoServer for data transfer: " + remoteDomainName + ":" + hostConnectPort);
                 neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
             }
-            // 客户端发送标识
-            //格式：TCP;ID   或者 UDP;ID
+
+            debugOperation("Sending TCP handshake with ID.");
             neoTransferSocket.sendStr("TCP" + ";" + socketID);
 
             if (showConnection) {
                 say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
             }
 
-            // 【核心修改】传入 enableProxyProtocol 参数
-            // 方向：Server -> Local (需要处理 Proxy Protocol)
+            debugOperation("Starting TCP Transformers.");
             TCPTransformer serverToNeoTask = new TCPTransformer(neoTransferSocket, localServerSocket, enableProxyProtocol);
-
-            // 方向：Local -> Server (不需要处理)
             TCPTransformer neoToServerTask = new TCPTransformer(localServerSocket, neoTransferSocket, false);
 
             ThreadManager connectionThreadManager = new ThreadManager(serverToNeoTask, neoToServerTask);
@@ -460,10 +623,12 @@ public class NeoLink {
                 if (showConnection) {
                     say(languageData.A_TCP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
                 }
+                debugOperation("TCP Connection " + socketID + " closed.");
                 connectionThreadManager.close();
             });
 
         } catch (Exception e) {
+            debugOperation("Failed to create TCP connection.");
             debugOperation(e);
             if (showConnection) {
                 say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
@@ -473,19 +638,23 @@ public class NeoLink {
     }
 
     public static void createNewUDPConnection(String socketID, String remoteAddress) {
+        debugOperation("Creating UDP Tunnel. ID: " + socketID + ", Remote: " + remoteAddress);
         SecureSocket neoTransferSocket = null;
         DatagramSocket datagramSocket = null;
         try {
+            debugOperation("Connecting to NeoServer for UDP transfer.");
             neoTransferSocket = new SecureSocket(remoteDomainName, hostConnectPort);
+            debugOperation("Creating local DatagramSocket.");
             datagramSocket = new DatagramSocket();
-            // 客户端发送标识
-            //格式：TCP;ID   或者 UDP;ID
+
+            debugOperation("Sending UDP handshake with ID.");
             neoTransferSocket.sendStr("UDP" + ";" + socketID);
 
             if (showConnection) {
                 say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.BUILD_UP);
             }
 
+            debugOperation("Starting UDP Transformers.");
             UDPTransformer localToNeoTask = new UDPTransformer(datagramSocket, neoTransferSocket);
             UDPTransformer neoToLocalTask = new UDPTransformer(neoTransferSocket, datagramSocket);
             ThreadManager connectionThreadManager = new ThreadManager(localToNeoTask, neoToLocalTask);
@@ -494,10 +663,12 @@ public class NeoLink {
                 if (showConnection) {
                     say(languageData.A_UDP_CONNECTION + remoteAddress + " -> " + localDomainName + ":" + localPort + languageData.DESTROY);
                 }
+                debugOperation("UDP Connection " + socketID + " closed.");
                 connectionThreadManager.close();
             });
 
         } catch (Exception e) {
+            debugOperation("Failed to create UDP connection.");
             debugOperation(e);
             say(languageData.FAIL_TO_CONNECT_LOCALHOST + localPort, LogType.ERROR);
             close(datagramSocket, neoTransferSocket);

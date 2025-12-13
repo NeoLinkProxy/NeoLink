@@ -26,7 +26,7 @@ public final class ConfigOperator {
 
     /**
      * 读取配置文件并设置所有相关的静态变量。
-     * 同时也检查 node11.json 是否存在。
+     * 同时也检查 node.json 是否存在。
      */
     public static void readAndSetValue() {
         // 1. 检查并创建 config.cfg (从资源模板复制)
@@ -34,7 +34,7 @@ public final class ConfigOperator {
             copyResourceToFile("/templates/config.cfg", CONFIG_FILE);
         }
 
-        // 2. 检查 node11.json，如果不存在则创建一个空的数组 "[]"
+        // 2. 检查 node.json，如果不存在则创建一个空的数组 "[]"
         if (!Files.exists(NODE_PATH)) {
             createEmptyNodeJson();
         }
@@ -93,13 +93,13 @@ public final class ConfigOperator {
     }
 
     /**
-     * 创建一个包含空数组 [] 的 node11.json
+     * 创建一个包含空数组 [] 的 node.json
      */
     private static void createEmptyNodeJson() {
         try {
             Files.writeString(NODE_PATH, "[]", StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         } catch (IOException e) {
-            NeoLink.say("创建 node11.json 失败: " + e.getMessage());
+            NeoLink.say("创建 node.json 失败: " + e.getMessage());
         }
     }
 }

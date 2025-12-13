@@ -1,5 +1,6 @@
 package neoproxy.neolink.threads;
 
+import neoproxy.neolink.Debugger;
 import plethora.net.SecureSocket;
 
 import java.io.IOException;
@@ -11,7 +12,8 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import static neoproxy.neolink.InternetOperator.close;
-import static neoproxy.neolink.NeoLink.*;
+import static neoproxy.neolink.NeoLink.localDomainName;
+import static neoproxy.neolink.NeoLink.localPort;
 
 /**
  * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
@@ -72,7 +74,7 @@ public class UDPTransformer implements Runnable {
         try {
             address = InetAddress.getByAddress(ipBytes);
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
             return null;
         }
         int port = buffer.getShort() & 0xFFFF;
@@ -96,7 +98,7 @@ public class UDPTransformer implements Runnable {
                 secureSocket.sendByte(serializedData);
             }
         } catch (IOException e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
         }
     }
 
@@ -122,7 +124,7 @@ public class UDPTransformer implements Runnable {
         int totalLen = 4 + 4 + 4 + ipLength + 2 + length;
         if (totalLen > serializationBuffer.capacity()) {
             // 实际生产中，可能需要更大的固定缓冲区或更复杂的处理
-            debugOperation(new IOException("UDP packet too large for serialization buffer"));
+            Debugger.debugOperation(new IOException("UDP packet too large for serialization buffer"));
             // 回退到原始方式
             ByteBuffer tempBuffer = ByteBuffer.allocate(totalLen);
             tempBuffer.order(ByteOrder.BIG_ENDIAN);
@@ -160,7 +162,7 @@ public class UDPTransformer implements Runnable {
                 }
             }
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
         }
     }
 
@@ -173,7 +175,7 @@ public class UDPTransformer implements Runnable {
                 transferDataToNeoServer();
             }
         } catch (Exception e) {
-            debugOperation(e);
+            Debugger.debugOperation(e);
         } finally {
             // 最终修复：无论正常结束还是异常结束，都确保关闭资源
             close(plainSocket, secureSocket);
