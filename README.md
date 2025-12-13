@@ -17,7 +17,9 @@
 
 NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服务（例如 Minecraft 服务器）暴露给公网 NeoProxyServer。项目同时提供命令行与 JavaFX GUI 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
-**新功能**：支持 Proxy Protocol v2 (PPv2)，可将外部访客的真实 IP 透传给后端 Web 服务（如 Nginx）。
+**新功能**：
+1. **多节点切换**：支持通过 `node.json` 配置多个服务端节点，并通过 `--node` 参数一键切换。
+2. **Proxy Protocol v2**：支持 PPv2 协议，可将外部访客的真实 IP 透传给后端 Web 服务（如 Nginx）。
 
 > **重点**：请仔细阅读 eula.txt 中声明的限制<br>
 >EXE 版本使用 Graalvm 构建原生镜像，理论上不需要 Java 环境运行
@@ -29,6 +31,7 @@ NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服
 
 - **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
 - **通用 TCP/UDP 支持**：几乎所有类型的服务均可穿透。
+- **多节点管理**：通过 JSON 配置文件管理多个服务器节点，启动时灵活切换。
 - **真实 IP 透传**：支持 Proxy Protocol v2 协议，配合 Nginx 等后端可获取用户真实 IP。
 - **双模式运行**：命令行（CLI）适合服务器部署，图形界面（GUI）适合新手。
 - **自动重连**：连接断开后自动重试，保障服务高可用。
@@ -58,6 +61,7 @@ java -jar NeoLink-XXXX.jar --nogui --zh-cn
 # --output-file=path/to/logfile.log  将日志写入指定文件
 # --key=...                          访问密钥
 # --local-port=...                   本地要被穿透的端口
+# --node=NodeName                    指定要连接的节点名称（需配置 node.json，如名称含空格请加引号）
 # --enable-pp                        启用 Proxy Protocol v2（透传真实 IP，仅限 Web 等支持的后端）
 # --debug                            打印调试信息（异常栈）
 # --no-color                         关闭 ANSI 颜色输出
@@ -77,10 +81,14 @@ java -jar NeoLink-XXXX.jar --zh-cn --key=你的访问密钥 --local-port=本地�
 NeoLink-XXXX.exe --zh-cn --key=你的访问密钥 --local-port=本地端口号
 ```
 
-### 一键启动（命令行模式）
+### 使用指定节点启动（新功能）
+如果你配置了 `node.json`，可以快速连接到指定的服务器节点：
 ```bash
-# 使用命令行模式并直接指定密钥和端口，以及开启 IP 透传
-java -jar NeoLink-XXXX.jar --nogui --zh-cn --key=你的访问密钥 --local-port=80 --enable-pp
+# 连接到 node.json 中名为 "HK-Server" 的节点
+java -jar NeoLink-XXXX.jar --nogui --key=密钥 --local-port=80 --node=HK-Server
+
+# 如果节点名称包含空格，请使用双引号
+java -jar NeoLink-XXXX.jar --nogui --key=密钥 --local-port=80 --node="HK Server 1"
 ```
 
 ### 🖥️构建项目
@@ -93,61 +101,60 @@ cd NeoProxyServer
 mvn clean package
 ```
 
-### 📁配置文件（`config.cfg`）
+---
 
-第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。默认内容如下（也可直接在仓库中保存此文件）：
+## 📁 配置文件
+
+### 1. 通用配置 (`config.cfg`)
+第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。
+**注意**：如果你使用了 `--node` 参数，`node.json` 中的配置将覆盖 `config.cfg` 中的 `REMOTE_DOMAIN_NAME` 及端口设置。
 
 ```properties
 #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
-#Put the domain name or public network ip of the NeoServer you want to connect to here
 REMOTE_DOMAIN_NAME=localhost
 
 #设置是否启用自动更新
-#Enable or disable automatic updates
 ENABLE_AUTO_UPDATE=true
 
 #是否向后端服务透传真实 IP (Proxy Protocol v2)
 #注意：仅当你的后端服务(如Nginx)配置了 accept_proxy 才可以开启，否则会导致连接失败。
-#普通应用(SSH, RDP, Minecraft)请保持 false
 ENABLE_PROXY_PROTOCOL=false
 
-#如果你不知道以下的设置意味着什么，请你不要改变它
-#If you don't know what the following setting means, please don't change it
 LOCAL_DOMAIN_NAME=localhost
 HOST_HOOK_PORT=44801
 HOST_CONNECT_PORT=44802
 
-#设置用来连接本地服务器的代理服务器ip和端口，示例：socks->127.0.0.1:7890 如果需要登录则提供密码， 格式： ip:端口@用户名:密码   示例：socks->127.0.0.1:7890@Ceroxe;123456   如果不需要去请留空
-#Set the proxy server IP address and port to connect to the on-premises server,Example: socks->127.0.0.1:7890 Provide password if login is required, Format: type->ip:port@username:password Example: socks->127.0.0.1:7890@Ceroxe;123456   If you don't need to go, leave it blank
+#代理设置 (示例: socks->127.0.0.1:7890)
 PROXY_IP_TO_LOCAL_SERVER=
-
-#设置用来连接 NeoProxyServer 的代理服务器ip和端口，示例：socks->127.0.0.1:7890 如果需要登录则提供密码， 格式： ip:端口@用户名:密码   示例：socks->127.0.0.1:7890@Ceroxe;123456
-#Set the proxy server IP address and port to connect to the NeoProxyServer,Example: socks->127.0.0.1:7890 Provide password if login is required, Format: type->ip:port@username:password Example: socks->127.0.0.1:7890@Ceroxe;123456   If you don't need to go, leave it blank
 PROXY_IP_TO_NEO_SERVER=
 
-#设置发送心跳包的间隔，单位为毫秒
-#Set the interval for sending heartbeat packets, in milliseconds
 HEARTBEAT_PACKET_DELAY=1000
-
-#是否启用自动重连当服务端暂时离线的时候
-#Whether to enable automatic reconnection when the server is temporarily offline
 ENABLE_AUTO_RECONNECT=true
-
-#如果ENABLE_AUTO_RECONNECT设置为true，则将间隔多少秒后重连，单位为秒，且必须为大于0的整数
-#If ENABLE_AUTO_RECONNECT is set to true, the number of seconds after which reconnection will be made in seconds and must be an integer greater than 0
 RECONNECTION_INTERVAL=30
-
-#数据包数组的长度
-#The length of the packet array
 BUFFER_LEN=4096
 ```
 
-#### 代理字段格式说明
-- 支持 2 种代理类型前缀：`socks` 或 `http`（不区分大小写）。示例：
-    - `socks->127.0.0.1:7890`（无认证）
-    - `http->10.10.10.1:8080@user;pass`（带认证）
-- `PROXY_IP_TO_LOCAL_SERVER`：当访问本地服务（localDomainName/localPort）时，先走这个代理（可为空）
-- `PROXY_IP_TO_NEO_SERVER`：当访问 NeoServer 时，走此代理（可为空）
+### 2. 多节点配置 (`node.json`)
+在程序同级目录下创建 `node.json` 文件，可以配置多个服务器节点。启动时使用 `--node=名称` 即可加载对应的地址和端口。
+
+**文件格式示例：**
+```json
+[
+  {
+    "name": "Localhost",
+    "address": "localhost",
+    "hookPort": 44801,
+    "connectPort": 44802
+  },
+  {
+    "name": "VIP-Node",
+    "address": "vip.example.com",
+    "hookPort": 55001,
+    "connectPort": 55002
+  }
+]
+```
+*如果未找到指定的节点名称，程序将回退使用 `config.cfg` 中的默认配置。*
 
 ---
 
@@ -170,49 +177,38 @@ BUFFER_LEN=4096
 
 Q: 为什么连接不上 NeoProxyServer？  
 A:
-1. 检查 ***config.cfg*** 中 **REMOTE_DOMAIN_NAME** 与 **HOST_HOOK_PORT** 和 **HOST_CONNECT_PORT** 的值是否跟服务端匹配。
+1. 检查配置（`config.cfg` 或 `node.json`）中的地址与端口是否正确。
 2. 确认服务器防火墙/云服务安全组已放通对应端口。
 3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。
-4. 使用 `--debug` 获取更多异常栈信息。
+
+Q: 如何使用 HTTPS 协议？<br>
+A: 通常有两种方案：
+1. **后端 TLS 终止**：在你的后端服务（如 Nginx、Caddy）上部署 **NeoProxyServer 服务器域名** 的 SSL 证书。NeoLink 负责将加密的 TCP 流量透传给后端，由后端进行解密。
+2. **CDN TLS 终止**：在 CDN（如 Cloudflare）上开启 HTTPS，设置回源地址为 NeoProxyServer 的域名和端口，并采用 HTTP 回源。
 
 Q: 如何获取访问者的真实 IP？（Proxy Protocol）
 A:
-1. 客户端开启透传功能：
-    - **GUI**：在“高级设置”中勾选“透传真实IP (PPv2)”。
-    - **命令行**：添加参数 `--enable-pp`。
-    - **配置文件**：设置 `ENABLE_PROXY_PROTOCOL=true`。
-2. 后端服务（如 Nginx）必须配置接收 Proxy Protocol，否则会报错。示例 Nginx 配置：
+1. 客户端开启透传功能（`--enable-pp` 或配置文件）。
+2. 后端服务（如 Nginx）配置接收 Proxy Protocol：
    ```nginx
    server {
-       listen 80 proxy_protocol; # 必须加 proxy_protocol
+       listen 80 proxy_protocol; 
        location / {
            proxy_pass http://127.0.0.1:8080;
            proxy_set_header X-Real-IP $proxy_protocol_addr;
-           proxy_set_header X-Forwarded-For $proxy_protocol_addr;
        }
    }
    ```
-   **注意**：不要对 SSH、RDP 或 Minecraft 开启此功能，否则会导致连接失败！
+   **注意**：SSH/RDP/MC 等服务通常不支持此协议，开启会导致连接失败。
 
-Q: 如何使用 HTTPS 协议<br>
-A:
-1. 想要在后端使用 HTTPS ，你必须持有 REMOTE_DOMAIN_NAME 域名的证书，也就是 NeoProxyServer 所在的服务器域名的证书，一般来说需要服务器管理员授权
-2. 在后端使用 nginx 加载证书套壳在你的 http 端口上即可
+Q: `--node` 参数不起作用？
+A: 请确保当前目录下存在 `node.json` 文件，且 JSON 格式正确（包含 `name`, `address`, `hookPort`, `connectPort` 字段），并确保参数中的节点名称与 JSON 中的 `name` 完全一致。
 
 Q: 本地端口无法连接（`Fail to connect to localhost`）？  
 A: 确认本地服务（如 Minecraft）已经在 `LOCAL_DOMAIN_NAME:localPort` 上监听，并且程序有权限访问该端口。
 
-Q: 如何关闭自动重连？  
-A: 在 `config.cfg` 中将 `ENABLE_AUTO_RECONNECT=false`。
-
-Q: GUI 启动但无法显示日志或乱码？  
-A: GUI 使用 WebView 渲染日志，程序已经做了中文编码/ANSI 转换的处理；如仍异常，请检查 JavaFX 版本与系统环境编码设置。
-
-Q: 如何禁用 TCP 或 UDP 连接？<br>
-A: UI 下高级设置可以调节，或者使用启动参数 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接。
-
 Q: RDP 总是断开连接怎么回事？<br>
-A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的RDP即可完美解决。
+A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的RDP即可完美解决（使用 `--disable-udp`）。
 
 ---
 
@@ -224,8 +220,7 @@ A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且�
 ## 🛠️故障排查 & 调试建议
 
 - 启用 `--debug` 获取更多堆栈信息（会写入日志文件）。
-- 查看 `logs/` 目录中的最近日志文件以定位问题。
-- 若出现"延迟大于 200ms"的提示，请考虑更换更稳定的网络或 NeoProxyServer 节点。
+- 若指定了 `--node` 但连接地址未变，请检查日志中是否有 "Failed to load node config" 的提示。
 - 使用 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接，以排查特定协议的问题。
 
 ---
