@@ -1,7 +1,7 @@
 package neoproxy.neolink.threads;
 
 import neoproxy.neolink.NeoLink;
-import plethora.utils.Sleeper;
+import fun.ceroxe.api.utils.Sleeper;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;

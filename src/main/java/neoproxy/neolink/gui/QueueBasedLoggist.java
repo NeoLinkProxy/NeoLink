@@ -1,7 +1,7 @@
 package neoproxy.neolink.gui;
 
-import plethora.print.log.Loggist;
-import plethora.print.log.State;
+import fun.ceroxe.api.print.log.Loggist;
+import fun.ceroxe.api.print.log.State;
 
 import java.io.File;
 import java.util.regex.Pattern;

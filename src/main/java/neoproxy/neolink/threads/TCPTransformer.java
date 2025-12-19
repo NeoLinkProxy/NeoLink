@@ -1,6 +1,6 @@
 package neoproxy.neolink.threads;
 
-import plethora.net.SecureSocket;
+import fun.ceroxe.api.net.SecureSocket;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;

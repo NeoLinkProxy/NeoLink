@@ -1,19 +1,19 @@
 package neoproxy.neolink;
 
+import fun.ceroxe.api.OshiUtils;
+import fun.ceroxe.api.utils.TimeUtils;
 import neoproxy.neolink.gui.AppStart;
 import neoproxy.neolink.gui.MainWindowController;
 import neoproxy.neolink.threads.CheckAliveThread;
 import neoproxy.neolink.threads.TCPTransformer;
 import neoproxy.neolink.threads.UDPTransformer;
-import plethora.net.NetworkUtils;
-import plethora.net.SecureSocket;
-import plethora.os.detect.OSDetector;
-import plethora.print.log.LogType;
-import plethora.print.log.Loggist;
-import plethora.print.log.State;
-import plethora.thread.ThreadManager;
-import plethora.time.Time;
-import plethora.utils.Sleeper;
+import fun.ceroxe.api.net.SecureSocket;
+import fun.ceroxe.api.print.log.LogType;
+import fun.ceroxe.api.print.log.Loggist;
+import fun.ceroxe.api.print.log.State;
+import fun.ceroxe.api.thread.ThreadManager;
+import fun.ceroxe.api.utils.Sleeper;
+import fun.ceroxe.api.net.IcmpPingUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -304,7 +304,7 @@ public class NeoLink {
             String logsDirPath = CURRENT_DIR_PATH + File.separator + "logs";
             File logsDir = new File(logsDirPath);
             logsDir.mkdirs();
-            logFile = new File(logsDirPath, Time.getCurrentTimeAsFileName(false) + ".log");
+            logFile = new File(logsDirPath, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
         }
         try {
             if (!logFile.exists()) {
@@ -378,9 +378,9 @@ public class NeoLink {
         } else {
             lastReceivedTime = System.currentTimeMillis();
             debugOperation("Handshake successful.");
-            if (OSDetector.isWindows()) {
+            if (OshiUtils.isWindows()) {
                 debugOperation("Calculating latency...");
-                int latency = NetworkUtils.getLatency(remoteDomainName);
+                int latency = IcmpPingUtil.ping(remoteDomainName,1000);
                 if (latency == -1) {
                     loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
                     loggist.say(new State(LogType.INFO, "SERVER", serverResponse));

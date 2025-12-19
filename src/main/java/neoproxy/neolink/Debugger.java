@@ -1,8 +1,7 @@
 package neoproxy.neolink;
 
-import plethora.print.log.LogType;
-import plethora.print.log.State;
-import plethora.utils.StringUtils;
+import fun.ceroxe.api.print.log.LogType;
+import fun.ceroxe.api.print.log.State;
 
 import static neoproxy.neolink.NeoLink.isGUIMode;
 import static neoproxy.neolink.NeoLink.loggist;
@@ -11,7 +10,7 @@ public class Debugger {
 
     public static void debugOperation(Exception e) {
         if (NeoLink.isDebugMode) {
-            String exceptionMsg = StringUtils.getExceptionMsg(e);
+            String exceptionMsg = e.getMessage();
             if (!isGUIMode) {
                 System.out.println("[DEBUG-EXCEPTION] " + exceptionMsg);
             }

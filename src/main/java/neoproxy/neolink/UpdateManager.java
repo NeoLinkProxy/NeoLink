@@ -1,10 +1,11 @@
 package neoproxy.neolink;
 
+import fun.ceroxe.api.WindowsOperation;
 import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
-import plethora.os.detect.OSDetector;
-import plethora.os.windowsSystem.WindowsOperation;
-import plethora.print.log.LogType;
+import fun.ceroxe.api.OshiUtils;
+
+import fun.ceroxe.api.print.log.LogType;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -21,7 +22,7 @@ public class UpdateManager {
     public static void checkUpdate(String fileName) {
         debugOperation("Checking for updates: " + fileName);
         try {
-            boolean isWindows = OSDetector.isWindows();
+            boolean isWindows = OshiUtils.isWindows();
             debugOperation("OS is Windows: " + isWindows);
             sendStr(isWindows ? "7z" : "jar");
             boolean canDownload = Boolean.parseBoolean(receiveStr());
