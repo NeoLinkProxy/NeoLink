@@ -2,7 +2,7 @@ package neoproxy.neolink;
 
 import neoproxy.neolink.threads.CheckAliveThread;
 import neoproxy.neolink.threads.TCPTransformer;
-import plethora.utils.config.LineConfigReader;
+import fun.ceroxe.api.utils.config.LineConfigReader;
 
 import java.io.File;
 import java.io.IOException;

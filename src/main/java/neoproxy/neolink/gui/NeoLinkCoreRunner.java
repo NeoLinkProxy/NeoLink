@@ -5,7 +5,7 @@ import neoproxy.neolink.InternetOperator;
 import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.ProxyOperator;
 import neoproxy.neolink.threads.CheckAliveThread;
-import plethora.net.SecureSocket;
+import fun.ceroxe.api.net.SecureSocket;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;

@@ -1,6 +1,6 @@
 package neoproxy.neolink;
 
-import plethora.net.SecureSocket;
+import fun.ceroxe.api.net.SecureSocket;
 
 import java.io.IOException;
 import java.net.*;
