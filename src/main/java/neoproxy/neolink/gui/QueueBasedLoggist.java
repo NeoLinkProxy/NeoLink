@@ -4,72 +4,84 @@ import fun.ceroxe.api.print.log.Loggist;
 import fun.ceroxe.api.print.log.State;
 
 import java.io.File;
-import java.util.regex.Pattern;
+import java.io.OutputStream;
+import java.io.PrintStream;
 
 /**
- * 基于队列的 Loggist 实现，同时将日志写入文件。
- * 所有日志消息都会被格式化并发送到 LogMessageQueue 以供 GUI 显示，
- * 同时也会被移除颜色代码后委托给传入的 fileLoggist 实例写入到指定文件中。
- * 这确保了文件内容与 GUI 显示一致（但文件无颜色），并且支持 --output-file 参数。
+ * 终极修复版 QueueBasedLoggist。
+ * 策略：
+ * 1. GUI：直接发送格式化好的 String 到队列，绕过 System.out，确保绝对无乱码。
+ * 2. 文件：委托给底层 fileLoggist.say() 确保能写入文件。
+ * 3. 冲突解决：在调用底层写文件时，临时屏蔽 System.out，防止日志被重定向器捕获导致重复和乱码。
  */
 public class QueueBasedLoggist extends Loggist {
 
-    // ANSI 转义序列的正则表达式，用于匹配颜色代码
-    private static final Pattern ANSI_PATTERN = Pattern.compile("\033\\[([\\d;]*)m");
-    private final Loggist fileLoggist; // 传入的、负责文件写入的 Loggist 实例
+    // 一个“黑洞”PrintStream，什么都不做
+    private static final PrintStream DUMMY_OUT = new PrintStream(new OutputStream() {
+        @Override
+        public void write(int b) {
+        }
 
-    // 构造函数接收一个已配置好文件路径的 Loggist 实例
+        @Override
+        public void write(byte[] b, int off, int len) {
+        }
+    });
+    private final Loggist fileLoggist;
+
     public QueueBasedLoggist(Loggist fileLoggist) {
-        // 调用父类构造函数，传入一个虚拟文件，因为父类可能需要一个文件引用
-        // 但我们不直接使用父类的 write 方法进行核心日志写入，所以这个文件实际不用于写入核心日志
         super(new File(System.getProperty("java.io.tmpdir"), "queue-based-dummy.log"));
         this.fileLoggist = fileLoggist;
     }
 
     @Override
     public void say(State state) {
-        // 获取格式化后的日志字符串（包含时间戳、类型、来源等，可能包含 ANSI 代码）
-        String logMessage = this.getLogString(state) + "\n";
-        // 发送到 GUI 队列 (保持颜色)
-        LogMessageQueue.offer(logMessage);
-        // 写入文件（移除颜色后，通过传入的 fileLoggist 实例）
-        // 从 logMessage 中移除 ANSI 代码
-        String logMessageForFile = removeAnsiCodes(logMessage);
-        // 使用 fileLoggist 的 write 方法写入文件
-        // 注意：fileLoggist.write 本身可能在内部处理换行，我们传入 false，因为 logMessageForFile 已经包含了 \n
-        fileLoggist.write(logMessageForFile, false);
+        // --- 1. GUI 部分 (保持原样，清晰无乱码) ---
+        // 直接将格式化好的字符串（带颜色）发送给 GUI 队列
+        // 这样不经过字节流转换，绝对不会有乱码
+        LogMessageQueue.offer(this.getLogString(state));
+
+        // --- 2. 文件 部分 (使用底层逻辑，但屏蔽控制台输出) ---
+        // 我们需要 fileLoggist 把日志放进它的异步写文件队列里。
+        // 但是 fileLoggist.say() 默认会 System.out.println，这会导致 GUI 收到重复且可能乱码的内容。
+        // 所以我们用“移花接木”法，暂时把 System.out 指向黑洞。
+
+        PrintStream originalOut = System.out;
+        // 加锁防止多线程竞争导致 System.out 状态错乱
+        synchronized (System.out) {
+            try {
+                System.setOut(DUMMY_OUT); // 切换到静音模式
+                fileLoggist.say(state);   // 执行写文件逻辑（控制台输出被吞掉，文件写入逻辑正常执行）
+            } finally {
+                System.setOut(originalOut); // 立即恢复，以免影响其他非日志的输出
+            }
+        }
     }
 
     @Override
     public void sayNoNewLine(State state) {
-        // 获取格式化后的日志字符串（不带换行，可能包含 ANSI 代码）
-        String logMessage = this.getLogString(state);
-        // 发送到 GUI 队列 (保持颜色)
-        LogMessageQueue.offer(logMessage);
-        // 写入文件（移除颜色后，通过传入的 fileLoggist 实例）
-        String logMessageForFile = removeAnsiCodes(logMessage);
-        // fileLoggist.write 不会添加换行
-        fileLoggist.write(logMessageForFile, false);
+        // 同理处理不换行的情况
+        LogMessageQueue.offer(this.getLogString(state));
+
+        PrintStream originalOut = System.out;
+        synchronized (System.out) {
+            try {
+                System.setOut(DUMMY_OUT);
+                fileLoggist.sayNoNewLine(state);
+            } finally {
+                System.setOut(originalOut);
+            }
+        }
     }
 
-    // 重写 write 方法，阻止其写入文件（因为我们已经在 say/sayNoNewLine 中通过 fileLoggist 处理了）
-    // 这是为了防止父类在其他地方调用 write 时重复写入或干扰
     @Override
     public void write(String str, boolean isNewLine) {
-        // Do nothing, 日志写入已在 say/sayNoNewLine 中通过 fileLoggist 完成
+        // 直接写入不做特殊处理，通常业务逻辑主要走 say()
+        fileLoggist.write(str, isNewLine);
     }
 
-    /**
-     * 移除字符串中的 ANSI 转义序列。
-     *
-     * @param input 包含 ANSI 代码的原始字符串
-     * @return 移除了 ANSI 代码的纯文本字符串
-     */
-    private String removeAnsiCodes(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-        // 使用预编译的正则表达式替换所有 ANSI 代码为空字符串
-        return ANSI_PATTERN.matcher(input).replaceAll("");
+    @Override
+    public void close() {
+        fileLoggist.close();
+        super.close();
     }
 }

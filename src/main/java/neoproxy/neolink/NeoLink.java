@@ -1,19 +1,19 @@
 package neoproxy.neolink;
 
 import fun.ceroxe.api.OshiUtils;
+import fun.ceroxe.api.net.SecureSocket;
+import fun.ceroxe.api.net.TcpPingUtil;
+import fun.ceroxe.api.print.log.LogType;
+import fun.ceroxe.api.print.log.Loggist;
+import fun.ceroxe.api.print.log.State;
+import fun.ceroxe.api.thread.ThreadManager;
+import fun.ceroxe.api.utils.Sleeper;
 import fun.ceroxe.api.utils.TimeUtils;
 import neoproxy.neolink.gui.AppStart;
 import neoproxy.neolink.gui.MainWindowController;
 import neoproxy.neolink.threads.CheckAliveThread;
 import neoproxy.neolink.threads.TCPTransformer;
 import neoproxy.neolink.threads.UDPTransformer;
-import fun.ceroxe.api.net.SecureSocket;
-import fun.ceroxe.api.print.log.LogType;
-import fun.ceroxe.api.print.log.Loggist;
-import fun.ceroxe.api.print.log.State;
-import fun.ceroxe.api.thread.ThreadManager;
-import fun.ceroxe.api.utils.Sleeper;
-import fun.ceroxe.api.net.IcmpPingUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -380,8 +380,8 @@ public class NeoLink {
             debugOperation("Handshake successful.");
             if (OshiUtils.isWindows()) {
                 debugOperation("Calculating latency...");
-                int latency = IcmpPingUtil.ping(remoteDomainName,1000);
-                if (latency == -1) {
+                int latency = TcpPingUtil.ping(remoteDomainName, hostHookPort, 1000);
+                if (latency == -1 || latency > 200) {
                     loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
                     loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
                 } else {

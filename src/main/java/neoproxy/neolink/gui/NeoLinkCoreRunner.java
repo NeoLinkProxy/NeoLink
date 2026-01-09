@@ -1,11 +1,11 @@
 package neoproxy.neolink.gui;
 
+import fun.ceroxe.api.net.SecureSocket;
 import javafx.application.Platform;
 import neoproxy.neolink.InternetOperator;
 import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.ProxyOperator;
 import neoproxy.neolink.threads.CheckAliveThread;
-import fun.ceroxe.api.net.SecureSocket;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;

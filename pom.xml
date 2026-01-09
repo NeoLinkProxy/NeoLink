@@ -6,7 +6,7 @@
 
     <groupId>neoproxy</groupId>
     <artifactId>NeoLink</artifactId>
-    <version>5.10.2</version>
+    <version>5.10.3</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -19,7 +19,7 @@
         <dependency>
             <groupId>fun.ceroxe.api</groupId>
             <artifactId>ceroxe-core</artifactId>
-            <version>0.2.5</version>
+            <version>0.2.7</version>
         </dependency>
         <dependency>
             <groupId>fun.ceroxe.api</groupId>

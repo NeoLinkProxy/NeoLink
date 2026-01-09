@@ -1,11 +1,10 @@
 package neoproxy.neolink;
 
+import fun.ceroxe.api.OshiUtils;
 import fun.ceroxe.api.WindowsOperation;
+import fun.ceroxe.api.print.log.LogType;
 import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
-import fun.ceroxe.api.OshiUtils;
-
-import fun.ceroxe.api.print.log.LogType;
 
 import java.io.*;
 import java.nio.file.Files;

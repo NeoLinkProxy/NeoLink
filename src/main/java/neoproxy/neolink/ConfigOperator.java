@@ -1,8 +1,8 @@
 package neoproxy.neolink;
 
+import fun.ceroxe.api.utils.config.LineConfigReader;
 import neoproxy.neolink.threads.CheckAliveThread;
 import neoproxy.neolink.threads.TCPTransformer;
-import fun.ceroxe.api.utils.config.LineConfigReader;
 
 import java.io.File;
 import java.io.IOException;
