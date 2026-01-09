@@ -1,7 +1,7 @@
 package neoproxy.neolink.threads;
 
-import neoproxy.neolink.Debugger;
 import fun.ceroxe.api.net.SecureSocket;
+import neoproxy.neolink.Debugger;
 
 import java.io.IOException;
 import java.net.DatagramPacket;

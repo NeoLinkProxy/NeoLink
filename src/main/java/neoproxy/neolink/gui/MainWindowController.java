@@ -1,5 +1,6 @@
 package neoproxy.neolink.gui;
 
+import fun.ceroxe.api.print.log.Loggist;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -38,7 +39,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXParseException;
-import fun.ceroxe.api.print.log.Loggist;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;

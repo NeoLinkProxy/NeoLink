@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>neoproxy</groupId>
   <artifactId>NeoLink</artifactId>
-  <version>5.10.2</version>
+  <version>5.10.3</version>
   <build>
     <resources>
       <resource>
