@@ -7,12 +7,15 @@ import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
 
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
 import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.InternetOperator.*;
+import static neoproxy.neolink.InternetOperator.receiveStr;
+import static neoproxy.neolink.InternetOperator.sendStr;
 import static neoproxy.neolink.NeoLink.*;
 
 public class UpdateManager {
@@ -23,27 +26,38 @@ public class UpdateManager {
         try {
             boolean isWindows = OshiUtils.isWindows();
             debugOperation("OS is Windows: " + isWindows);
-            sendStr(isWindows ? "7z" : "jar");
-            boolean canDownload = Boolean.parseBoolean(receiveStr());
-            debugOperation("Server response for download availability: " + canDownload);
 
-            if (!canDownload) {
+            // 1. 告诉服务端当前需要的格式
+            sendStr(isWindows ? "7z" : "jar");
+
+            // 2. [修改] 接收服务端返回的下载地址 (URL)
+            // 以前这里是接收 boolean，现在改为接收字符串
+            String responseUrl = receiveStr();
+            debugOperation("Server response (URL): " + responseUrl);
+
+            // 3. 检查返回值，如果是 "false" 或者空，说明服务端无法提供更新
+            if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
                 if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
-                    mainWindowController.stopService();
+                    if (mainWindowController != null) {
+                        mainWindowController.stopService();
+                    }
                 } else {
                     exitAndFreeze(-1);
                 }
                 return;
             }
 
+            // 4. 准备本地文件路径
             String fileExtension = isWindows ? ".7z" : ".jar";
             File clientFile = new File(tempUpdateDir, fileName + fileExtension);
-            debugOperation("Target update file: " + clientFile.getAbsolutePath());
+            debugOperation("Target local file: " + clientFile.getAbsolutePath());
 
             say(languageData.START_TO_DOWNLOAD_UPDATE);
+            say("Download Source: " + responseUrl);
 
-            boolean downloadSuccess = receiveFileInChunks(clientFile);
+            // 5. [修改] 从 URL 下载文件，而不是从 Socket 接收流
+            boolean downloadSuccess = downloadFileFromUrl(responseUrl, clientFile);
             debugOperation("Download success: " + downloadSuccess);
 
             if (!downloadSuccess) {
@@ -54,6 +68,7 @@ public class UpdateManager {
 
             say(languageData.DOWNLOAD_SUCCESS);
 
+            // 6. 后续解压和安装逻辑保持不变
             if (isWindows) {
                 debugOperation("Extracting 7z file...");
                 boolean extractionSuccess = extractSevenZFile(clientFile, new File(CURRENT_DIR_PATH));
@@ -113,65 +128,68 @@ public class UpdateManager {
         }
     }
 
-    private static boolean receiveFileInChunks(File outputFile) {
-        debugOperation("Starting file reception in chunks.");
+    // [新增] HTTP下载工具方法
+    private static boolean downloadFileFromUrl(String urlString, File outputFile) {
+        HttpURLConnection httpConn = null;
         try {
-            String fileSizeStr = receiveStr();
-            debugOperation("Received file size string: " + fileSizeStr);
-            long fileSize;
-            try {
-                fileSize = Long.parseLong(fileSizeStr);
-            } catch (NumberFormatException e) {
-                say(languageData.INVALID_FILE_SIZE_RECEIVED + fileSizeStr, LogType.ERROR);
-                return false;
-            }
+            URL url = new URL(urlString);
+            httpConn = (HttpURLConnection) url.openConnection();
+            httpConn.setInstanceFollowRedirects(true);
+            httpConn.setConnectTimeout(10000);
+            httpConn.setReadTimeout(30000); // 下载大文件时允许读取时间较长
+            httpConn.setRequestMethod("GET");
+            // 伪装 User-Agent 避免部分 CDN 拦截
+            httpConn.setRequestProperty("User-Agent", "NeoLink-Updater/" + VersionInfo.VERSION);
 
-            if (fileSize < 0) {
-                say(languageData.INVALID_FILE_SIZE_RECEIVED + fileSize, LogType.ERROR);
-                return false;
-            }
+            int responseCode = httpConn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                long fileSize = httpConn.getContentLengthLong();
 
-            say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
-
-            try (BufferedOutputStream fileOutputStream = new BufferedOutputStream(new FileOutputStream(outputFile))) {
-                long totalBytesRead = 0;
-                int progress = 0;
-
-                while (totalBytesRead < fileSize) {
-                    byte[] chunk = receiveBytes();
-                    if (chunk == null) {
-                        say(languageData.CONNECTION_CLOSED_PREMATURELY, LogType.ERROR);
-                        return false;
-                    }
-
-                    fileOutputStream.write(chunk);
-                    totalBytesRead += chunk.length;
-
-                    int newProgress = (int) (totalBytesRead * 100 / fileSize);
-                    if (newProgress > progress) {
-                        progress = newProgress;
-                        say(languageData.DOWNLOAD_PROGRESS + progress + "%");
-                        // debugOperation("Download progress: " + progress + "%"); // Too chatty
-                    }
+                // 打印文件大小信息
+                if (fileSize > 0) {
+                    say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
+                } else {
+                    say("Downloading file (size unknown)...");
                 }
 
-                if (totalBytesRead != fileSize) {
-                    say(languageData.FILE_SIZE_MISMATCH + fileSize + ", Received: " + totalBytesRead, LogType.ERROR);
-                    return false;
+                try (InputStream inputStream = new BufferedInputStream(httpConn.getInputStream());
+                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
+                     BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(fileOutputStream)) {
+
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    long totalBytesRead = 0;
+                    int progress = 0;
+
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        bufferedOutputStream.write(buffer, 0, bytesRead);
+                        totalBytesRead += bytesRead;
+
+                        // 简单的进度显示
+                        if (fileSize > 0) {
+                            int newProgress = (int) (totalBytesRead * 100 / fileSize);
+                            if (newProgress > progress) { // 避免刷屏，只有进度变化时才显示
+                                progress = newProgress;
+                                say(languageData.DOWNLOAD_PROGRESS + progress + "%");
+                            }
+                        }
+                    }
                 }
 
                 say(languageData.FILE_DOWNLOAD_COMPLETED);
-            } catch (Exception e) {
-                Debugger.debugOperation(e);
-                say(languageData.ERROR_WHILE_DOWNLOADING_FILE + e.getMessage(), LogType.ERROR);
+                return true;
+            } else {
+                say("Download failed. Server replied HTTP code: " + responseCode, LogType.ERROR);
                 return false;
             }
-
-            return true;
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.ERROR_RECEIVING_FILE + e.getMessage(), LogType.ERROR);
+            say(languageData.ERROR_WHILE_DOWNLOADING_FILE + e.getMessage(), LogType.ERROR);
             return false;
+        } finally {
+            if (httpConn != null) {
+                httpConn.disconnect();
+            }
         }
     }
 
@@ -186,6 +204,8 @@ public class UpdateManager {
             return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
         }
     }
+
+    // --- 下面的代码为原有的解压和清理逻辑，保持不变 ---
 
     private static boolean extractSevenZFile(File sevenZFile, File destination) {
         debugOperation("Starting 7z extraction.");

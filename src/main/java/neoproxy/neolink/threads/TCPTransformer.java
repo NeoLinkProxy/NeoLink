@@ -2,8 +2,6 @@ package neoproxy.neolink.threads;
 
 import fun.ceroxe.api.net.SecureSocket;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.net.Socket;
 
 import static neoproxy.neolink.Debugger.debugOperation;
@@ -23,7 +21,7 @@ public class TCPTransformer implements Runnable {
             (byte) 0x00, (byte) 0x0D, (byte) 0x0A, (byte) 0x51,
             (byte) 0x55, (byte) 0x49, (byte) 0x54, (byte) 0x0A
     };
-    public static int BUFFER_LENGTH = 4096; // 可以保持为静态常量
+    public static int BUFFER_LENGTH = 65535; // 可以保持为静态常量
     private final Socket plainSocket;
     private final SecureSocket secureSocket;
     private final int mode;
@@ -60,9 +58,11 @@ public class TCPTransformer implements Runnable {
      * 将本地数据转发到 Neo 服务器 (Local -> Neo)
      */
     private void transferDataToNeoServer() {
-        try (BufferedInputStream inputFromLocal = new BufferedInputStream(plainSocket.getInputStream())) {
+        // 修改：直接获取 InputStream，不要包裹 BufferedInputStream
+        try (var inputFromLocal = plainSocket.getInputStream()) {
             int bytesRead;
             // 🔥 使用实例的 buffer，实现对象复用
+            // 直接从 Socket 读入 64KB buffer，减少内存拷贝和系统调用
             while ((bytesRead = inputFromLocal.read(buffer)) != -1) {
                 secureSocket.sendByte(buffer, 0, bytesRead);
             }
@@ -80,7 +80,8 @@ public class TCPTransformer implements Runnable {
      * 【核心逻辑】在此处检测并处理 Proxy Protocol 头
      */
     private void transferDataToLocalServer() {
-        try (BufferedOutputStream outputToLocal = new BufferedOutputStream(plainSocket.getOutputStream())) {
+        // 修改：直接获取 OutputStream，不要包裹 BufferedOutputStream
+        try (var outputToLocal = plainSocket.getOutputStream()) {
             byte[] data;
             boolean isFirstPacket = true;
 
@@ -89,7 +90,6 @@ public class TCPTransformer implements Runnable {
 
                 if (isFirstPacket) {
                     isFirstPacket = false;
-
                     // 检测是否是 Proxy Protocol v2 头
                     if (isProxyProtocolV2Signature(data)) {
                         if (this.enableProxyProtocol) {
@@ -97,11 +97,10 @@ public class TCPTransformer implements Runnable {
                             outputToLocal.write(data);
                         } else {
                             // 配置为关闭：丢弃该数据包
-                            // 假设服务端是单独发送的这个包，直接跳过本次循环
                             continue;
                         }
                     } else {
-                        // 不是 PP 头（可能是旧版服务端），正常写入
+                        // 不是 PP 头，正常写入
                         outputToLocal.write(data);
                     }
                 } else {
@@ -109,7 +108,8 @@ public class TCPTransformer implements Runnable {
                     outputToLocal.write(data);
                 }
 
-                outputToLocal.flush();
+                // 移除 flush()，因为 SocketOutputStream 默认是直接发送的，且没有 Buffer 就不需要 flush
+                // outputToLocal.flush();
             }
             shutdownInput(secureSocket);
             shutdownOutput(plainSocket);
