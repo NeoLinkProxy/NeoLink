@@ -2,7 +2,6 @@ package neoproxy.neolink;
 
 import fun.ceroxe.api.utils.config.LineConfigReader;
 import neoproxy.neolink.threads.CheckAliveThread;
-import neoproxy.neolink.threads.TCPTransformer;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,7 +70,6 @@ public final class ConfigOperator {
         ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
         ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
         CheckAliveThread.HEARTBEAT_PACKET_DELAY = reader.getOptional("HEARTBEAT_PACKET_DELAY").map(Integer::parseInt).orElse(1000);
-        TCPTransformer.BUFFER_LENGTH = reader.getOptional("BUFFER_LEN").map(Integer::parseInt).orElse(4096);
     }
 
     /**

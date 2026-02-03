@@ -68,6 +68,8 @@ public class NeoLink {
     public static boolean isDisableTCP = false;
     // New variable for storing the node name from command line
     public static String specifiedNodeName = null;
+    // [新增] 测试更新标志
+    public static boolean isTestUpdate = false;
     private static boolean shouldAutoStartInGUI = false;
     private static boolean isBackend = false;
     private static boolean noColor = false;
@@ -293,6 +295,8 @@ public class NeoLink {
             case "--disable-tcp" -> isDisableTCP = true;
             case "--disable-udp" -> isDisableUDP = true;
             case "--enable-pp" -> enableProxyProtocol = true;
+            // [新增] 解析测试更新参数
+            case "--test-update" -> isTestUpdate = true;
         }
     }
 
@@ -385,7 +389,13 @@ public class NeoLink {
                     loggist.say(new State(LogType.INFO, "SERVER", languageData.TOO_LONG_LATENCY_MSG));
                     loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
                 } else {
-                    loggist.say(new State(LogType.INFO, "SERVER", serverResponse + " " + latency + "ms"));
+                    // [修复] 只有当消息是标准的连接成功提示时，才显示延迟信息
+                    // 如果是自定义消息 (CBM)，则原样显示，不带毫秒数
+                    if (serverResponse.trim().equals(languageData.CONNECTION_BUILD_UP_SUCCESSFULLY.trim())) {
+                        loggist.say(new State(LogType.INFO, "SERVER", serverResponse + " " + latency + "ms"));
+                    } else {
+                        loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
+                    }
                 }
             } else {
                 loggist.say(new State(LogType.INFO, "SERVER", serverResponse));
@@ -562,7 +572,10 @@ public class NeoLink {
     }
 
     public static String formatClientInfoString(LanguageData languageData, String key) {
-        String info = languageData.getCurrentLanguage() + ";" + VersionInfo.VERSION + ";" + key + ";";
+        // [修改] 如果处于测试更新模式，则上报一个极低的版本号
+        String versionToReport = isTestUpdate ? "0.0.1" : VersionInfo.VERSION;
+
+        String info = languageData.getCurrentLanguage() + ";" + versionToReport + ";" + key + ";";
         if (!isDisableTCP) {
             info = info.concat("T");
         }

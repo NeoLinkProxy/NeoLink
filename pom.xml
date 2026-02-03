@@ -6,16 +6,17 @@
 
     <groupId>neoproxy</groupId>
     <artifactId>NeoLink</artifactId>
-    <version>5.10.3</version>
+    <version>5.10.4</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javafx.version>21.0.8</javafx.version>
+        <javafx.version>21.0.5</javafx.version> <!-- 使用较新的稳定版本 -->
     </properties>
 
     <dependencies>
+        <!-- 业务依赖 -->
         <dependency>
             <groupId>fun.ceroxe.api</groupId>
             <artifactId>ceroxe-core</artifactId>
@@ -26,17 +27,8 @@
             <artifactId>ceroxe-detector</artifactId>
             <version>0.2.5</version>
         </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- JavaFX Web -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-web</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
+
+        <!-- 7Zip 依赖 -->
         <dependency>
             <groupId>net.sf.sevenzipjbinding</groupId>
             <artifactId>sevenzipjbinding</artifactId>
@@ -47,7 +39,81 @@
             <artifactId>sevenzipjbinding-all-platforms</artifactId>
             <version>16.02-2.01</version>
         </dependency>
+
+        <!-- ======================================================== -->
+        <!--  JavaFX 全平台通用依赖配置 (解决 "no suitable pipeline")   -->
+        <!-- ======================================================== -->
+
+        <!-- 1. 基础编译依赖 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- 2. Windows 平台原生库 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+
+        <!-- 3. Linux 平台原生库 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>linux</classifier>
+        </dependency>
+
+        <!-- 4. Mac Intel 平台原生库 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>mac</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>mac</classifier>
+        </dependency>
+
+        <!-- 5. Mac Apple Silicon (M1/M2/M3) 平台原生库 [你当前报错缺少的就是这个] -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>mac-aarch64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>mac-aarch64</classifier>
+        </dependency>
+
     </dependencies>
+
     <build>
         <resources>
             <resource>
@@ -59,7 +125,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.1.1</version>
+                <version>3.5.1</version> <!-- 推荐使用较新版本 -->
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -67,9 +133,22 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!-- 过滤掉 module-info.class 避免模块系统冲突 -->
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <!-- 关键修改：指向新的 Launcher 类 -->
                                     <mainClass>neoproxy.neolink.NeoLink</mainClass>
                                 </transformer>
                             </transformers>
@@ -79,5 +158,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

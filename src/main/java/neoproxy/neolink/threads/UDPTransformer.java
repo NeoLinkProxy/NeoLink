@@ -22,7 +22,7 @@ import static neoproxy.neolink.NeoLink.localPort;
 public class UDPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;
     public static final int MODE_LOCAL_TO_NEO = 1;
-    public static int BUFFER_LENGTH = 4096; // 可以保持为静态常量
+    public static int BUFFER_LENGTH = 65535; // 可以保持为静态常量
 
     private final DatagramSocket plainSocket;
     private final SecureSocket secureSocket;
@@ -33,8 +33,7 @@ public class UDPTransformer implements Runnable {
 
     // 🔥【性能优化】为序列化创建一个可复用的ByteBuffer
     // 注意：这个大小需要根据你的最大UDP包来设定，要足够大。
-    // 2048是一个比较安全的值，但如果你的UDP包更大，需要相应增加。
-    private final ByteBuffer serializationBuffer = ByteBuffer.allocate(2048);
+    private final ByteBuffer serializationBuffer = ByteBuffer.allocate(65560);
 
     /**
      * 构造函数：用于从 Neo 服务器接收数据并转发到本地服务。

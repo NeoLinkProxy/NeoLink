@@ -946,7 +946,7 @@ public class MainWindowController {
         // 1. 设置标志位
         isRunning = true;
 
-        // 2. 立即更新 UI 状态：Start 禁用，Stop 启用
+        // 2. 立即更新 UI 状态
         updateButtonState(true);
 
         // 3. 准备数据
@@ -957,18 +957,22 @@ public class MainWindowController {
         applyAdvancedSettings();
 
         if (languageData != null) languageData = languageData.flush();
+
+        // [修改] 增加测试模式提醒，方便你确认参数是否传进来了
+        if (NeoLink.isTestUpdate) {
+            NeoLink.say("\033[33m[TEST-MODE] --test-update 已启用，将上报虚假版本号 0.0.1 触发更新...\033[0m");
+        }
+
         NeoLink.say("正在启动 NeoLink 服务...");
         NeoLink.printBasicInfo();
 
         // 4. 提交任务
         currentTask = coreExecutor.submit(() -> {
             try {
-                // 将 MainWindowController 的引用传递给 NeoLink 全局对象，以便 Runner 回调
                 NeoLink.mainWindowController = this;
                 NeoLinkCoreRunner.runCore(NeoLink.remoteDomainName, NeoLink.localPort, NeoLink.key);
             } catch (Exception e) {
                 Debugger.debugOperation("Critical error in runCore submission: " + e.getMessage());
-                // 如果提交本身失败，确保 UI 重置
                 Platform.runLater(this::resetUIStateToStopped);
             }
         });
@@ -988,9 +992,10 @@ public class MainWindowController {
 
     private void resetNeoLinkState() {
         NeoLink.hookSocket = null;
-        NeoLink.connectingSocket = null; // 确保清理
+        NeoLink.connectingSocket = null;
         NeoLink.remotePort = 0;
         NeoLink.isReconnectedOperation = false;
+        // 确保不会重置 isTestUpdate，保持命令行传入的参数
         NeoLink.inputScanner = new Scanner(new ByteArrayInputStream(new byte[0]));
         ConfigOperator.readAndSetValue();
     }
