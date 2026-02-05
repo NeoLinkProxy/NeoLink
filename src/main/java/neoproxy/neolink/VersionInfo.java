@@ -149,21 +149,22 @@ public class VersionInfo {
 
     private static String getAppVersion() {
         Properties props = new Properties();
-        try (InputStream is = NeoLink.class.getClassLoader()
-                .getResourceAsStream("app.properties")) {
+        try (InputStream is = NeoLink.class.getClassLoader().getResourceAsStream("app.properties")) {
             if (is == null) {
-                throw new IllegalStateException(
-                        "Missing resource: " + "app.properties" + " (ensure it's in src/main/resources)");
+                return "Dev-Build";
             }
-            props.load(is); // Java 9+ 默认 UTF-8，安全读取中文/特殊字符
+            props.load(is);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to read " + "app.properties", e);
+            return "Unknown";
         }
 
         String version = props.getProperty("app.version");
-        if (version == null || version.trim().isEmpty()) {
-            throw new IllegalStateException(
-                    "Property '" + "app.version" + "' is missing or empty in " + "app.properties");
+
+        // 【新增修复逻辑】
+        // 如果没有配置成功，version 拿到的会是原始字符串 "${version}"
+        if (version == null || version.isEmpty() || version.contains("${")) {
+            // 这里可以直接返回 project 指定的版本号作为兜底，或者返回开发版标识
+            return "Dev-ver";
         }
 
         return version.trim();

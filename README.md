@@ -11,10 +11,8 @@
 
 ![Java](https://img.shields.io/badge/Java-21%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=flat-square&logo=windows&logoColor=white)
-![Build](https://img.shields.io/badge/Build-GraalVM%20Native-222222?style=flat-square&logo=graalvm&logoColor=white)
-![GUI](https://img.shields.io/badge/Interface-JavaFX-blueviolet?style=flat-square&logo=java)
-
-</div>
+![Build](https://img.shields.io/badge/Build-Gradle-blue?style=flat-square&logo=gradle)
+![GUI](https://img.shields.io/badge/Interface-Compose%20Multiplatform-blueviolet?style=flat-square&logo=kotlin)
 
 ---
 
@@ -30,37 +28,35 @@
 
 ## 📖 说明 (概览)
 
-NeoLink 项目同时提供 **命令行 (CLI)** 与 **JavaFX 图形界面 (GUI)** 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
+NeoLink 项目同时提供 **命令行 (CLI)** 与 **Compose Multiplatform 图形界面 (GUI)** 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
-自 4.7.0 版本开始，同步支持 TCP 和 UDP。EXE 版本使用 **GraalVM** 构建原生镜像，理论上不需要 Java 环境即可运行。
+自 4.7.0 版本开始，同步支持 TCP 和 UDP。本项目已迁移至 **Compose Multiplatform** 框架，提供更现代、响应更快的声明式 UI 体验。
 
 ### ✨ 核心亮点
 
-- ☕ **Java 21 驱动**：充分利用现代 Java 特性，性能更优。
+- 🚀 **现代 UI 架构**：基于 **Compose Multiplatform** 构建，完美适配跨平台深色模式与高分屏。
+- ☕ **Java 21 + Kotlin 驱动**：利用现代强类型语言特性，性能更优，转发更稳定。
 - ↔️ **通用 TCP/UDP**：几乎所有类型的服务均可穿透。
 - 🆔 **真实 IP 透传**：支持 **Proxy Protocol v2**，配合 Nginx 等后端可获取用户真实 IP。
 - 🗄️ **多节点管理**：通过 `node.json` 配置多个服务端节点，启动时灵活切换。
-- 🖥️ **双模式运行**：命令行适合服务器部署，图形界面适合新手。
 - 🔄 **稳定可靠**：自动重连、心跳保活，防止 NAT 超时断开。
-- ⬆️ **自动更新**：Windows 下支持自动下载新版本并重启。
+- ⬆️ **自动更新**：支持自动检测并下载新版本，简化维护流程。
 - 🔌 **代理支持**：支持 HTTP/SOCKS5 代理连接 NeoProxyServer 或本地服务。
 - 🌐 **多语言**：自动识别系统语言（中/英），也可通过参数强制指定。
-- 🔧 **参数化启动**：支持通过命令行参数直接指定密钥和端口，实现一键启动。
 
 ---
 
 ## 🚀 快速开始
 
-*   🪟 **Windows 11**：支持 EXE 启动（采用 Graalvm 构建，无需 Java 环境）
-*   🎁 **Release 界面**：提供了环境捆绑版（仅支持 Windows），是电脑小白使用 NeoLink 最方便的选择，避免折腾
-*   🐧 **其他平台**：仅支持 Java 21 以上的版本启动
-*   ⚡ **一键启动**：支持通过命令行参数直接指定密钥和本地端口
+*   🪟 **多平台支持**：支持 Windows、Linux 及 macOS。
+*   🎁 **Release 界面**：提供了各平台的打包版本，无需配置复杂的 Java 环境即可使用。
+*   ⚡ **一键启动**：支持通过命令行参数直接指定密钥和本地端口。
 
 ### **获取客户端:** 
 🎁 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 🖥️ **命令行模式 (Terminal)**
-将构建后的 JAR（举例 `NeoLink-XXXX.jar`）放到工作目录并运行（强制制定中文）：
+将构建后的 JAR 放到工作目录并运行（强制指定中文）：
 ```bash
 # 示例命令
 java -jar NeoLink-XXXX.jar --nogui --zh-cn
@@ -69,41 +65,33 @@ java -jar NeoLink-XXXX.jar --nogui --zh-cn
 # --output-file=path/to/logfile.log  将日志写入指定文件
 # --key=...                          访问密钥
 # --local-port=...                   本地要被穿透的端口
-# --node=NodeName                    指定要连接的节点名称（需配置 node.json，如名称含空格请加引号）
-# --enable-pp                        启用 Proxy Protocol v2（透传真实 IP，仅限 Web 等支持的后端）
-# --debug                            打印调试信息（异常栈）
-# --no-color                         关闭 ANSI 颜色输出
+# --node=NodeName                    指定要连接的节点名称（需配置 node.json）
+# --enable-pp                        启用 Proxy Protocol v2
+# --debug                            打印调试信息
 # --en-us / --zh-cn                  指定语言
-# --nogui                            禁用 JavaFX GUI 启动
-# --gui                              使用 JavaFX GUI 启动 （默认启用）
+# --nogui                            禁用 GUI 启动
+# --gui                              使用 GUI 启动 (默认)
 # --disable-tcp                      禁用 TCP 连接
 # --disable-udp                      禁用 UDP 连接
 ```
 
-### ✨ **一键启动 (GUI模式)**
+### ✨ **一键启动 (GUI 模式)**
 ```bash
 # 使用 GUI 并直接指定密钥和端口，实现一键启动
 java -jar NeoLink-XXXX.jar --zh-cn --key=你的访问密钥 --local-port=本地端口号
-
-# 或者使用 EXE 文件
-NeoLink-XXXX.exe --zh-cn --key=你的访问密钥 --local-port=本地端口号
-```
-
-### 🌟 **使用指定节点启动 (新功能)**
-如果你配置了 `node.json`，可以快速连接到指定的服务器节点：
-```bash
-# 连接到 node.json 中名为 "HK-Server" 的节点
-java -jar NeoLink-XXXX.jar --nogui --key=密钥 --local-port=80 --node=HK-Server
-
-# 如果节点名称包含空格，请使用双引号
-java -jar NeoLink-XXXX.jar --nogui --key=密钥 --local-port=80 --node="HK Server 1"
 ```
 
 ### 🛠️ **构建项目**
+由于项目已迁移至 Gradle，请使用以下命令构建：
 ```bash
 git clone https://github.com/NeoLinkProxy/NeoLink.git
 cd NeoLink
-mvn clean package
+
+# 开发模式直接运行
+./gradlew run
+
+# 打包为当前平台的安装包/执行文件
+./gradlew packageDistributionForCurrentOS
 ```
 
 ---
@@ -112,7 +100,6 @@ mvn clean package
 
 ### 1. 📝 **通用配置** (`config.cfg`)
 第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。
-**注意**：如果你使用了 `--node` 参数，`node.json` 中的配置将覆盖 `config.cfg` 中的 `REMOTE_DOMAIN_NAME` 及端口设置。
 
 ```properties
 #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
@@ -122,7 +109,6 @@ REMOTE_DOMAIN_NAME=localhost
 ENABLE_AUTO_UPDATE=true
 
 #是否向后端服务透传真实 IP (Proxy Protocol v2)
-#注意：仅当你的后端服务(如Nginx)配置了 accept_proxy 才可以开启，否则会导致连接失败。
 ENABLE_PROXY_PROTOCOL=false
 
 LOCAL_DOMAIN_NAME=localhost
@@ -140,7 +126,7 @@ BUFFER_LEN=4096
 ```
 
 ### 2. 🗄️ **多节点配置** (`node.json`)
-在程序同级目录下创建 `node.json` 文件，可以配置多个服务器节点。启动时使用 `--node=名称` 即可加载对应的地址和端口。
+在程序同级目录下创建 `node.json` 文件，可以配置多个服务器节点。
 
 **文件格式示例：**
 ```json
@@ -148,86 +134,51 @@ BUFFER_LEN=4096
   {
     "name": "Localhost",
     "address": "localhost",
-    "hookPort": 44801,
-    "connectPort": 44802
+    "HOST_HOOK_PORT": 44801,
+    "HOST_CONNECT_PORT": 44802
   },
   {
     "name": "VIP-Node",
     "address": "vip.example.com",
-    "hookPort": 55001,
-    "connectPort": 55002
+    "HOST_HOOK_PORT": 55001,
+    "HOST_CONNECT_PORT": 55002
   }
 ]
 ```
-*如果未找到指定的节点名称，程序将回退使用 `config.cfg` 中的默认配置。*
 
 ---
 
 ## 📈 日志
 
-- 📁 默认输出目录：`./logs/`（程序会在当前工作目录创建并写入文件）
+- 📁 默认输出目录：`./logs/`
 - 📄 可使用 `--output-file` 指定日志文件路径
-- 🖥️ GUI 模式会使用内部队列将日志显示在 WebView 中
+- 🖥️ GUI 模式使用高度优化的日志列表显示，支持颜色解析与复制。
 
 ---
 
 ## 📞 EULA & 联系方式
 
-程序会在首次运行写出 `eula.txt`，内容包含使用限制与作者联系方式（QQ 群 / QQ）。请阅读并遵守 EULA 要求。  
-联系方式（出现在 EULA）：QQ群 `304509047` 💬，作者 QQ `1591117599` 📧。
+程序会在首次运行写出 `eula.txt`，内容包含使用限制与作者联系方式。  
+联系方式：QQ群 `304509047` 💬，作者 QQ `1591117599` 📧。
 
 ---
 
 ## 🤔 常见问题 (FAQ)
 
 Q: 为什么连接不上 NeoProxyServer？  
-A:
-1. 检查配置（`config.cfg` 或 `node.json`）中的地址与端口是否正确。
-2. 确认服务器防火墙/云服务安全组已放通对应端口。
-3. 若使用代理，检查 `PROXY_IP_TO_NEO_SERVER` 配置是否正确并可达。
+A: 请检查防火墙端口是否开放，以及 `node.json` 中的端口是否与服务端对应。
 
-Q: 如何使用 HTTPS 协议？<br>
-A: 通常有两种方案：
-1. 🔒 **后端 TLS 终止**：在你的后端服务（如 Nginx、Caddy）上部署 **NeoProxyServer 服务器域名** 的 SSL 证书。NeoLink 负责将加密的 TCP 流量透传给后端，由后端进行解密。
-2. ☁️ **CDN TLS 终止**：在 CDN（如 Cloudflare）上开启 HTTPS，设置回源地址为 NeoProxyServer 的域名和端口，并采用 HTTP 回源。
+Q: 如何获取访问者的真实 IP？  
+A: 客户端开启透传功能（`--enable-pp`），并确保后端（如 Nginx）配置了 `proxy_protocol` 监听。
 
-Q: 如何获取访问者的真实 IP？（Proxy Protocol）
-A:
-1. 客户端开启透传功能（`--enable-pp` 或配置文件）。
-2. 后端服务（如 Nginx）配置接收 Proxy Protocol：
-   ```nginx
-   server {
-       listen 80 proxy_protocol; 
-       location / {
-           proxy_pass http://127.0.0.1:8080;
-           proxy_set_header X-Real-IP $proxy_protocol_addr;
-       }
-   }
-   ```
-   **注意**：SSH/RDP/MC 等服务通常不支持此协议，开启会导致连接失败。
-
-Q: `--node` 参数不起作用？
-A: 请确保当前目录下存在 `node.json` 文件，且 JSON 格式正确（包含 `name`, `address`, `hookPort`, `connectPort` 字段），并确保参数中的节点名称与 JSON 中的 `name` 完全一致。
-
-Q: 本地端口无法连接（`Fail to connect to localhost`）？  
-A: 确认本地服务（如 Minecraft）已经在 `LOCAL_DOMAIN_NAME:localPort` 上监听，并且程序有权限访问该端口。
-
-Q: RDP 总是断开连接怎么回事？<br>
-A: 如果在网络不佳的情况下启用了 UDP ，RDP 协议会识别并且应用。但是 UDP 容易丢包，在这种情况下禁用 UDP 使用纯 TCP 的 RDP 即可完美解决（使用 `--disable-udp`）。
+Q: RDP 总是断开连接？  
+A: UDP 在弱网下容易丢包，建议使用 `--disable-udp` 强制 RDP 走纯 TCP 模式。
 
 ---
 
 ## 🔐 许可证
 
 本项目基于 [MIT License](https://opensource.org/licenses/MIT) 开源发布。
-
----
-
-## 🛠️ 故障排查 & 调试建议
-
-- 🐞 启用 `--debug` 获取更多堆栈信息（会写入日志文件）。
-- 🚫 若指定了 `--node` 但连接地址未变，请检查日志中是否有 "Failed to load node config" 的提示。
-- 🔍 使用 `--disable-tcp` 或 `--disable-udp` 参数可以分别禁用 TCP 或 UDP 连接，以排查特定协议的问题。
 
 ---
 

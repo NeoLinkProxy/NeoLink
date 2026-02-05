@@ -3,6 +3,7 @@ package neoproxy.neolink;
 import fun.ceroxe.api.OshiUtils;
 import fun.ceroxe.api.WindowsOperation;
 import fun.ceroxe.api.print.log.LogType;
+import neoproxy.neolink.gui.NeoLinkCoreRunner;
 import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
 
@@ -30,8 +31,7 @@ public class UpdateManager {
             // 1. 告诉服务端当前需要的格式
             sendStr(isWindows ? "7z" : "jar");
 
-            // 2. [修改] 接收服务端返回的下载地址 (URL)
-            // 以前这里是接收 boolean，现在改为接收字符串
+            // 2. 接收服务端返回的下载地址 (URL)
             String responseUrl = receiveStr();
             debugOperation("Server response (URL): " + responseUrl);
 
@@ -39,9 +39,9 @@ public class UpdateManager {
             if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
                 if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
-                    if (mainWindowController != null) {
-                        mainWindowController.stopService();
-                    }
+                    // [修改] 以前是调用 Controller.stopService()，现在调用 Runner 的停止请求
+                    // 这会通过回调通知 UI (ViewModel) 停止运行状态
+                    NeoLinkCoreRunner.requestStop();
                 } else {
                     exitAndFreeze(-1);
                 }
@@ -56,7 +56,7 @@ public class UpdateManager {
             say(languageData.START_TO_DOWNLOAD_UPDATE);
             say("Download Source: " + responseUrl);
 
-            // 5. [修改] 从 URL 下载文件，而不是从 Socket 接收流
+            // 5. 下载文件
             boolean downloadSuccess = downloadFileFromUrl(responseUrl, clientFile);
             debugOperation("Download success: " + downloadSuccess);
 

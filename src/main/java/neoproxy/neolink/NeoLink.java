@@ -9,8 +9,7 @@ import fun.ceroxe.api.print.log.State;
 import fun.ceroxe.api.thread.ThreadManager;
 import fun.ceroxe.api.utils.Sleeper;
 import fun.ceroxe.api.utils.TimeUtils;
-import neoproxy.neolink.gui.AppStart;
-import neoproxy.neolink.gui.MainWindowController;
+import neoproxy.neolink.gui.ComposeEntryKt;
 import neoproxy.neolink.threads.CheckAliveThread;
 import neoproxy.neolink.threads.TCPTransformer;
 import neoproxy.neolink.threads.UDPTransformer;
@@ -57,12 +56,13 @@ public class NeoLink {
     public static boolean enableAutoUpdate = true;
     public static boolean enableProxyProtocol = false;
     public static int reconnectionIntervalSeconds = 30;
-    public static double savedWindowX = 100;
-    public static double savedWindowY = 100;
-    public static double savedWindowWidth = 950;
-    public static double savedWindowHeight = 700;
+
+    // [修改] 移除了 savedWindowX 等 JavaFX 窗口状态变量
+
     public static Scanner inputScanner = new Scanner(System.in);
-    public static MainWindowController mainWindowController = null;
+
+    // [修改] 移除了 MainWindowController 引用
+
     public static boolean isGUIMode = true;
     public static boolean isDisableUDP = false;
     public static boolean isDisableTCP = false;
@@ -74,11 +74,13 @@ public class NeoLink {
     private static boolean isBackend = false;
     private static boolean noColor = false;
 
+    // [新增] 供 Kotlin UI 调用以检查是否需要自动启动
+    public static boolean shouldAutoStart() {
+        return shouldAutoStartInGUI;
+    }
+
     public static void main(String[] args) {
         // [DEBUG] Entry point
-        // Note: isDebugMode might not be set yet until args are parsed,
-        // but we can't log before checking args.
-
         parseCommandLineArgs(args);
         debugOperation("Entering main() method.");
         debugOperation("Command line arguments parsed. Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
@@ -86,11 +88,14 @@ public class NeoLink {
         killCmdWindowIfNeeded(args);
 
         if (isGUIMode) {
-            debugOperation("GUI Mode detected. Delegating to AppStart.main().");
-            AppStart.main(args, shouldAutoStartInGUI);
-            debugOperation("AppStart returned. Exiting system with code 0.");
+            debugOperation("GUI Mode detected. Delegating to ComposeEntryKt.main().");
+            // [修改] 调用 Kotlin Compose 的 Main 方法
+            ComposeEntryKt.main(args);
+            // Compose Desktop 应用关闭后退出 JVM
             System.exit(0);
         }
+
+        // --- 以下为 CLI 模式逻辑 ---
 
         debugOperation("CLI Mode proceeding. Initializing logger.");
         initializeLogger();
@@ -182,15 +187,26 @@ public class NeoLink {
                     }
 
                     // Extract Hook Port
-                    Pattern hookPortPattern = Pattern.compile("\"hookPort\"\\s*:\\s*(\\d+)");
+                    Pattern hookPortPattern = Pattern.compile("\"HOST_HOOK_PORT\"\\s*:\\s*(\\d+)");
                     Matcher hookPortMatcher = hookPortPattern.matcher(obj);
+                    // 兼容旧版 json key
+                    if (!hookPortMatcher.find()) {
+                        hookPortPattern = Pattern.compile("\"hookPort\"\\s*:\\s*(\\d+)");
+                        hookPortMatcher = hookPortPattern.matcher(obj);
+                    }
+
                     if (hookPortMatcher.find()) {
                         hostHookPort = Integer.parseInt(hookPortMatcher.group(1));
                     }
 
                     // Extract Connect Port
-                    Pattern connectPortPattern = Pattern.compile("\"connectPort\"\\s*:\\s*(\\d+)");
+                    Pattern connectPortPattern = Pattern.compile("\"HOST_CONNECT_PORT\"\\s*:\\s*(\\d+)");
                     Matcher connectPortMatcher = connectPortPattern.matcher(obj);
+                    if (!connectPortMatcher.find()) {
+                        connectPortPattern = Pattern.compile("\"connectPort\"\\s*:\\s*(\\d+)");
+                        connectPortMatcher = connectPortPattern.matcher(obj);
+                    }
+
                     if (connectPortMatcher.find()) {
                         hostConnectPort = Integer.parseInt(connectPortMatcher.group(1));
                     }
@@ -365,9 +381,8 @@ public class NeoLink {
                 sendStr("false");
                 hookSocket.close();
                 say(languageData.PLEASE_UPDATE_MANUALLY);
-                if (isGUIMode && mainWindowController != null) {
-                    mainWindowController.stopService();
-                } else {
+                // [修改] 如果是 CLI 模式，退出。GUI 模式由 CoreRunner 捕获处理或外部 System.exit
+                if (!isGUIMode) {
                     exitAndFreeze(2);
                 }
             }
