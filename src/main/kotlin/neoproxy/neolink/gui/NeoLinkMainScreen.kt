@@ -60,9 +60,12 @@ import javax.xml.parsers.DocumentBuilderFactory
  * 核心逻辑：基于全链路硬件检测结果 (WindowsEffects.isEffectApplied) 动态调整 UI 表现
  */
 object ModernTheme {
-    // 动态背景：如果应用成功则半透 (0xCC)，失败则全黑 (0xFF)
-    val background: Color get() = if (WindowsEffects.isEffectApplied) Color(0xCC121214) else Color(0xFF121214)
-    val surface: Color get() = if (WindowsEffects.isEffectApplied) Color(0xCC1E1E20) else Color(0xFF1E1E20)
+    // 动态背景：特效开启时 80% 不透明度，关闭时 100% 不透明度兜底
+    val background: Color
+        get() = if (WindowsEffects.isEffectApplied) Color(0xCC121214) else Color(0xFF121214)
+
+    val surface: Color
+        get() = if (WindowsEffects.isEffectApplied) Color(0xCC1E1E20) else Color(0xFF1E1E20)
 
     val surfaceHover = Color(0xFF252528)
     val border = Color(0xFF2C2C2E)
