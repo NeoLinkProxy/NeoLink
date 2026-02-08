@@ -1,356 +1,554 @@
 package neoproxy.neolink.gui
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.PathParser
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
 import org.w3c.dom.Element
-import java.awt.Cursor
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
-// --- 颜色定义 (1:1 复刻 JavaFX CSS) ---
-val BgColor = Color(0xFF0C0C0C)
-val InputBgColor = Color(0xFF202020)
-val InputBorderColor = Color(0xFF555555)
-val TextColor = Color(0xFFCCCCCC)
-val PrimaryBlue = Color(0xFF0078D4)
-val TitleBarHover = Color(0xFF333333)
-val CloseRed = Color(0xFFE81123)
+/**
+ * NeoLink 现代感主题配置
+ * 核心逻辑：基于全链路硬件检测结果 (WindowsEffects.isEffectApplied) 动态调整 UI 表现
+ */
+object ModernTheme {
+    // 动态背景：如果应用成功则半透 (0xCC)，失败则全黑 (0xFF)
+    val background: Color get() = if (WindowsEffects.isEffectApplied) Color(0xCC121214) else Color(0xFF121214)
+    val surface: Color get() = if (WindowsEffects.isEffectApplied) Color(0xCC1E1E20) else Color(0xFF1E1E20)
+
+    val surfaceHover = Color(0xFF252528)
+    val border = Color(0xFF2C2C2E)
+    val primary = Color(0xFF3B82F6)
+    val textPrimary = Color(0xFFE4E4E7)
+    val textSecondary = Color(0xFFA1A1AA)
+    val success = Color(0xFF10B981)
+    val error = Color(0xFFEF4444)
+    val inputBackground = Color(0xFF18181B)
+    val terminalBg = Color(0xFF0F0F10)
+    val divider = Color(0xFF27272A)
+
+    val shapeWindow = RoundedCornerShape(8.dp)
+    val shapeMedium = RoundedCornerShape(10.dp)
+    val shapeSmall = RoundedCornerShape(6.dp)
+}
+
+/**
+ * 自定义深色圆角右键菜单实现
+ */
+@OptIn(ExperimentalFoundationApi::class)
+val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
+    @Composable
+    override fun Representation(state: ContextMenuState, items: () -> List<ContextMenuItem>) {
+        val status = state.status
+        if (status is ContextMenuState.Status.Open) {
+            Popup(
+                offset = IntOffset(status.rect.left.toInt(), status.rect.top.toInt()),
+                onDismissRequest = { state.status = ContextMenuState.Status.Closed }
+            ) {
+                Surface(
+                    shape = ModernTheme.shapeMedium,
+                    color = Color(0xFF1E1E20), // 菜单通常保持不透明
+                    elevation = 8.dp,
+                    border = BorderStroke(1.dp, ModernTheme.border),
+                    modifier = Modifier.width(IntrinsicSize.Max)
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        items().forEach { item ->
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isHovered by interactionSource.collectIsHoveredAsState()
+
+                            val displayLabel = when (item.label) {
+                                "Copy" -> "复制"
+                                "Cut" -> "剪切"
+                                "Paste" -> "粘贴"
+                                "Select All" -> "全选"
+                                else -> item.label
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null,
+                                        onClick = {
+                                            item.onClick()
+                                            state.status = ContextMenuState.Status.Closed
+                                        }
+                                    )
+                                    .background(if (isHovered) ModernTheme.surfaceHover else Color.Transparent)
+                                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = displayLabel,
+                                    color = ModernTheme.textPrimary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
-fun WindowScope.`NeoLinkMainScreen`(
+fun WindowScope.neoLinkMainScreen(
     windowState: WindowState,
     viewModel: NeoLinkViewModel,
     appIcon: Painter,
     onExit: () -> Unit
 ) {
+    val customTextSelectionColors = TextSelectionColors(
+        handleColor = Color(0xFFBD93F9),
+        backgroundColor = ModernTheme.primary.copy(alpha = 0.5f)
+    )
+
+    var showValidationError by remember { mutableStateOf(false) }
+    var validationMessage by remember { mutableStateOf("") }
+    var isCustomAddressMode by remember { mutableStateOf(false) }
+
+    val isMaximized = windowState.placement == WindowPlacement.Maximized
+    // 只有在非全屏时才使用圆角形状
+    val currentShape = if (isMaximized) RectangleShape else ModernTheme.shapeWindow
+
     MaterialTheme(
         colors = darkColors(
-            background = BgColor,
-            surface = BgColor,
-            primary = PrimaryBlue,
-            onBackground = TextColor,
-            onSurface = TextColor
+            background = Color.Transparent, // MaterialTheme 设为全透
+            surface = ModernTheme.surface,
+            primary = ModernTheme.primary,
+            onBackground = ModernTheme.textPrimary,
+            onSurface = ModernTheme.textPrimary
         )
+    ) {
+        CompositionLocalProvider(LocalTextSelectionColors provides customTextSelectionColors) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 核心逻辑：
+                    // 1. 系统层负责物理裁剪（由 WindowsEffects 处理）
+                    // 2. Compose 层负责视觉裁剪，确保内容不画到圆角外面
+                    .clip(currentShape)
+            ) {
+                // 主背景层
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = ModernTheme.background, // 这里是半透明色
+                    shape = currentShape,
+                    // 给一个极细的半透明边框，增加精致感
+                    border = if (!isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                        ) {
+                            customTitleBar(windowState, appIcon, onExit)
+                            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1000.dp)
+                                        .align(Alignment.CenterHorizontally)
+                                ) {
+                                    sectionCard {
+                                        connectionSection(
+                                            viewModel,
+                                            isCustomAddressMode,
+                                            onModeChange = { isCustomAddressMode = it })
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    advancedSettingsSection(viewModel)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    logConsoleSection(viewModel)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    bottomBar(viewModel, isCustomAddressMode) { msg ->
+                                        validationMessage = msg
+                                        showValidationError = true
+                                    }
+                                }
+                            }
+                        }
+
+                        if (showValidationError) {
+                            modernAlertDialog(
+                                title = "参数验证未通过",
+                                message = validationMessage,
+                                onDismiss = { showValidationError = false }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable(enabled = false) {},
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(BgColor)
-                .border(1.dp, Color(0xFF333333))
+                .width(360.dp)
+                .background(Color(0xFF1E1E20), ModernTheme.shapeMedium) // 弹窗背景保持不透明
+                .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium)
+                .padding(24.dp)
         ) {
-            // 1. 自定义标题栏 (Top) - 传入 appIcon
-            `CustomTitleBar`(windowState, appIcon, onExit)
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = ModernTheme.error,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(title, color = ModernTheme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(message, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                shape = RoundedCornerShape(19.dp),
+                colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.primary),
+                elevation = ButtonDefaults.elevation(0.dp, 0.dp)
             ) {
-                // 连接设置 (Top Section)
-                `ConnectionSection`(viewModel)
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // 高级设置 (Accordion)
-                `AdvancedSettingsSection`(viewModel)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 日志区域 (Log Console)
-                `LogConsoleSection`(viewModel)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 底部按钮 (Bottom Bar)
-                `BottomBar`(viewModel)
+                Text("返回修改", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-// --- 标题栏组件 ---
 @Composable
-fun WindowScope.`CustomTitleBar`(
-    windowState: WindowState,
-    appIcon: Painter,
-    onExit: () -> Unit
-) {
-    WindowDraggableArea {
+fun sectionCard(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
+            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(12.dp),
+        content = content
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun WindowScope.customTitleBar(windowState: WindowState, appIcon: Painter, onExit: () -> Unit) {
+    val isMaximized = windowState.placement == WindowPlacement.Maximized
+    val toggleMaximize = {
+        windowState.placement = if (isMaximized) WindowPlacement.Floating else WindowPlacement.Maximized
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .background(Color.Transparent)
+    ) {
+        WindowDraggableArea(
+            modifier = Modifier.fillMaxSize().combinedClickable(
+                onClick = {},
+                onDoubleClick = toggleMaximize,
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            )
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = appIcon,
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(23.dp).offset(y = (3).dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    "NeoLink 内网穿透客户端",
+                    color = ModernTheme.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontFamily = FontFamily.SansSerif
+                )
+            }
+        }
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(36.dp)
-                .background(BgColor)
-                .padding(start = 10.dp),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 复刻 JavaFX logoView 样式
-            Image(
-                painter = appIcon,
-                contentDescription = "Logo",
-                modifier = Modifier
-                    .height(26.dp)
-                    .padding(end = 10.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            Text(
-                "NeoLink - 内网穿透客户端",
-                color = TextColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = FontFamily.SansSerif
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 窗口控制按钮
-            `TitleBarButton`("—") { windowState.isMinimized = true }
-            `TitleBarButton`(if (windowState.placement == WindowPlacement.Maximized) "❐" else "□") {
-                windowState.placement = if (windowState.placement == WindowPlacement.Maximized)
-                    WindowPlacement.Floating else WindowPlacement.Maximized
+            windowControlButton(onClick = { windowState.isMinimized = true }) { color ->
+                drawLine(
+                    color,
+                    Offset(18.dp.toPx(), 16.dp.toPx()),
+                    Offset(28.dp.toPx(), 16.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
             }
-            `TitleBarButton`("✕", isClose = true) { onExit() }
+
+            windowControlButton(onClick = toggleMaximize) { color ->
+                if (isMaximized) {
+                    drawRect(
+                        color,
+                        topLeft = Offset(20.dp.toPx(), 12.dp.toPx()),
+                        size = Size(8.dp.toPx(), 8.dp.toPx()),
+                        style = Stroke(1.dp.toPx())
+                    )
+                    drawRect(
+                        ModernTheme.background, // 使用当前背景色遮挡
+                        topLeft = Offset(17.dp.toPx(), 15.dp.toPx()),
+                        size = Size(9.dp.toPx(), 9.dp.toPx())
+                    )
+                    drawRect(
+                        color,
+                        topLeft = Offset(18.dp.toPx(), 16.dp.toPx()),
+                        size = Size(8.dp.toPx(), 8.dp.toPx()),
+                        style = Stroke(1.dp.toPx())
+                    )
+                } else {
+                    drawRect(
+                        color,
+                        topLeft = Offset(18.dp.toPx(), 12.dp.toPx()),
+                        size = Size(10.dp.toPx(), 10.dp.toPx()),
+                        style = Stroke(1.dp.toPx())
+                    )
+                }
+            }
+
+            windowControlButton(isClose = true, onClick = { onExit() }) { color ->
+                drawLine(
+                    color,
+                    Offset(18.dp.toPx(), 11.dp.toPx()),
+                    Offset(28.dp.toPx(), 21.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawLine(
+                    color,
+                    Offset(18.dp.toPx(), 21.dp.toPx()),
+                    Offset(28.dp.toPx(), 11.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
         }
     }
 }
 
 @Composable
-fun `TitleBarButton`(text: String, isClose: Boolean = false, onClick: () -> Unit) {
+fun windowControlButton(
+    isClose: Boolean = false,
+    onClick: () -> Unit,
+    drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
+
+    val bg = when {
+        isHovered && isClose -> Color(0xFFE81123)
+        isHovered -> Color(0xFF333333)
+        else -> Color.Transparent
+    }
+    val fg = if (isHovered && isClose) Color.White else ModernTheme.textSecondary
 
     Box(
         modifier = Modifier
             .width(46.dp)
             .fillMaxHeight()
-            .background(
-                if (isHovered) (if (isClose) CloseRed else TitleBarHover) else Color.Transparent
-            )
+            .background(bg)
             .clickable(onClick = onClick, interactionSource = interactionSource, indication = null),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = TextColor, fontSize = 14.sp)
+        Canvas(modifier = Modifier.fillMaxSize()) { drawIcon(fg) }
     }
 }
 
 @Composable
-fun `ConnectionSection`(vm: NeoLinkViewModel) {
+fun connectionSection(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChange: (Boolean) -> Unit) {
     Column {
-        `GroupTitle`("连接设置")
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            `LabeledComponent`("远程服务器:") {
-                if (vm.nodeList.isNotEmpty()) {
-                    `NodeSelector`(vm)
-                } else {
-                    `CustomTextField`(
-                        value = vm.remoteDomain,
-                        onValueChange = { vm.remoteDomain = it },
-                        width = 220.dp
-                    )
-                }
-            }
-
-            `LabeledComponent`("本地端口:") {
-                `CustomTextField`(
-                    value = vm.localPort,
-                    onValueChange = { if (it.all { c -> c.isDigit() }) vm.localPort = it },
-                    width = 160.dp
-                )
-            }
-
-            `LabeledComponent`("访问密钥:") {
-                `CustomTextField`(
-                    value = vm.accessKey,
-                    onValueChange = { vm.accessKey = it },
-                    isPassword = true,
-                    width = 220.dp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun `NodeSelector`(vm: NeoLinkViewModel) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        Row(
-            modifier = Modifier
-                .width(220.dp)
-                .height(30.dp)
-                .background(InputBgColor, RoundedCornerShape(3.dp))
-                .border(1.dp, InputBorderColor, RoundedCornerShape(3.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            vm.selectedNode?.let { node ->
-                `SvgIcon`(node.iconSvg, size = 18.dp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(node.name, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            } ?: Text("选择节点", color = Color.Gray, fontSize = 13.sp, modifier = Modifier.weight(1f))
-
-            Text("▼", color = Color.Gray, fontSize = 10.sp)
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color(0xFF2B2B2B)).width(220.dp)
-        ) {
-            vm.nodeList.forEach { node ->
-                DropdownMenuItem(onClick = {
-                    vm.selectNode(node)
-                    expanded = false
-                }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        `SvgIcon`(node.iconSvg, size = 16.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(node.name, color = TextColor, fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun `AdvancedSettingsSection`(vm: NeoLinkViewModel) {
-    var isExpanded by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Color(0xFF333333), RoundedCornerShape(4.dp))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1A1A1A))
-                .clickable { isExpanded = !isExpanded }
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(if (isExpanded) "▼" else "▶", color = TextColor, fontSize = 10.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("高级设置", color = TextColor, fontSize = 14.sp)
-        }
-
-        if (isExpanded) {
-            Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("本地域名:", 100.dp)
-                    `CustomTextField`(vm.localDomain, { vm.localDomain = it }, width = 200.dp)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("服务端口:", 100.dp)
-                    `CustomTextField`(vm.hostHookPort, { vm.hostHookPort = it }, width = 200.dp)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("连接端口:", 100.dp)
-                    `CustomTextField`(vm.hostConnectPort, { vm.hostConnectPort = it }, width = 200.dp)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("协议启用:", 100.dp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                        `CustomCheckbox`("启用TCP", vm.isTcpEnabled) { vm.isTcpEnabled = it }
-                        `CustomCheckbox`("启用UDP", vm.isUdpEnabled) { vm.isUdpEnabled = it }
-                        `CustomCheckbox`("真实IP透传", vm.isPpv2Enabled) { vm.isPpv2Enabled = it }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("自动重连:", 100.dp)
-                    `CustomCheckbox`("启用自动重连", vm.isAutoReconnect) { vm.isAutoReconnect = it }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    `LabelText`("日志设置:", 100.dp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                        `CustomCheckbox`("调试模式", vm.isDebugMode) { vm.isDebugMode = it }
-                        `CustomCheckbox`("显示连接", vm.isShowConnection) { vm.isShowConnection = it }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ColumnScope.`LogConsoleSection`(vm: NeoLinkViewModel) {
-    Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-        `GroupTitle`("运行日志")
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val listState = rememberLazyListState()
-
-        LaunchedEffect(vm.logMessages.size) {
-            if (vm.logMessages.isNotEmpty()) {
-                listState.scrollToItem(vm.logMessages.size - 1)
-            }
-        }
-
-        SelectionContainer {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF050505))
-                    .border(1.dp, Color(0xFF1E1E1E))
+                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
+                    .background(ModernTheme.primary, RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                "连接配置",
+                color = ModernTheme.textPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(0.618f)) {
+                labelText("远程服务器地址")
+                Spacer(modifier = Modifier.height(4.dp))
+                nodeSelector(viewModel, isCustomMode, onModeChange)
+            }
+            Column(modifier = Modifier.weight(0.382f)) {
+                labelText("本地端口")
+                Spacer(modifier = Modifier.height(4.dp))
+                modernTextField(
+                    value = viewModel.localPort,
+                    onValueChange = { if (it.all { c -> c.isDigit() }) viewModel.localPort = it },
+                    placeholder = "8080"
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            labelText("访问密钥 (Token)")
+            Spacer(modifier = Modifier.height(4.dp))
+            modernTextField(
+                value = viewModel.accessKey,
+                onValueChange = { viewModel.accessKey = it },
+                placeholder = "请输入连接密钥",
+                isPassword = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChange: (Boolean) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val rotationState by animateFloatAsState(targetValue = if (expanded) 180f else 0f)
+
+    if (isCustomMode) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            modernTextField(
+                value = viewModel.remoteDomain,
+                onValueChange = { viewModel.remoteDomain = it },
+                placeholder = "输入 IP 或域名",
+                modifier = Modifier.fillMaxWidth()
+            )
+            IconButton(onClick = { onModeChange(false) }, modifier = Modifier.size(34.dp).padding(end = 4.dp)) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "返回",
+                    tint = ModernTheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(34.dp)
+                    .background(ModernTheme.inputBackground, ModernTheme.shapeSmall)
+                    .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall).clip(ModernTheme.shapeSmall)
+                    .clickable { expanded = true }.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(12.dp)
+                viewModel.selectedNode?.let { node ->
+                    Box(
+                        modifier = Modifier.size(18.dp).offset(y = 1.dp),
+                        contentAlignment = Alignment.Center
+                    ) { svgIcon(node.iconSvg, size = 16.dp) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                } ?: Text(
+                    "选择节点",
+                    color = ModernTheme.textSecondary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = ModernTheme.textSecondary,
+                    modifier = Modifier.rotate(rotationState)
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1E1E20)) // 下拉菜单背景保持不透明
+                    .border(1.dp, ModernTheme.border, RoundedCornerShape(4.dp)).width(300.dp)
+            ) {
+                viewModel.nodeList.forEach { node ->
+                    DropdownMenuItem(
+                        onClick = { viewModel.selectNode(node); expanded = false },
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.size(20.dp),
+                                contentAlignment = Alignment.Center
+                            ) { svgIcon(node.iconSvg, size = 16.dp) }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp)
+                        }
+                    }
+                }
+                Divider(color = ModernTheme.divider, thickness = 1.dp)
+                DropdownMenuItem(
+                    onClick = { onModeChange(true); expanded = false },
+                    modifier = Modifier.height(40.dp)
                 ) {
-                    items(vm.logMessages) { msg ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = ModernTheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = msg,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            style = TextStyle(
-                                lineHeight = 18.sp,
-                                letterSpacing = 0.5.sp
-                            ),
-                            modifier = Modifier.padding(bottom = 2.dp)
+                            "自定义地址...",
+                            color = ModernTheme.primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -360,148 +558,367 @@ fun ColumnScope.`LogConsoleSection`(vm: NeoLinkViewModel) {
 }
 
 @Composable
-fun `BottomBar`(vm: NeoLinkViewModel) {
+fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
+    var isExpanded by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
+            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).clip(ModernTheme.shapeMedium)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = ModernTheme.textSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "高级设置",
+                color = ModernTheme.textPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.offset(x = (-3).dp, y = (-2).dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                if (isExpanded) "收起" else "展开",
+                color = ModernTheme.textSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.offset(x = (-1).dp, y = (-2).dp)
+            )
+        }
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                Divider(color = ModernTheme.divider, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        labelText("本地域名"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
+                        viewModel.localDomain,
+                        { viewModel.localDomain = it },
+                        placeholder = "localhost"
+                    )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        labelText("Hook端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
+                        viewModel.hostHookPort,
+                        { viewModel.hostHookPort = it })
+                    }
+                    Column(Modifier.weight(1f)) {
+                        labelText("连接端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
+                        viewModel.hostConnectPort,
+                        { viewModel.hostConnectPort = it })
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        labelText("传输协议"); Spacer(modifier = Modifier.height(6.dp))
+                        modernCheckbox("启用 TCP", viewModel.isTcpEnabled) { viewModel.isTcpEnabled = it }; Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+                        modernCheckbox("启用 UDP", viewModel.isUdpEnabled) { viewModel.isUdpEnabled = it }; Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+                        modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) { viewModel.isPpv2Enabled = it }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
+                        modernCheckbox("自动重连", viewModel.isAutoReconnect) {
+                            viewModel.isAutoReconnect = it
+                        }; Spacer(modifier = Modifier.height(4.dp))
+                        modernCheckbox("调试模式", viewModel.isDebugMode) { viewModel.isDebugMode = it }; Spacer(
+                        modifier = Modifier.height(4.dp)
+                    )
+                        modernCheckbox("显示详情", viewModel.isShowConnection) { viewModel.isShowConnection = it }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
+    val statusColor by animateColorAsState(
+        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.error,
+        animationSpec = tween(durationMillis = 500)
+    )
+
+    Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
+                    .background(statusColor, RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                "运行日志",
+                color = ModernTheme.textPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        val listState = rememberLazyListState()
+        LaunchedEffect(viewModel.logMessages.size) {
+            if (viewModel.logMessages.isNotEmpty()) listState.scrollToItem(
+                viewModel.logMessages.size - 1
+            )
+        }
+
+        CompositionLocalProvider(
+            LocalContextMenuRepresentation provides ModernContextMenuRepresentation,
+            LocalTextSelectionColors provides LocalTextSelectionColors.current
+        ) {
+            SelectionContainer {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(ModernTheme.terminalBg, ModernTheme.shapeMedium)
+                        .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall).clip(ModernTheme.shapeMedium)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(10.dp)
+                    ) {
+                        items(viewModel.logMessages) { msg ->
+                            Text(
+                                text = msg,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                style = TextStyle(lineHeight = 16.sp, letterSpacing = 0.sp),
+                                modifier = Modifier.padding(bottom = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationError: (String) -> Unit) {
+    val actionBtnBgColor by animateColorAsState(
+        targetValue = if (viewModel.isRunning) ModernTheme.error else ModernTheme.primary,
+        animationSpec = tween(durationMillis = 500)
+    )
+    val indicatorColor by animateColorAsState(
+        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.textSecondary,
+        animationSpec = tween(durationMillis = 500)
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Button(
-            onClick = { vm.startService() },
-            enabled = !vm.isRunning,
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = PrimaryBlue,
-                disabledBackgroundColor = Color(0xFF333333)
-            ),
-            modifier = Modifier.height(36.dp)
-        ) {
-            Text("启动服务", color = if (vm.isRunning) Color.Gray else Color.White)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier.size(6.dp).offset(y = 2.5.dp).background(
+                    indicatorColor,
+                    CircleShape
+                )
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                if (viewModel.isRunning) "服务运行中" else "服务已停止",
+                color = ModernTheme.textSecondary,
+                fontSize = 12.sp,
+            )
         }
-        Spacer(modifier = Modifier.width(16.dp))
+
         Button(
-            onClick = { vm.stopService() },
-            enabled = vm.isRunning,
+            onClick = {
+                if (viewModel.isRunning) {
+                    viewModel.stopService()
+                } else {
+                    val errors = mutableListOf<String>()
+                    if (isCustomMode && viewModel.remoteDomain.isBlank()) errors.add("远程服务器地址不能为空")
+                    if (!isCustomMode && viewModel.selectedNode == null) errors.add("请选择一个远程连接节点")
+                    if (viewModel.localPort.isBlank()) errors.add("本地端口不能为空")
+                    if (viewModel.accessKey.isBlank()) errors.add("访问密钥 (Token) 不能为空")
+
+                    if (errors.isNotEmpty()) {
+                        onValidationError(errors.joinToString("\n") { "• $it" })
+                    } else {
+                        viewModel.startService()
+                    }
+                }
+            },
+            shape = ModernTheme.shapeSmall,
             colors = ButtonDefaults.buttonColors(
-                backgroundColor = Color(0xFF333333),
-                disabledBackgroundColor = Color(0xFF222222)
+                backgroundColor = actionBtnBgColor,
+                contentColor = Color.White
             ),
-            modifier = Modifier.height(36.dp)
+            elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
+            modifier = Modifier.height(34.dp).width(100.dp)
         ) {
-            Text("停止服务", color = if (!vm.isRunning) Color.Gray else Color.White)
+            Text(
+                if (viewModel.isRunning) "停止服务" else "立即启动",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
         }
     }
 }
 
-// --- 通用小组件 ---
-
 @Composable
-fun `GroupTitle`(text: String) {
-    Text(text, color = PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-}
-
-@Composable
-fun `LabeledComponent`(label: String, content: @Composable () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = TextColor, fontSize = 13.sp)
-        Spacer(modifier = Modifier.width(8.dp))
-        content()
-    }
-}
-
-@Composable
-fun `LabelText`(text: String, width: androidx.compose.ui.unit.Dp) {
-    Text(text, color = TextColor, fontSize = 13.sp, modifier = Modifier.width(width))
-}
-
-@Composable
-fun `CustomTextField`(
-    value: String,
-    onValueChange: (String) -> Unit,
-    width: androidx.compose.ui.unit.Dp,
-    isPassword: Boolean = false
-) {
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-        singleLine = true,
-        cursorBrush = SolidColor(Color.White),
-        modifier = Modifier
-            .width(width)
-            .height(30.dp)
-            .background(InputBgColor, RoundedCornerShape(3.dp))
-            .border(1.dp, InputBorderColor, RoundedCornerShape(3.dp))
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+fun labelText(text: String) {
+    Text(
+        text,
+        color = ModernTheme.textSecondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.offset(y = (-4).dp)
     )
 }
 
 @Composable
-fun `CustomCheckbox`(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)))
-            .clickable { onCheckedChange(!checked) },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+fun modernTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "",
+    isPassword: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    val commonTextStyle = TextStyle(
+        color = ModernTheme.textPrimary,
+        fontSize = 13.sp,
+        lineHeight = 16.sp
+    )
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = commonTextStyle,
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        singleLine = true,
+        cursorBrush = SolidColor(ModernTheme.primary),
+        decorationBox = { innerTextField ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .background(ModernTheme.inputBackground, ModernTheme.shapeSmall)
+                    .border(
+                        width = 1.dp,
+                        color = if (isFocused) ModernTheme.primary else ModernTheme.border,
+                        shape = ModernTheme.shapeSmall
+                    )
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier.offset(y = (-1).dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = commonTextStyle.copy(
+                                color = Color.Gray.copy(alpha = 0.5f),
+                                fontSize = 12.sp
+                            ),
+                            modifier = Modifier.offset(y = (-0.5).dp)
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        },
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused }
+    )
+}
+
+@Composable
+fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(modifier = Modifier.clip(ModernTheme.shapeSmall).clickable { onCheckedChange(!checked) }
+        .padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            modifier = Modifier
-                .size(18.dp)
-                .background(if (checked) PrimaryBlue else InputBgColor, RoundedCornerShape(4.dp))
-                .border(2.dp, if (checked) PrimaryBlue else InputBorderColor, RoundedCornerShape(4.dp)),
+            modifier = Modifier.size(16.dp)
+                .background(if (checked) ModernTheme.primary else Color.Transparent, RoundedCornerShape(3.dp)).border(
+                    1.dp,
+                    if (checked) ModernTheme.primary else ModernTheme.textSecondary,
+                    RoundedCornerShape(3.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
-            if (checked) Text("✔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (checked) Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(12.dp)
+            )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text, color = Color.White, fontSize = 14.sp)
+        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = (-4).dp))
     }
 }
 
 @Composable
-fun `SvgIcon`(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
+fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
     if (svgContent.isNullOrBlank()) {
-        Canvas(modifier = Modifier.size(size)) { drawCircle(Color(0xFF00FF88)) }
-        return
+        Canvas(modifier = Modifier.size(size)) { drawCircle(Color(0xFF3B82F6), style = Stroke(width = 2f)) }; return
     }
-
     val drawInstructions = remember(svgContent) {
         try {
-            val factory = DocumentBuilderFactory.newInstance()
-            val builder = factory.newDocumentBuilder()
-            val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray()))
+            val factory = DocumentBuilderFactory.newInstance();
+            val builder = factory.newDocumentBuilder();
+            val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray()));
             val root = doc.documentElement
-
             val vbAttr = root.getAttribute("viewBox").split(Regex("[\\s,]+"))
-            val viewBox = if (vbAttr.size == 4) {
-                Rect(vbAttr[0].toFloat(), vbAttr[1].toFloat(), vbAttr[2].toFloat(), vbAttr[3].toFloat())
-            } else {
-                val w = root.getAttribute("width").toFloatOrNull() ?: 900f
-                val h = root.getAttribute("height").toFloatOrNull() ?: 600f
-                Rect(0f, 0f, w, h)
-            }
-
-            val instructions = mutableListOf<`DrawOp`>()
-            `parseSvgLayer`(root, instructions)
-            Pair(viewBox, instructions)
-        } catch (e: Exception) {
+            val viewBox = if (vbAttr.size == 4) Rect(
+                vbAttr[0].toFloat(),
+                vbAttr[1].toFloat(),
+                vbAttr[2].toFloat(),
+                vbAttr[3].toFloat()
+            ) else Rect(
+                0f,
+                0f,
+                root.getAttribute("width").toFloatOrNull() ?: 900f,
+                root.getAttribute("height").toFloatOrNull() ?: 600f
+            )
+            val ops = mutableListOf<DrawOp>(); parseSvgLayer(root, ops); Pair(viewBox, ops)
+        } catch (_: Exception) {
             null
         }
     }
-
     if (drawInstructions != null) {
         val (viewBox, ops) = drawInstructions
         Canvas(modifier = Modifier.size(size)) {
-            val scaleX = size.toPx() / viewBox.width
-            val scaleY = size.toPx() / viewBox.height
+            val scaleX = size.toPx() / viewBox.width;
+            val scaleY = size.toPx() / viewBox.height;
             val finalScale = minOf(scaleX, scaleY)
-
-            scale(finalScale, finalScale, pivot = Offset.Zero) {
-                ops.forEach { op ->
-                    when (op) {
-                        is `DrawOp`.PathOp -> drawPath(op.path, op.color)
-                        is `DrawOp`.RectOp -> drawRect(op.color, op.topLeft, op.size)
-                        is `DrawOp`.CircleOp -> drawCircle(op.color, op.radius, op.center)
+            val drawWidth = viewBox.width * finalScale;
+            val drawHeight = viewBox.height * finalScale
+            val offsetX = (size.toPx() - drawWidth) / 2;
+            val offsetY = (size.toPx() - drawHeight) / 2
+            translate(left = offsetX, top = offsetY) {
+                scale(
+                    finalScale,
+                    finalScale,
+                    pivot = Offset.Zero
+                ) {
+                    ops.forEach { op ->
+                        when (op) {
+                            is DrawOp.PathOp -> drawPath(op.path, op.color); is DrawOp.RectOp -> drawRect(
+                            op.color,
+                            op.topLeft,
+                            op.size
+                        ); is DrawOp.CircleOp -> drawCircle(op.color, op.radius, op.center)
+                        }
                     }
                 }
             }
@@ -509,47 +926,64 @@ fun `SvgIcon`(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
     }
 }
 
-sealed class `DrawOp` {
-    data class PathOp(val path: Path, val color: Color) : `DrawOp`()
-    data class RectOp(val topLeft: Offset, val size: Size, val color: Color) : `DrawOp`()
-    data class CircleOp(val center: Offset, val radius: Float, val color: Color) : `DrawOp`()
+sealed class DrawOp {
+    data class PathOp(val path: Path, val color: Color) : DrawOp();
+    data class RectOp(val topLeft: Offset, val size: Size, val color: Color) : DrawOp();
+    data class CircleOp(val center: Offset, val radius: Float, val color: Color) : DrawOp()
 }
 
-fun `parseSvgLayer`(element: Element, ops: MutableList<`DrawOp`>) {
+fun parseSvgLayer(element: Element, ops: MutableList<DrawOp>) {
     val children = element.childNodes
     for (i in 0 until children.length) {
         val node = children.item(i)
         if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
-            val el = node as Element
+            val el = node as Element;
             val colorStr = el.getAttribute("fill").ifBlank { "#000000" }
             val color = try {
-                Color(java.awt.Color.decode(colorStr.replace("'", "")).rgb).copy(alpha = 1f)
-            } catch (e: Exception) {
-                Color.Black
+                val c = Color(
+                    java.awt.Color.decode(
+                        colorStr.replace(
+                            "'",
+                            ""
+                        )
+                    ).rgb
+                ).copy(alpha = 1f); if (c == Color.Black) ModernTheme.textPrimary else c
+            } catch (_: Exception) {
+                ModernTheme.textPrimary
             }
-
             when (el.tagName.lowercase()) {
                 "path" -> {
-                    val d = el.getAttribute("d")
-                    if (d.isNotBlank()) {
-                        val path = PathParser().parsePathString(d).toPath()
-                        ops.add(`DrawOp`.PathOp(path, color))
-                    }
+                    val d = el.getAttribute("d"); if (d.isNotBlank()) ops.add(
+                        DrawOp.PathOp(
+                            PathParser().parsePathString(d).toPath(), color
+                        )
+                    )
                 }
-                "rect" -> {
-                    val x = el.getAttribute("x").toFloatOrNull() ?: 0f
-                    val y = el.getAttribute("y").toFloatOrNull() ?: 0f
-                    val w = el.getAttribute("width").toFloatOrNull() ?: 0f
-                    val h = el.getAttribute("height").toFloatOrNull() ?: 0f
-                    ops.add(`DrawOp`.RectOp(Offset(x, y), Size(w, h), color))
-                }
-                "circle" -> {
-                    val cx = el.getAttribute("cx").toFloatOrNull() ?: 0f
-                    val cy = el.getAttribute("cy").toFloatOrNull() ?: 0f
-                    val r = el.getAttribute("r").toFloatOrNull() ?: 0f
-                    ops.add(`DrawOp`.CircleOp(Offset(cx, cy), r, color))
-                }
-                "g" -> `parseSvgLayer`(el, ops)
+
+                "rect" -> ops.add(
+                    DrawOp.RectOp(
+                        Offset(
+                            el.getAttribute("x").toFloatOrNull() ?: 0f,
+                            el.getAttribute("y").toFloatOrNull() ?: 0f
+                        ),
+                        Size(
+                            el.getAttribute("width").toFloatOrNull() ?: 0f,
+                            el.getAttribute("height").toFloatOrNull() ?: 0f
+                        ),
+                        color
+                    )
+                )
+
+                "circle" -> ops.add(
+                    DrawOp.CircleOp(
+                        Offset(
+                            el.getAttribute("cx").toFloatOrNull() ?: 0f,
+                            el.getAttribute("cy").toFloatOrNull() ?: 0f
+                        ), el.getAttribute("r").toFloatOrNull() ?: 0f, color
+                    )
+                )
+
+                "g" -> parseSvgLayer(el, ops)
             }
         }
     }

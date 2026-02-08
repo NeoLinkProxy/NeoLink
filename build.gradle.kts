@@ -1,11 +1,9 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    // Kotlin 语言支持
     kotlin("jvm") version "1.9.22"
-    // Compose 官方核心插件 (负责 UI 和打包)
     id("org.jetbrains.compose") version "1.6.1"
-    // 显式引入 idea 插件，用于强制修复 IDEA 项目结构
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     idea
 }
 
@@ -14,96 +12,83 @@ version = "5.10.4"
 
 repositories {
     mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://maven.pkg.jetbrains.space/public/p/public/compose/dev")
     google()
 }
 
-// === 核心修改 1：显式强制源码集 ===
 kotlin {
     jvmToolchain(21)
-
     sourceSets {
         val main by getting {
-            // 强制指定两个目录都作为 Kotlin 源码目录
             kotlin.srcDirs("src/main/kotlin", "src/main/java")
-            resources.srcDir("src/main/resources")
+            resources.srcDirs("src/main/resources")
         }
     }
 }
 
 dependencies {
-    // 1. 核心业务
     implementation("fun.ceroxe.api:ceroxe-core:0.2.7")
     implementation("fun.ceroxe.api:ceroxe-detector:0.2.7")
 
-    // 2. 7Zip 支持
+    // 这个你已经配对了，它包含全平台解压库
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
 
-    // 3. Compose UI 基础库
-    implementation(compose.desktop.currentOs)
+    implementation(compose.desktop.common)
+
+    // 【核心修复】不要使用 currentOs，要显式列出所有目标平台
+    // 这样 shadowJar 会把这些平台的原生动态库全部打包进去
+    implementation(compose.desktop.windows_x64)
+    implementation(compose.desktop.macos_x64)
+    implementation(compose.desktop.macos_arm64) // 适配 M1/M2/M3 芯片
+    implementation(compose.desktop.linux_x64)
+
     implementation(compose.material)
     implementation(compose.ui)
     implementation(compose.foundation)
-    implementation(compose.preview)
-    // 强制引入 runtime 解决部分 import 无法识别问题
     implementation(compose.runtime)
 
-    // 4. 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
+
+    // JNA 本身是跨平台的，会自动根据系统加载内部的 .so/.dylib/.dll
+    implementation("net.java.dev.jna:jna:5.14.0")
+    implementation("net.java.dev.jna:jna-platform:5.14.0")
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "21"
-        // 增加编码参数，防止中文路径引起的文件读写异常
-        freeCompilerArgs += listOf("-Xjvm-default=all")
-    }
-}
-
-// === Compose 官方打包配置 (保持不变) ===
-compose.desktop {
-    application {
-        mainClass = "neoproxy.neolink.NeoLink"
-        nativeDistributions {
-            targetFormats(TargetFormat.Exe, TargetFormat.Msi)
-            packageName = "NeoLink"
-            packageVersion = "5.10.4"
-            description = "NeoLink Client powered by Compose"
-            copyright = "© 2026 Ceroxe"
-            vendor = "Ceroxe"
-            windows {
-                menu = true
-                shortcut = true
-                upgradeUuid = "00000000-0000-0000-0000-000000000000"
-            }
-        }
-    }
-}
-// === 核心修改：配置资源过滤，将 version 注入 app.properties ===
-tasks.processResources {
-    // 定义要注入的属性字典
-    val props = mapOf("version" to project.version)
-
-    // 输入声明（为了支持 Gradle 的增量构建缓存）
-    inputs.properties(props)
-
-    // 匹配到 app.properties 文件时执行替换
+// 资源处理修复
+tasks.withType<ProcessResources> {
+    filteringCharset = "UTF-8"
+    inputs.property("version", project.version)
     filesMatching("app.properties") {
-        expand(props)
+        expand("version" to project.version)
     }
 }
-tasks.withType<JavaExec> {
-    jvmArgs("-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8")
+
+// ShadowJar 任务
+tasks.named<ShadowJar>("shadowJar") {
+    manifest {
+        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
+    }
+    mergeServiceFiles()
+    archiveBaseName.set("NeoLink")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
-// 同时建议给编译任务也加上编码限制
+// 编译编码修复
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions {
+        jvmTarget = "21"
+    }
+}
+
+// 运行编码修复
+tasks.withType<JavaExec> {
+    jvmArgs("-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8")
 }

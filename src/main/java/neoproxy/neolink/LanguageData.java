@@ -72,7 +72,7 @@ public class LanguageData implements Serializable {
         languageData.PORT_OUT_OF_RANGE_MSG = "输入的端口范围应在1~65535之间。";
         languageData.IF_YOU_SEE_EULA = "如果你已经开始使用的本软件，说明你已经知晓并同意了本软件的eula协议";
         languageData.VERSION = "版本 ： ";
-        languageData.PLEASE_ENTER_ACCESS_CODE = "请输入序列号：";
+        languageData.PLEASE_ENTER_ACCESS_CODE = "请输入密钥：";
         languageData.CONNECT_TO = "连接 ";
         languageData.OMITTED = " ...";
         languageData.A_TCP_CONNECTION = "一个 TCP 连接 ";
