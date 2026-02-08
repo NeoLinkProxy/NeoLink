@@ -18,7 +18,8 @@
 
 > **简介**
 >
-> NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服务（例如 Minecraft 服务器、RDP 远程桌面）暴露给公网 NeoProxyServer。
+> NeoLink 是一个轻量级的内网穿透客户端，用于将本地 TCP/UDP 服务（例如 Minecraft 服务器、RDP 远程桌面）暴露给公网
+> NeoProxyServer。
 >
 > **推荐场景**：RDP 远程桌面、Minecraft 服务器、HTTP 文件服务、需要获取真实 IP 的 Web 服务。
 
@@ -28,7 +29,8 @@
 
 ## 📖 说明 (概览)
 
-NeoLink 项目同时提供 **命令行 (CLI)** 与 **Compose Multiplatform 图形界面 (GUI)** 两种运行模式，并支持通过 HTTP/SOCKS 代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
+NeoLink 项目同时提供 **命令行 (CLI)** 与 **Compose Multiplatform 图形界面 (GUI)** 两种运行模式，并支持通过 HTTP/SOCKS
+代理访问本地或远端服务。客户端包含自动重连、心跳检测、日志记录与远程更新下载功能。
 
 自 4.7.0 版本开始，同步支持 TCP 和 UDP。本项目已迁移至 **Compose Multiplatform** 框架，提供更现代、响应更快的声明式 UI 体验。
 
@@ -48,41 +50,50 @@ NeoLink 项目同时提供 **命令行 (CLI)** 与 **Compose Multiplatform 图�
 
 ## 🚀 快速开始
 
-*   🪟 **多平台支持**：支持 Windows、Linux 及 macOS。
-*   🎁 **Release 界面**：提供了各平台的打包版本，无需配置复杂的 Java 环境即可使用。
-*   ⚡ **一键启动**：支持通过命令行参数直接指定密钥和本地端口。
+* 🪟 **多平台支持**：支持 Windows、Linux 及 macOS。
+* 🎁 **Release 界面**：提供了各平台的打包版本，无需配置复杂的 Java 环境即可使用。
+* ⚡ **一键启动**：支持通过命令行参数直接指定密钥和本地端口。
 
-### **获取客户端:** 
+### **获取客户端:**
+
 🎁 从本项目的 "Releases" 页面下载最新的客户端
 
 ### 🖥️ **命令行模式 (Terminal)**
+
 将构建后的 JAR 放到工作目录并运行（强制指定中文）：
+
 ```bash
 # 示例命令
 java -jar NeoLink-XXXX.jar --nogui --zh-cn
 
 # 可选参数追加到后面
-# --output-file=path/to/logfile.log  将日志写入指定文件
 # --key=...                          访问密钥
 # --local-port=...                   本地要被穿透的端口
 # --node=NodeName                    指定要连接的节点名称（需配置 node.json）
-# --enable-pp                        启用 Proxy Protocol v2
+# --output-file=path/to/logfile.log  将日志写入指定文件
+# --enable-pp                        启用 Proxy Protocol v2 (透传真实 IP)
 # --debug                            打印调试信息
 # --en-us / --zh-cn                  指定语言
 # --nogui                            禁用 GUI 启动
 # --gui                              使用 GUI 启动 (默认)
 # --disable-tcp                      禁用 TCP 连接
 # --disable-udp                      禁用 UDP 连接
+# --no-show-conn                     不显示详细的连接建立/销毁信息
+# --no-color                         禁用控制台彩色输出
+# --test-update                      测试模式：模拟旧版本触发自动更新检测
 ```
 
 ### ✨ **一键启动 (GUI 模式)**
+
 ```bash
 # 使用 GUI 并直接指定密钥和端口，实现一键启动
 java -jar NeoLink-XXXX.jar --zh-cn --key=你的访问密钥 --local-port=本地端口号
 ```
 
 ### 🛠️ **构建项目**
+
 由于项目已迁移至 Gradle，请使用以下命令构建：
+
 ```bash
 git clone https://github.com/NeoLinkProxy/NeoLink.git
 cd NeoLink
@@ -99,49 +110,52 @@ cd NeoLink
 ## 📁 配置文件
 
 ### 1. 📝 **通用配置** (`config.cfg`)
+
 第一次运行时程序会在当前工作目录创建 `config.cfg`（如果不存在）。
 
 ```properties
 #把你要连接的 NeoServer 的域名或者公网 ip 放到这里来
 REMOTE_DOMAIN_NAME=localhost
-
 #设置是否启用自动更新
 ENABLE_AUTO_UPDATE=true
-
 #是否向后端服务透传真实 IP (Proxy Protocol v2)
 ENABLE_PROXY_PROTOCOL=false
-
+#本地服务域名或 IP
 LOCAL_DOMAIN_NAME=localhost
+#服务端指令 Hook 端口
 HOST_HOOK_PORT=44801
+#服务端数据传输端口
 HOST_CONNECT_PORT=44802
-
-#代理设置 (示例: socks->127.0.0.1:7890)
+#代理设置 (示例: socks->127.0.0.1:7890 或 socks->127.0.0.1:7890@user;pass)
 PROXY_IP_TO_LOCAL_SERVER=
 PROXY_IP_TO_NEO_SERVER=
-
+#心跳包间隔 (ms)
 HEARTBEAT_PACKET_DELAY=1000
+#是否启用自动重连
 ENABLE_AUTO_RECONNECT=true
+#重连间隔时间 (秒)
 RECONNECTION_INTERVAL=30
-BUFFER_LEN=4096
 ```
 
 ### 2. 🗄️ **多节点配置** (`node.json`)
+
 在程序同级目录下创建 `node.json` 文件，可以配置多个服务器节点。
 
 **文件格式示例：**
+
 ```json
 [
   {
-    "name": "Localhost",
-    "address": "localhost",
+    "name": "中国 - 宿迁",
+    "address": "p.ceroxe.fun",
     "HOST_HOOK_PORT": 44801,
     "HOST_CONNECT_PORT": 44802
   },
   {
-    "name": "VIP-Node",
-    "address": "vip.example.com",
-    "HOST_HOOK_PORT": 55001,
-    "HOST_CONNECT_PORT": 55002
+    "name": "日本 BGP",
+    "address": "154.36.180.82",
+    "HOST_HOOK_PORT": 9100,
+    "HOST_CONNECT_PORT": 9101
   }
 ]
 ```
@@ -166,7 +180,7 @@ BUFFER_LEN=4096
 ## 🤔 常见问题 (FAQ)
 
 Q: 为什么连接不上 NeoProxyServer？  
-A: 请检查防火墙端口是否开放，以及 `node.json` 中的端口是否与服务端对应。
+A: 请检查防火墙端口是否开放，以及 `node.json` 或 `config.cfg` 中的端口是否与服务端对应。
 
 Q: 如何获取访问者的真实 IP？  
 A: 客户端开启透传功能（`--enable-pp`），并确保后端（如 Nginx）配置了 `proxy_protocol` 监听。

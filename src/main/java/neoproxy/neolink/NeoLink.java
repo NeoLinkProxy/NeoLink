@@ -57,12 +57,7 @@ public class NeoLink {
     public static boolean enableProxyProtocol = false;
     public static int reconnectionIntervalSeconds = 30;
 
-    // [修改] 移除了 savedWindowX 等 JavaFX 窗口状态变量
-
     public static Scanner inputScanner = new Scanner(System.in);
-
-    // [修改] 移除了 MainWindowController 引用
-
     public static boolean isGUIMode = true;
     public static boolean isDisableUDP = false;
     public static boolean isDisableTCP = false;
@@ -80,6 +75,7 @@ public class NeoLink {
     }
 
     public static void main(String[] args) {
+        ConfigOperator.initEnvironment();
         // [DEBUG] Entry point
         parseCommandLineArgs(args);
         debugOperation("Entering main() method.");
@@ -153,7 +149,7 @@ public class NeoLink {
      */
     private static void loadNodeConfiguration() {
         debugOperation("Attempting to load configuration for node: " + specifiedNodeName);
-        File nodeFile = new File(CURRENT_DIR_PATH, "node.json");
+        File nodeFile = new File(ConfigOperator.WORKING_DIR, "node.json");
 
         try {
             if (!nodeFile.exists()) {
@@ -317,29 +313,13 @@ public class NeoLink {
     }
 
     public static void initializeLogger() {
-        File logFile;
-        if (outputFilePath != null) {
-            logFile = new File(outputFilePath);
-        } else {
-            String logsDirPath = CURRENT_DIR_PATH + File.separator + "logs";
-            File logsDir = new File(logsDirPath);
-            logsDir.mkdirs();
-            logFile = new File(logsDirPath, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
-        }
-        try {
-            if (!logFile.exists()) {
-                logFile.createNewFile();
-            }
-            Loggist logger = new Loggist(logFile);
-            logger.openWriteChannel();
-            loggist = logger;
-            debugOperation("Logger initialized at: " + logFile.getAbsolutePath());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to initialize logger", e);
-        }
-        if (noColor) {
-            loggist.disableColor();
-        }
+        File logsDir = new File(ConfigOperator.WORKING_DIR, "logs");
+        if (!logsDir.exists()) logsDir.mkdirs();
+
+        // 所有的日志输出都挂载在 WORKING_DIR/logs 下
+        File logFile = new File(logsDir, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
+        loggist = new Loggist(logFile);
+        loggist.openWriteChannel();
     }
 
     private static void connectToNeoServer() throws IOException {
