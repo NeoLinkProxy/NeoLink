@@ -150,6 +150,7 @@ fun WindowScope.neoLinkMainScreen(
     windowState: WindowState,
     viewModel: NeoLinkViewModel,
     appIcon: Painter,
+    isModern: Boolean, // 关键参数：true 代表 Win11 开启高级特效，false 代表老系统兼容模式
     onExit: () -> Unit
 ) {
     val customTextSelectionColors = TextSelectionColors(
@@ -162,12 +163,13 @@ fun WindowScope.neoLinkMainScreen(
     var isCustomAddressMode by remember { mutableStateOf(false) }
 
     val isMaximized = windowState.placement == WindowPlacement.Maximized
-    // 只有在非全屏时才使用圆角形状
-    val currentShape = if (isMaximized) RectangleShape else ModernTheme.shapeWindow
+
+    // 只有在 Win11 且非全屏时才使用圆角
+    val currentShape = if (isMaximized || !isModern) RectangleShape else ModernTheme.shapeWindow
 
     MaterialTheme(
         colors = darkColors(
-            background = Color.Transparent, // MaterialTheme 设为全透
+            background = Color.Transparent,
             surface = ModernTheme.surface,
             primary = ModernTheme.primary,
             onBackground = ModernTheme.textPrimary,
@@ -178,28 +180,35 @@ fun WindowScope.neoLinkMainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 核心逻辑：
-                    // 1. 系统层负责物理裁剪（由 WindowsEffects 处理）
-                    // 2. Compose 层负责视觉裁剪，确保内容不画到圆角外面
-                    .clip(currentShape)
+                    // 关键修复：老系统不进行裁剪，防止像素丢失
+                    .then(if (isModern) Modifier.clip(currentShape) else Modifier)
             ) {
-                // 主背景层
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = ModernTheme.background, // 这里是半透明色
+                    color = ModernTheme.background, // 自动根据 WindowsEffects.isEffectApplied 切换不透明度
                     shape = currentShape,
-                    // 给一个极细的半透明边框，增加精致感
-                    border = if (!isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
+                    // 只有现代模式才画边框
+                    border = if (isModern && !isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                        ) {
-                            customTitleBar(windowState, appIcon, onExit)
-                            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+
+                            // 【核心改动】
+                            // 如果是 Win11 (isModern)，使用我们画的自定义标题栏
+                            // 如果是 Win10/老系统，此时窗口有系统自带标题栏，直接跳过此部分
+                            if (isModern) {
+                                customTitleBar(windowState, appIcon, onExit)
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
                                 Column(
-                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1000.dp)
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .widthIn(max = 1000.dp)
                                         .align(Alignment.CenterHorizontally)
                                 ) {
                                     sectionCard {
