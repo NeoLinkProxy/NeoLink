@@ -101,8 +101,8 @@ cd NeoLink
 # 开发模式直接运行
 ./gradlew run
 
-# 打包为当前平台的安装包/执行文件
-./gradlew packageDistributionForCurrentOS
+# 打包 Jar
+./gradlew shadowJar
 ```
 
 ---

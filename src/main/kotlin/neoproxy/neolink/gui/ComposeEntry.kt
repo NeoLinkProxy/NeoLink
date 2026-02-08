@@ -14,8 +14,10 @@ import java.awt.Dimension
 import java.util.*
 
 fun main(args: Array<String>) {
+    // 强制引导系统尝试 DirectX
+    System.setProperty("skiko.renderApi", "DIRECTX")
+
     Locale.setDefault(Locale.SIMPLIFIED_CHINESE)
-    // 删除了 System.setProperty("skiko.renderApi")，让 RTX 5080 自动发挥性能
 
     application {
         val viewModel = remember { NeoLinkViewModel() }
@@ -32,17 +34,25 @@ fun main(args: Array<String>) {
             },
             state = windowState,
             undecorated = true,
-            transparent = true, // 必须开启
+            transparent = true,
             title = "NeoLink",
             icon = appIcon,
             resizable = true
         ) {
             window.minimumSize = Dimension(720, 480)
+            // 初始背景完全透明，交由 Compose 渲染
             window.background = java.awt.Color(0, 0, 0, 0)
 
             LaunchedEffect(Unit) {
-                // RTX 5080 这里 100ms 延迟足够了
-                kotlinx.coroutines.delay(100)
+                // 【关键修复】循环等待 Skiko 确定渲染 API 类型 (最多等 2 秒)
+                // 解决 RTX 5080 探测到 null 的问题
+                var retry = 0
+                while (System.getProperty("skiko.renderApi") == null && retry < 10) {
+                    kotlinx.coroutines.delay(200)
+                    retry++
+                }
+
+                // 应用视觉效果
                 WindowsEffects.applyAcrylicIfPossible(window)
                 viewModel.initialize(args)
             }
