@@ -16,85 +16,84 @@ object WindowsEffects {
     var isEffectApplied by mutableStateOf(false)
         private set
 
-    /**
-     * 终极 Build 号探测：直接读取 ntdll 内存
-     * 解决 Kotlin Structure 初始化报错和 Java 属性返回 10.0 的问题
-     */
-    private fun getRealBuildNumber(): Int {
+    fun getRealBuildNumber(): Int {
         return try {
             val ntdll = NativeLibrary.getInstance("ntdll")
             val rtlGetVersion = ntdll.getFunction("RtlGetVersion")
-            // OSVERSIONINFOEXW 结构体大小为 284 字节
-            val mem = Memory(284)
-            mem.clear()
-            mem.setInt(0, 284) // dwOSVersionInfoSize
-
+            val mem = Memory(284).apply { clear(); setInt(0, 284) }
             val result = rtlGetVersion.invokeInt(arrayOf(mem))
             if (result == 0) {
-                val build = mem.getInt(12) // dwBuildNumber 在结构体中的偏移量
-                println("[WindowsEffects] 探测到真实系统 Build: $build")
+                val build = mem.getInt(12)
+                println("[WindowsEffects] DEBUG: 探测到真实 Build 号 = $build")
                 build
-            } else 0
+            } else {
+                println("[WindowsEffects] DEBUG: ntdll 调用返回非零值: $result")
+                0
+            }
         } catch (e: Exception) {
-            println("[WindowsEffects] Build 探测异常: ${e.message}")
+            println("[WindowsEffects] DEBUG: Build 探测崩溃: ${e.message}")
             0
         }
     }
 
     fun applyAcrylicIfPossible(window: Window) {
-        println("\n==== NeoLink 视觉效果全链路调试 ====")
+        println("\n>>>>>> NeoLink 视觉效果全链路自检 >>>>>>")
 
         val build = getRealBuildNumber()
         val renderApi = System.getProperty("skiko.renderApi")?.uppercase()
-        println("[WindowsEffects] 当前渲染引擎: $renderApi")
 
-        // 1. 系统版本拦截 (Win11 22H2 Build 22621)
+        println("[WindowsEffects] DEBUG: 系统 Build = $build")
+        println("[WindowsEffects] DEBUG: 渲染引擎 (Skiko) = $renderApi")
+
+        // 1. 拦截检查
         if (build < 22621) {
-            println("[WindowsEffects] 拦截: 系统 Build $build 过低，不支持亚克力。")
+            println("[WindowsEffects] DEBUG: 拦截 -> 系统版本过低 (低于 Win11 22H2)")
             isEffectApplied = false
             return
         }
 
-        // 2. 硬件加速拦截 (专门对付 HD3000/4000)
-        // 如果渲染器明确变成了 SOFTWARE，说明显卡不支持硬件加速，坚决不开启
         if (renderApi == "SOFTWARE") {
-            println("[WindowsEffects] 拦截: 显卡工作在软件渲染模式，已禁用特效。")
+            println("[WindowsEffects] DEBUG: 拦截 -> 当前处于软件渲染模式，为保全老机器 UI，拒绝开启透明")
             isEffectApplied = false
             return
         }
 
         try {
-            val hwndPtr = Native.getWindowPointer(window) ?: return
+            val hwndPtr = Native.getWindowPointer(window)
+            if (hwndPtr == null) {
+                println("[WindowsEffects] DEBUG: 错误 -> 无法获取窗口句柄 HWND")
+                return
+            }
             val hwnd = WinDef.HWND(hwndPtr)
             val dwm = Native.load("dwmapi", DwmLib::class.java)
 
-            // 设置深色模式
-            dwm.DwmSetWindowAttribute(hwnd, 20, IntByReference(1).pointer, 4)
-            // 设置物理圆角
-            dwm.DwmSetWindowAttribute(hwnd, 33, IntByReference(2).pointer, 4)
+            // 2. 尝试设置深色模式
+            val hrDark = dwm.DwmSetWindowAttribute(hwnd, 20, IntByReference(1).pointer, 4)
+            println("[WindowsEffects] DEBUG: 深色模式设置 (Attr 20) HRESULT = ${hrDark.toInt()}")
 
-            // 应用亚克力 (属性 38)
-            val hr = dwm.DwmSetWindowAttribute(hwnd, 38, IntByReference(3).pointer, 4)
+            // 3. 尝试设置圆角
+            val hrCorner = dwm.DwmSetWindowAttribute(hwnd, 33, IntByReference(2).pointer, 4)
+            println("[WindowsEffects] DEBUG: 圆角裁剪设置 (Attr 33) HRESULT = ${hrCorner.toInt()}")
 
-            // 只要 API 返回 0，且不是确定的软件渲染，我们就认为 RTX 显卡已经成功激活
-            isEffectApplied = (hr.toInt() == 0)
+            // 4. 尝试应用亚克力 (高风险操作)
+            val hrAcrylic = dwm.DwmSetWindowAttribute(hwnd, 38, IntByReference(3).pointer, 4)
+            println("[WindowsEffects] DEBUG: 亚克力设置 (Attr 38) HRESULT = ${hrAcrylic.toInt()}")
 
-            println("[WindowsEffects] DWM 调用结果 HRESULT: ${hr.toInt()}")
-            println("[WindowsEffects] 结论: ${if (isEffectApplied) "亚克力已激活" else "应用失败"}")
+            // 5. 结论判定
+            // 只要 hrAcrylic 为 0，说明 Windows 已经成功在 DWM 层开启了亚克力
+            isEffectApplied = (hrAcrylic.toInt() == 0)
+
+            println("[WindowsEffects] DEBUG: 最终 isEffectApplied 状态 = $isEffectApplied")
 
         } catch (e: Throwable) {
-            println("[WindowsEffects] JNA 调用异常: ${e.message}")
+            println("[WindowsEffects] DEBUG: 严重异常 -> JNA 崩溃: ${e.message}")
+            e.printStackTrace()
             isEffectApplied = false
         }
-        println("==== 调试结束 ====\n")
+        println("<<<<<< 自检结束 <<<<<<\n")
     }
 
     interface DwmLib : com.sun.jna.Library {
-        fun DwmSetWindowAttribute(
-            hwnd: WinDef.HWND,
-            dwAttribute: Int,
-            pvAttribute: Pointer,
-            cbAttribute: Int
-        ): WinNT.HRESULT
+        fun DwmSetWindowAttribute(hwnd: WinDef.HWND, dwAttribute: Int, pvAttribute: Pointer, cbAttribute: Int): WinNT.HRESULT
     }
 }
