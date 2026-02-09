@@ -497,8 +497,7 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
                         contentAlignment = Alignment.Center
                     ) { svgIcon(node.iconSvg, size = 16.dp) }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                } ?: Text(
+                    Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f).offset(y = (-2).dp))                } ?: Text(
                     "选择节点",
                     color = ModernTheme.textSecondary,
                     fontSize = 13.sp,
