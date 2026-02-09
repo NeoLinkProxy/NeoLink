@@ -60,12 +60,22 @@ import javax.xml.parsers.DocumentBuilderFactory
  * 核心逻辑：基于全链路硬件检测结果 (WindowsEffects.isEffectApplied) 动态调整 UI 表现
  */
 object ModernTheme {
-    // 动态背景：特效开启时 80% 不透明度，关闭时 100% 不透明度兜底
+    // 降级模式检测：如果 RenderState.isSoftwareFallback 为 true，说明已经切换到了 SOFTWARE 渲染
+    // 此时必须使用不透明背景，否则软件渲染无法正确处理 Alpha 通道
     val background: Color
-        get() = if (WindowsEffects.isEffectApplied) Color(0xCC121214) else Color(0xFF121214)
+        get() = if (RenderState.isSoftwareFallback) {
+            Color(0xFF121214) // 100% 不透明，防止消失
+        } else if (WindowsEffects.isEffectApplied) {
+            Color(0xCC121214)
+        } else {
+            Color(0xFF121214)
+        }
 
     val surface: Color
-        get() = if (WindowsEffects.isEffectApplied) Color(0xCC1E1E20) else Color(0xFF1E1E20)
+        get() = if (RenderState.isSoftwareFallback || !WindowsEffects.isEffectApplied)
+            Color(0xFF1E1E20)
+        else
+            Color(0xCC1E1E20)
 
     val surfaceHover = Color(0xFF252528)
     val border = Color(0xFF2C2C2E)
@@ -98,7 +108,7 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
             ) {
                 Surface(
                     shape = ModernTheme.shapeMedium,
-                    color = Color(0xFF1E1E20), // 菜单通常保持不透明
+                    color = Color(0xFF1E1E20),
                     elevation = 8.dp,
                     border = BorderStroke(1.dp, ModernTheme.border),
                     modifier = Modifier.width(IntrinsicSize.Max)
@@ -107,7 +117,6 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
                         items().forEach { item ->
                             val interactionSource = remember { MutableInteractionSource() }
                             val isHovered by interactionSource.collectIsHoveredAsState()
-
                             val displayLabel = when (item.label) {
                                 "Copy" -> "复制"
                                 "Cut" -> "剪切"
@@ -115,27 +124,19 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
                                 "Select All" -> "全选"
                                 else -> item.label
                             }
-
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
-                                        onClick = {
-                                            item.onClick()
-                                            state.status = ContextMenuState.Status.Closed
-                                        }
+                                        onClick = { item.onClick(); state.status = ContextMenuState.Status.Closed }
                                     )
                                     .background(if (isHovered) ModernTheme.surfaceHover else Color.Transparent)
                                     .padding(horizontal = 20.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = displayLabel,
-                                    color = ModernTheme.textPrimary,
-                                    fontSize = 13.sp
-                                )
+                                Text(text = displayLabel, color = ModernTheme.textPrimary, fontSize = 13.sp)
                             }
                         }
                     }
@@ -150,7 +151,6 @@ fun WindowScope.neoLinkMainScreen(
     windowState: WindowState,
     viewModel: NeoLinkViewModel,
     appIcon: Painter,
-    isModern: Boolean, // 关键参数：true 代表 Win11 开启高级特效，false 代表老系统兼容模式
     onExit: () -> Unit
 ) {
     val customTextSelectionColors = TextSelectionColors(
@@ -163,9 +163,7 @@ fun WindowScope.neoLinkMainScreen(
     var isCustomAddressMode by remember { mutableStateOf(false) }
 
     val isMaximized = windowState.placement == WindowPlacement.Maximized
-
-    // 只有在 Win11 且非全屏时才使用圆角
-    val currentShape = if (isMaximized || !isModern) RectangleShape else ModernTheme.shapeWindow
+    val currentShape = if (isMaximized) RectangleShape else ModernTheme.shapeWindow
 
     MaterialTheme(
         colors = darkColors(
@@ -180,26 +178,18 @@ fun WindowScope.neoLinkMainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 关键修复：老系统不进行裁剪，防止像素丢失
-                    .then(if (isModern) Modifier.clip(currentShape) else Modifier)
+                    .clip(currentShape)
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = ModernTheme.background, // 自动根据 WindowsEffects.isEffectApplied 切换不透明度
+                    // 这里的颜色会根据 isSoftwareFallback 自动切换
+                    color = ModernTheme.background,
                     shape = currentShape,
-                    // 只有现代模式才画边框
-                    border = if (isModern && !isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
+                    border = if (!isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.fillMaxSize()) {
-
-                            // 【核心改动】
-                            // 如果是 Win11 (isModern)，使用我们画的自定义标题栏
-                            // 如果是 Win10/老系统，此时窗口有系统自带标题栏，直接跳过此部分
-                            if (isModern) {
-                                customTitleBar(windowState, appIcon, onExit)
-                            }
-
+                            customTitleBar(windowState, appIcon, onExit)
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -229,7 +219,6 @@ fun WindowScope.neoLinkMainScreen(
                                 }
                             }
                         }
-
                         if (showValidationError) {
                             modernAlertDialog(
                                 title = "参数验证未通过",
