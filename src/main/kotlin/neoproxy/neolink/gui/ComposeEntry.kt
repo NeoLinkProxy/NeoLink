@@ -9,10 +9,6 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.sun.jna.Native
-import com.sun.jna.Pointer
-import com.sun.jna.platform.win32.WinNT
-import com.sun.jna.ptr.PointerByReference
 import kotlinx.coroutines.delay
 import java.awt.Dimension
 import java.io.PrintStream
@@ -27,49 +23,28 @@ object RenderState {
     var isSoftwareFallback by mutableStateOf(false)
 }
 
-/**
- * 基于功能的硬件探测器
- */
-object DirectXProber {
-    interface D3D12Lib : com.sun.jna.Library {
-        fun D3D12CreateDevice(
-            pAdapter: Pointer?,
-            minLevel: Int,
-            riid: Pointer?,
-            ppDev: PointerByReference?
-        ): WinNT.HRESULT
-    }
-
-    fun canSupportDX12(): Boolean {
-        return try {
-            val d3d12 = Native.load("d3d12", D3D12Lib::class.java)
-            // 尝试创建 Level 11_0 级别的设备
-            val hr = d3d12.D3D12CreateDevice(null, 0xb000, null, null)
-            hr.toInt() >= 0
-        } catch (e: Throwable) {
-            false
-        }
-    }
-}
-
 fun main(args: Array<String>) {
-    // 1. 硬件探测：不看型号，只看 DX12 能不能跑通
-    val isCapable = DirectXProber.canSupportDX12()
-    if (!isCapable) {
-        println("[启动] 探测到显卡能力不足，强制进入软件渲染模式。")
+    // 1. 调用“隐形窗口”功能实测
+    val checkResult = NeoLinkPreFlightChecker.runFullCheck()
+
+    // 2. 根据实测结果强制配置环境
+    if (checkResult.isHardwareOk) {
+        println("[系统配置] ✅ 实测支持合成特效，启用 DIRECTX 模式。")
+        System.setProperty("skiko.renderApi", "DIRECTX")
+        RenderState.isSoftwareFallback = false
+    } else {
+        println("[系统配置] ❌ 实测不支持合成特效 (原因: ${checkResult.description})")
+        println("[系统配置] 强制进入 SOFTWARE 模式，关闭透明属性以解决点击穿透问题。")
         System.setProperty("skiko.renderApi", "SOFTWARE")
         RenderState.isSoftwareFallback = true
-    } else {
-        println("[启动] 硬件支持 DirectX 12，开启高性能模式。")
-        System.setProperty("skiko.renderApi", "DIRECTX")
     }
 
-    // 2. 日志劫持 (二道防线)
+    // 3. 日志劫持 (二道防线)
     val originalErr = System.err
     System.setErr(object : PrintStream(originalErr) {
         override fun write(buf: ByteArray, off: Int, len: Int) {
             val msg = String(buf, off, len)
-            if (msg.contains("RenderException") || msg.contains("DirectX12") || msg.contains("Failed to choose")) {
+            if (msg.contains("RenderException") || msg.contains("DirectX12")) {
                 if (!RenderState.isSoftwareFallback) {
                     RenderState.isSoftwareFallback = true
                     System.setProperty("skiko.renderApi", "SOFTWARE")
@@ -90,25 +65,27 @@ fun main(args: Array<String>) {
             size = DpSize(920.dp, 650.dp)
         )
 
+        // 这里的 useTransparentWindow 是解决穿透问题的命根子
+        val useTransparentWindow = !RenderState.isSoftwareFallback
+
         Window(
             onCloseRequest = { viewModel.stopService(); exitApplication() },
             state = windowState,
             title = "NeoLink 内网穿透客户端",
             icon = appIcon,
             undecorated = true,
-            transparent = true,
+            // 如果实测不支持 DWM 亚克力，这里就是 false (实心窗口)，鼠标就点不穿了
+            transparent = useTransparentWindow,
             resizable = true
         ) {
             window.minimumSize = Dimension(720, 480)
 
-            // 初始背景：降级用实体色，正常用全透
-            window.background = if (RenderState.isSoftwareFallback) {
-                java.awt.Color(18, 18, 20)
-            } else {
+            window.background = if (useTransparentWindow) {
                 java.awt.Color(0, 0, 0, 0)
+            } else {
+                java.awt.Color(18, 18, 20)
             }
 
-            // 监听降级：如果运行中崩溃，立即实体化背景
             LaunchedEffect(RenderState.isSoftwareFallback) {
                 if (RenderState.isSoftwareFallback) {
                     window.background = java.awt.Color(18, 18, 20)
@@ -118,20 +95,12 @@ fun main(args: Array<String>) {
             }
 
             LaunchedEffect(Unit) {
-                // 1. 先启动业务逻辑
                 viewModel.initialize(args)
 
-                // 2. 【核心修复】延迟注入亚克力
-                // 在 RTX 5080 上，必须等 Skiko 的 DirectX 上下文彻底创建完（约 500ms）再注入特效
-                if (!RenderState.isSoftwareFallback) {
+                // 如果预检通过了，我们再在主窗口上正式应用特效
+                if (useTransparentWindow) {
                     delay(500)
                     WindowsEffects.applyAcrylicIfPossible(window)
-
-                    // 3. 【双重保险】如果注入失败或窗口刷新了，2秒后再确认一次
-                    delay(1500)
-                    if (!WindowsEffects.isEffectApplied) {
-                        WindowsEffects.applyAcrylicIfPossible(window)
-                    }
                 }
             }
 
