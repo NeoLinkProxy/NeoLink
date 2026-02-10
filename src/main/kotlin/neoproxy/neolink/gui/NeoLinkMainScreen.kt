@@ -38,12 +38,17 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -497,7 +502,13 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
                         contentAlignment = Alignment.Center
                     ) { svgIcon(node.iconSvg, size = 16.dp) }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f).offset(y = (-2).dp))                } ?: Text(
+                    Text(
+                        node.name,
+                        color = ModernTheme.textPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f).offset(y = (-2).dp)
+                    )
+                } ?: Text(
                     "选择节点",
                     color = ModernTheme.textSecondary,
                     fontSize = 13.sp,
@@ -622,23 +633,38 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         labelText("传输协议"); Spacer(modifier = Modifier.height(6.dp))
-                        modernCheckbox("启用 TCP", viewModel.isTcpEnabled) { viewModel.isTcpEnabled = it }; Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-                        modernCheckbox("启用 UDP", viewModel.isUdpEnabled) { viewModel.isUdpEnabled = it }; Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-                        modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) { viewModel.isPpv2Enabled = it }
+                        // 🔴 实时生效：修改时同步更新 NeoLink 静态变量
+                        modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
+                            viewModel.isTcpEnabled = it
+                            neoproxy.neolink.NeoLink.isDisableTCP = !it
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        modernCheckbox("启用 UDP", viewModel.isUdpEnabled) {
+                            viewModel.isUdpEnabled = it
+                            neoproxy.neolink.NeoLink.isDisableUDP = !it
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {
+                            viewModel.isPpv2Enabled = it
+                            neoproxy.neolink.NeoLink.enableProxyProtocol = it
+                        }
                     }
                     Column(Modifier.weight(1f)) {
                         labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
                         modernCheckbox("自动重连", viewModel.isAutoReconnect) {
                             viewModel.isAutoReconnect = it
-                        }; Spacer(modifier = Modifier.height(4.dp))
-                        modernCheckbox("调试模式", viewModel.isDebugMode) { viewModel.isDebugMode = it }; Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-                        modernCheckbox("显示详情", viewModel.isShowConnection) { viewModel.isShowConnection = it }
+                            neoproxy.neolink.NeoLink.enableAutoReconnect = it
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        modernCheckbox("调试模式", viewModel.isDebugMode) {
+                            viewModel.isDebugMode = it
+                            neoproxy.neolink.NeoLink.isDebugMode = it
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        modernCheckbox("显示详情", viewModel.isShowConnection) {
+                            viewModel.isShowConnection = it
+                            neoproxy.neolink.NeoLink.showConnection = it
+                        }
                     }
                 }
             }
@@ -646,7 +672,7 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
     val statusColor by animateColorAsState(
@@ -667,13 +693,22 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
             )
+            Spacer(modifier = Modifier.weight(1f))
+            // 提示用户可以缩放
+            Text(
+                "Ctrl+滚轮调节字号",
+                color = ModernTheme.textSecondary.copy(alpha = 0.5f),
+                fontSize = 10.sp
+            )
         }
         Spacer(modifier = Modifier.height(8.dp))
+
         val listState = rememberLazyListState()
+
         LaunchedEffect(viewModel.logMessages.size) {
-            if (viewModel.logMessages.isNotEmpty()) listState.scrollToItem(
-                viewModel.logMessages.size - 1
-            )
+            if (viewModel.logMessages.isNotEmpty()) {
+                listState.scrollToItem(viewModel.logMessages.size - 1)
+            }
         }
 
         CompositionLocalProvider(
@@ -682,8 +717,24 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
         ) {
             SelectionContainer {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(ModernTheme.terminalBg, ModernTheme.shapeMedium)
-                        .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall).clip(ModernTheme.shapeMedium)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(ModernTheme.terminalBg, ModernTheme.shapeMedium)
+                        .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)
+                        .clip(ModernTheme.shapeMedium)
+                        // 🔴 核心功能：监听鼠标滚轮实现缩放
+                        .onPointerEvent(PointerEventType.Scroll) { event ->
+                            if (event.keyboardModifiers.isCtrlPressed) {
+                                val delta = event.changes.first().scrollDelta.y
+                                // 向上滚 delta 为负，向下滚为正
+                                val newSize = if (delta < 0) {
+                                    (viewModel.logFontSize.value + 1f).coerceAtMost(30f)
+                                } else {
+                                    (viewModel.logFontSize.value - 1f).coerceAtLeast(8f)
+                                }
+                                viewModel.logFontSize = newSize.sp
+                            }
+                        }
                 ) {
                     LazyColumn(
                         state = listState,
@@ -691,11 +742,21 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
                         contentPadding = PaddingValues(10.dp)
                     ) {
                         items(viewModel.logMessages) { msg ->
-                            Text(
-                                text = msg,
+                            val highlightedText = remember(msg, viewModel.logFontSize) {
+                                highlightLogMessage(msg)
+                            }
+
+                            androidx.compose.material.Text(
+                                text = highlightedText,
+                                color = ModernTheme.textPrimary,
+                                // 🔴 核心功能：使用动态字号
+                                fontSize = viewModel.logFontSize,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                style = TextStyle(lineHeight = 16.sp, letterSpacing = 0.sp),
+                                style = TextStyle(
+                                    // 自动计算行高，保持视觉比例
+                                    lineHeight = (viewModel.logFontSize.value * 1.35f).sp,
+                                    letterSpacing = 0.sp
+                                ),
                                 modifier = Modifier.padding(bottom = 1.dp)
                             )
                         }
@@ -704,6 +765,72 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
             }
         }
     }
+}
+
+/**
+ * 完整高亮逻辑函数（包含异常红色、MB/日期蓝色、IP域名紫色、缩进修复）
+ */
+private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.AnnotatedString {
+    val newText = original.text.replace("\t", "    ")
+    val builder = androidx.compose.ui.text.AnnotatedString.Builder(newText)
+
+    // 保留原有 [INFO] 颜色
+    val tabIndex = original.text.indexOf('\t')
+    original.spanStyles.forEach { range ->
+        if (tabIndex == -1 || range.end < tabIndex) {
+            builder.addStyle(range.item, range.start, range.end)
+        }
+    }
+
+    val colorPurple = Color(0xFFE040FB)
+    val colorBlue = Color(0xFF40C4FF)
+    val colorRed = Color(0xFFFF5252)
+
+    // A. 红色：异常头部、堆栈、源码引用
+    val patternExHeader = "\\b[\\w\\.]+(?:Exception|Error)(?::\\s*.*)?"
+    val patternStackTrace = "\\bat\\s+[\\w\\.\\$/<> ]+(?:\\(.*?\\))?"
+    val patternSourceInfo = "\\((?:Unknown Source|[\\w\\.]+\\.java:\\d+)\\)"
+    val regexException = Regex("($patternExHeader|$patternStackTrace|$patternSourceInfo)")
+
+    // B. 蓝色：MB、日期范围
+    val patternMB = "\\d+(?:\\.\\d+)?\\s*MB"
+    val patternDateRange = "\\d{4}/\\d{1,2}/\\d{1,2}-\\d{1,2}:\\d{2}"
+    val regexBlue = Regex("($patternMB|$patternDateRange)")
+
+    // C. 紫色：IP、域名
+    val ipv6Bracketed = "\\[[a-fA-F0-9:]+\\](?::\\d+)?"
+    val ipv6Raw = "(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}"
+    val ipv4 = "\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?"
+    val domain = "(?:localhost|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,})(?::\\d+)?"
+    val regexPurple = Regex("($ipv6Bracketed|$ipv6Raw|$ipv4|$domain)")
+    val timePattern = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
+
+    // 1. 红色应用
+    for (match in regexException.findAll(newText)) {
+        builder.addStyle(SpanStyle(color = colorRed, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
+    }
+
+    // 2. 蓝色应用
+    for (match in regexBlue.findAll(newText)) {
+        builder.addStyle(SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
+    }
+
+    // 3. 紫色应用（含避让逻辑）
+    for (match in regexPurple.findAll(newText)) {
+        val start = match.range.first
+        if (timePattern.matches(match.value)) continue
+
+        val lineStart = newText.lastIndexOf('\n', start).let { if (it == -1) 0 else it }
+        val lineEnd = newText.indexOf('\n', start).let { if (it == -1) newText.length else it }
+        val lineContent = newText.substring(lineStart, lineEnd)
+
+        if (lineContent.contains("Exception") || lineContent.contains("Error") || lineContent.trimStart().startsWith("at ")) {
+            continue
+        }
+        builder.addStyle(SpanStyle(color = colorPurple, fontWeight = FontWeight.Bold), start, match.range.last + 1)
+    }
+
+    return builder.toAnnotatedString()
 }
 
 @Composable

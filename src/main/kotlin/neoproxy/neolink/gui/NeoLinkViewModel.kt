@@ -9,6 +9,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,6 +41,7 @@ class NeoLinkViewModel {
     var isRunning by mutableStateOf(false)
     val logMessages = mutableStateListOf<AnnotatedString>()
     private val scope = CoroutineScope(Dispatchers.Default)
+    var logFontSize by mutableStateOf(12.sp)
 
     fun initialize(args: Array<String>) {
         // 1. 先定环境，再定日志
