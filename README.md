@@ -4,15 +4,12 @@
 
 支持 TCP / UDP 协议 • Proxy Protocol v2 • 多节点切换
 
-[![GitHub Release](https://img.shields.io/github/v/release/NeoLinkProxy/NeoLink?style=flat-square&color=blue)](https://github.com/NeoLinkProxy/NeoLink/releases)
-[![GitHub Downloads](https://img.shields.io/github/downloads/NeoLinkProxy/NeoLink/total?style=flat-square&color=success)](https://github.com/NeoLinkProxy/NeoLink/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/NeoLinkProxy/NeoLink?style=flat-square&logo=github)](https://github.com/NeoLinkProxy/NeoLink)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-
 ![Java](https://img.shields.io/badge/Java-21%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=flat-square&logo=windows&logoColor=white)
 ![Build](https://img.shields.io/badge/Build-Gradle-blue?style=flat-square&logo=gradle)
 ![GUI](https://img.shields.io/badge/Interface-Compose%20Multiplatform-blueviolet?style=flat-square&logo=kotlin)
+[![GitHub Stars](https://img.shields.io/github/stars/NeoLinkProxy/NeoLink?style=flat-square&logo=github)](https://github.com/NeoLinkProxy/NeoLink)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 ---
 
