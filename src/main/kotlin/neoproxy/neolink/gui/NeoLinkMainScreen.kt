@@ -48,7 +48,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -807,12 +806,20 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
 
     // 1. 红色应用
     for (match in regexException.findAll(newText)) {
-        builder.addStyle(SpanStyle(color = colorRed, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
+        builder.addStyle(
+            SpanStyle(color = colorRed, fontWeight = FontWeight.Bold),
+            match.range.first,
+            match.range.last + 1
+        )
     }
 
     // 2. 蓝色应用
     for (match in regexBlue.findAll(newText)) {
-        builder.addStyle(SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
+        builder.addStyle(
+            SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold),
+            match.range.first,
+            match.range.last + 1
+        )
     }
 
     // 3. 紫色应用（含避让逻辑）
@@ -824,7 +831,9 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
         val lineEnd = newText.indexOf('\n', start).let { if (it == -1) newText.length else it }
         val lineContent = newText.substring(lineStart, lineEnd)
 
-        if (lineContent.contains("Exception") || lineContent.contains("Error") || lineContent.trimStart().startsWith("at ")) {
+        if (lineContent.contains("Exception") || lineContent.contains("Error") || lineContent.trimStart()
+                .startsWith("at ")
+        ) {
             continue
         }
         builder.addStyle(SpanStyle(color = colorPurple, fontWeight = FontWeight.Bold), start, match.range.last + 1)

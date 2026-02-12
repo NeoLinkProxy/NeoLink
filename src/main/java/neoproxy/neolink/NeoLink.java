@@ -20,10 +20,8 @@ import java.net.DatagramSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Scanner;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,7 +33,6 @@ public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static final int INVALID_LOCAL_PORT = -1;
-    private static final File currentFile = getCurrentFile();
     public static volatile long lastReceivedTime = System.currentTimeMillis();
     public static int remotePort;
     public static String remoteDomainName = "localhost";
@@ -66,7 +63,6 @@ public class NeoLink {
     // [新增] 测试更新标志
     public static boolean isTestUpdate = false;
     private static boolean shouldAutoStartInGUI = false;
-    private static boolean isBackend = false;
     private static boolean noColor = false;
 
     // [新增] 供 Kotlin UI 调用以检查是否需要自动启动
@@ -80,8 +76,6 @@ public class NeoLink {
         parseCommandLineArgs(args);
         debugOperation("Entering main() method.");
         debugOperation("Command line arguments parsed. Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
-
-        killCmdWindowIfNeeded(args);
 
         if (isGUIMode) {
             debugOperation("GUI Mode detected. Delegating to ComposeEntryKt.main().");
@@ -226,27 +220,6 @@ public class NeoLink {
         }
     }
 
-    private static void killCmdWindowIfNeeded(String[] args) {
-        debugOperation("[DEBUG] Checking if CMD window needs killing. Backend: " + isBackend + ", GUI: " + isGUIMode);
-
-        if (!isBackend && isGUIMode) {
-            if (currentFile != null && currentFile.getAbsolutePath().endsWith(".exe")) {
-                debugOperation("[DEBUG] .exe detected. Spawning backend process.");
-                CopyOnWriteArrayList<String> newArgs = new CopyOnWriteArrayList<>();
-                newArgs.add(currentFile.getAbsolutePath());
-                newArgs.addAll(Arrays.asList(args));
-                newArgs.add("--backend");
-                ProcessBuilder processBuilder = new ProcessBuilder(newArgs);
-                try {
-                    processBuilder.start();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                System.exit(2);
-            }
-        }
-    }
-
     public static void detectLanguage() {
         if (languageData == null) {
             Locale defaultLocale = Locale.getDefault();
@@ -303,7 +276,6 @@ public class NeoLink {
             case "--no-show-conn" -> showConnection = false;
             case "--gui" -> isGUIMode = true;
             case "--nogui" -> isGUIMode = false;
-            case "--backend" -> isBackend = true;
             case "--disable-tcp" -> isDisableTCP = true;
             case "--disable-udp" -> isDisableUDP = true;
             case "--enable-pp" -> enableProxyProtocol = true;
@@ -319,6 +291,9 @@ public class NeoLink {
         // 所有的日志输出都挂载在 WORKING_DIR/logs 下
         File logFile = new File(logsDir, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
         loggist = new Loggist(logFile);
+        if (noColor) {
+            loggist.disableColor();
+        }
         loggist.openWriteChannel();
     }
 
