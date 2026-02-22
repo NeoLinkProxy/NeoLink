@@ -62,6 +62,8 @@ public class NeoLink {
     public static String specifiedNodeName = null;
     // [新增] 测试更新标志
     public static boolean isTestUpdate = false;
+    // [新增] 存储从 config.cfg 读到的 URL
+    public static String nkmNodeListUrl = "";
     private static boolean shouldAutoStartInGUI = false;
     private static boolean noColor = false;
 
@@ -95,6 +97,8 @@ public class NeoLink {
 
         debugOperation("Reading configuration values...");
         ConfigOperator.readAndSetValue();
+
+        NodeFetcher.fetchAndSaveNodes();
 
         // [New Logic] Load Node Config if specified
         if (specifiedNodeName != null) {

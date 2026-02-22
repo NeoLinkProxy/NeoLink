@@ -55,6 +55,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
+import kotlinx.coroutines.launch
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
@@ -87,6 +88,7 @@ object ModernTheme {
     val textPrimary = Color(0xFFE4E4E7)
     val textSecondary = Color(0xFFA1A1AA)
     val success = Color(0xFF10B981)
+    val warning = Color(0xFFFACC15)
     val error = Color(0xFFEF4444)
     val inputBackground = Color(0xFF18181B)
     val terminalBg = Color(0xFF0F0F10)
@@ -167,7 +169,14 @@ fun WindowScope.neoLinkMainScreen(
     var isCustomAddressMode by remember { mutableStateOf(false) }
 
     val isMaximized = windowState.placement == WindowPlacement.Maximized
-    val currentShape = if (isMaximized) RectangleShape else ModernTheme.shapeWindow
+
+    // 🔴 核心逻辑：如果处于软件渲染降级模式，或者窗口已最大化，则强制使用直角 (RectangleShape)
+    // 只有在硬件渲染正常且非最大化时，才应用 ModernTheme.shapeWindow (8.dp 圆角)
+    val currentShape = if (isMaximized || RenderState.isSoftwareFallback) {
+        RectangleShape
+    } else {
+        ModernTheme.shapeWindow
+    }
 
     MaterialTheme(
         colors = darkColors(
@@ -182,14 +191,17 @@ fun WindowScope.neoLinkMainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(currentShape)
+                    .clip(currentShape) // 裁剪根容器形状
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    // 这里的颜色会根据 isSoftwareFallback 自动切换
+                    // 颜色逻辑在 ModernTheme 中已处理：降级时为不透明，正常时带 Alpha
                     color = ModernTheme.background,
                     shape = currentShape,
-                    border = if (!isMaximized) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
+                    // 🔴 细节优化：降级模式下也禁用 1dp 的半透明高亮边框，保持直角窗口的纯粹感
+                    border = if (!isMaximized && !RenderState.isSoftwareFallback) {
+                        BorderStroke(1.dp, Color(0x1AFFFFFF))
+                    } else null
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.fillMaxSize()) {
@@ -236,6 +248,7 @@ fun WindowScope.neoLinkMainScreen(
         }
     }
 }
+
 
 @Composable
 fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
@@ -469,6 +482,26 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
     var expanded by remember { mutableStateOf(false) }
     val rotationState by animateFloatAsState(targetValue = if (expanded) 180f else 0f)
 
+    // [新增] 存储各节点的延迟结果
+    val pingResults = remember { mutableStateMapOf<String, String>() }
+    val scope = rememberCoroutineScope()
+
+    // [新增] 当菜单展开时触发异步测速
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            viewModel.nodeList.forEach { node ->
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val latency = `fun`.ceroxe.api.net.TcpPingUtil.ping(node.address, node.hookPort, 1000)
+                        pingResults[node.name] = if (latency == -1 || latency >= 1000) "超时" else "${latency}ms"
+                    } catch (e: Exception) {
+                        pingResults[node.name] = "超时"
+                    }
+                }
+            }
+        }
+    }
+
     if (isCustomMode) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             modernTextField(
@@ -523,7 +556,7 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.background(Color(0xFF1E1E20)) // 下拉菜单背景保持不透明
+                modifier = Modifier.background(Color(0xFF1E1E20))
                     .border(1.dp, ModernTheme.border, RoundedCornerShape(4.dp)).width(300.dp)
             ) {
                 viewModel.nodeList.forEach { node ->
@@ -531,13 +564,40 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
                         onClick = { viewModel.selectNode(node); expanded = false },
                         modifier = Modifier.height(40.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier.size(20.dp),
                                 contentAlignment = Alignment.Center
                             ) { svgIcon(node.iconSvg, size = 16.dp) }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(node.name, color = ModernTheme.textPrimary, fontSize = 13.sp)
+                            Text(
+                                node.name,
+                                color = ModernTheme.textPrimary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // [新增] 延迟显示逻辑
+                            pingResults[node.name]?.let { result ->
+                                val colorWarning = Color(0xFFFACC15) // 黄色
+                                val displayColor = when {
+                                    result == "超时" -> ModernTheme.error
+                                    else -> {
+                                        val ms = result.replace("ms", "").toIntOrNull() ?: 0
+                                        when {
+                                            ms <= 99 -> ModernTheme.success
+                                            ms <= 200 -> colorWarning
+                                            else -> ModernTheme.error
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = result,
+                                    color = displayColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

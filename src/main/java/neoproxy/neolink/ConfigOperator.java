@@ -85,6 +85,7 @@ public final class ConfigOperator {
             NeoLink.enableAutoUpdate = reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true);
             NeoLink.reconnectionIntervalSeconds = reader.getOptional("RECONNECTION_INTERVAL").map(Integer::parseInt).orElse(30);
             NeoLink.enableProxyProtocol = reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false);
+            NeoLink.nkmNodeListUrl = reader.getOptional("NKM_NODELIST_URL").orElse("");
             ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
             ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
             CheckAliveThread.HEARTBEAT_PACKET_DELAY = reader.getOptional("HEARTBEAT_PACKET_DELAY").map(Integer::parseInt).orElse(1000);
