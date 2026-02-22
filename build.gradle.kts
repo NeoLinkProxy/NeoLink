@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "neoproxy"
-version = "5.10.4"
+version = "5.11.0"
 
 repositories {
     mavenCentral()

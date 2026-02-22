@@ -62,6 +62,12 @@ public class LanguageData implements Serializable {
     public String WARNING_TCP_DISABLED = "TCP service is disabled !";
     public String WARNING_UDP_DISABLED = "UDP service is disabled !";
 
+    // [新增] NKM 节点拉取相关字符串
+    public String FETCHING_NODE_LIST = "Fetching latest public node list from NKM: ";
+    public String NODE_LIST_FETCH_SUCCESS = "Node list successfully updated from NKM.";
+    public String NODE_LIST_FETCH_FAIL = "Failed to fetch node list (skipped): ";
+    public String NODE_LIST_INVALID_JSON = "Node list JSON is invalid. Skipping update.";
+
     private String currentLanguage = "en";
 
     public static LanguageData getChineseLanguage() {
@@ -95,7 +101,6 @@ public class LanguageData implements Serializable {
         languageData.NO_FLOW_LEFT = "没有多余的流量了。";
         languageData.PLEASE_UPDATE_MANUALLY = "当前版本过旧，请手动下载更新。";
 
-        // UpdateManager类中的字符串
         languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE = "下载更新文件失败。";
         languageData.FAILED_TO_EXTRACT_7Z_FILE = "解压7z文件失败。";
         languageData.NEOLINK_EXE_NOT_FOUND = "在解压的文件中未找到NeoLink.exe。";
@@ -123,6 +128,12 @@ public class LanguageData implements Serializable {
         languageData.ERROR_CLOSING_7Z_FILE = "关闭7z文件时出错：";
         languageData.WARNING_TCP_DISABLED = "TCP 服务已禁用！";
         languageData.WARNING_UDP_DISABLED = "UDP 服务已禁用！";
+
+        // [新增] NKM 节点拉取中文翻译
+        languageData.FETCHING_NODE_LIST = "正在向 NKM 获取最新可用节点列表: ";
+        languageData.NODE_LIST_FETCH_SUCCESS = "节点列表已成功更新。";
+        languageData.NODE_LIST_FETCH_FAIL = "获取节点列表失败或超时 (已跳过): ";
+        languageData.NODE_LIST_INVALID_JSON = "获取到的节点列表格式无效，跳过更新。";
 
         return languageData;
     }

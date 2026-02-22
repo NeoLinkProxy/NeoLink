@@ -58,6 +58,7 @@ class NeoLinkViewModel {
 
         NeoLink.printLogo()
         NeoLink.printBasicInfo()
+        neoproxy.neolink.NodeFetcher.fetchAndSaveNodes()
         loadNodes()
         if (NeoLink.shouldAutoStart()) startService()
     }
