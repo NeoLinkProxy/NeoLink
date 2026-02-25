@@ -15,6 +15,7 @@ import java.io.PrintStream
 import java.util.*
 import javax.swing.UIManager
 import javax.swing.plaf.ColorUIResource
+import kotlin.system.exitProcess
 
 /**
  * 全局渲染状态
@@ -68,8 +69,15 @@ fun main(args: Array<String>) {
         // 这里的 useTransparentWindow 是解决穿透问题的命根子
         val useTransparentWindow = !RenderState.isSoftwareFallback
 
+        // 核心修复：统一定义彻底退出的闭包逻辑，停止服务 -> 退出 Compose -> 强杀 JVM 进程
+        val closeApp = {
+            viewModel.stopService()
+            exitApplication()
+            exitProcess(0)
+        }
+
         Window(
-            onCloseRequest = { viewModel.stopService(); exitApplication() },
+            onCloseRequest = closeApp, // 修复 1: 绑定右上角系统原生关闭事件
             state = windowState,
             title = "NeoLink 内网穿透客户端",
             icon = appIcon,
@@ -108,7 +116,7 @@ fun main(args: Array<String>) {
                 windowState = windowState,
                 viewModel = viewModel,
                 appIcon = appIcon,
-                onExit = ::exitApplication
+                onExit = closeApp // 修复 2: 绑定自定义 TitleBar 上的 X 按钮事件
             )
         }
     }
