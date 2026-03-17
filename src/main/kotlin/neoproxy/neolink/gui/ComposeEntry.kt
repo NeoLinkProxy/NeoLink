@@ -10,6 +10,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
+import neoproxy.neolink.ConfigOperator
+import neoproxy.neolink.NeoLink
 import java.awt.Dimension
 import java.io.PrintStream
 import java.util.*
@@ -17,30 +19,26 @@ import javax.swing.UIManager
 import javax.swing.plaf.ColorUIResource
 import kotlin.system.exitProcess
 
-/**
- * 全局渲染状态
- */
 object RenderState {
     var isSoftwareFallback by mutableStateOf(false)
 }
 
 fun main(args: Array<String>) {
-    // 1. 调用“隐形窗口”功能实测
     val checkResult = NeoLinkPreFlightChecker.runFullCheck()
 
-    // 2. 根据实测结果强制配置环境
     if (checkResult.isHardwareOk) {
-        println("[系统配置] ✅ 实测支持合成特效，启用 DIRECTX 模式。")
         System.setProperty("skiko.renderApi", "DIRECTX")
         RenderState.isSoftwareFallback = false
     } else {
-        println("[系统配置] ❌ 实测不支持合成特效 (原因: ${checkResult.description})")
-        println("[系统配置] 强制进入 SOFTWARE 模式，关闭透明属性以解决点击穿透问题。")
         System.setProperty("skiko.renderApi", "SOFTWARE")
         RenderState.isSoftwareFallback = true
     }
 
-    // 3. 日志劫持 (二道防线)
+    // 确保在任何组件（包括异步任务）调用 NeoLink.say() 之前，loggist 已经实例化
+    ConfigOperator.initEnvironment()
+    NeoLink.initializeLogger()
+    NeoLink.detectLanguage()
+
     val originalErr = System.err
     System.setErr(object : PrintStream(originalErr) {
         override fun write(buf: ByteArray, off: Int, len: Int) {
@@ -66,10 +64,8 @@ fun main(args: Array<String>) {
             size = DpSize(920.dp, 650.dp)
         )
 
-        // 这里的 useTransparentWindow 是解决穿透问题的命根子
         val useTransparentWindow = !RenderState.isSoftwareFallback
 
-        // 核心修复：统一定义彻底退出的闭包逻辑，停止服务 -> 退出 Compose -> 强杀 JVM 进程
         val closeApp = {
             viewModel.stopService()
             exitApplication()
@@ -77,12 +73,11 @@ fun main(args: Array<String>) {
         }
 
         Window(
-            onCloseRequest = closeApp, // 修复 1: 绑定右上角系统原生关闭事件
+            onCloseRequest = closeApp,
             state = windowState,
             title = "NeoLink 内网穿透客户端",
             icon = appIcon,
             undecorated = true,
-            // 如果实测不支持 DWM 亚克力，这里就是 false (实心窗口)，鼠标就点不穿了
             transparent = useTransparentWindow,
             resizable = true
         ) {
@@ -103,9 +98,10 @@ fun main(args: Array<String>) {
             }
 
             LaunchedEffect(Unit) {
+                // [优化点]：确保 ViewModel 初始化具备容错性
+                // 即使 NodeFetcher 还在后台写文件，viewModel 也应有逻辑跳过或延迟加载节点
                 viewModel.initialize(args)
 
-                // 如果预检通过了，我们再在主窗口上正式应用特效
                 if (useTransparentWindow) {
                     delay(500)
                     WindowsEffects.applyAcrylicIfPossible(window)
@@ -116,7 +112,7 @@ fun main(args: Array<String>) {
                 windowState = windowState,
                 viewModel = viewModel,
                 appIcon = appIcon,
-                onExit = closeApp // 修复 2: 绑定自定义 TitleBar 上的 X 按钮事件
+                onExit = closeApp
             )
         }
     }

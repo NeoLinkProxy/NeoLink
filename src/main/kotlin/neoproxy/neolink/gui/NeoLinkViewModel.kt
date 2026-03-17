@@ -42,26 +42,36 @@ class NeoLinkViewModel {
     private val scope = CoroutineScope(Dispatchers.Default)
     var logFontSize by mutableStateOf(12.sp)
 
+    private var isInitialized = false
+    private var isLogRedirected = false
     fun initialize(args: Array<String>) {
-        // 1. 先定环境，再定日志
-        ConfigOperator.initEnvironment()
+        // [修复] 增加初始化锁，防止窗口重建导致重复调用
+        if (isInitialized) return
+        isInitialized = true
 
-        // 确保 logs 目录存在，彻底防止根目录污染
+        ConfigOperator.initEnvironment()
         File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
 
         NeoLink.initializeLogger()
         NeoLink.detectLanguage()
         ConfigOperator.readAndSetValue()
 
-        // 重定向 GUI 内部日志到 logs 子目录
         setupLogRedirector()
 
         NeoLink.printLogo()
         NeoLink.printBasicInfo()
-        neoproxy.neolink.NodeFetcher.fetchAndSaveNodes()
-        loadNodes()
+
+        // 【优化】使用协程后台加载节点，防止阻塞 GUI 初始化
+        scope.launch(Dispatchers.IO) {
+            neoproxy.neolink.NodeFetcher.fetchAndSaveNodes()
+            withContext(Dispatchers.Main) {
+                loadNodes()
+            }
+        }
+
         if (NeoLink.shouldAutoStart()) startService()
     }
+
 
     private fun loadNodes() {
         // [修改] 使用 ConfigOperator.WORKING_DIR 构造文件路径
@@ -167,6 +177,10 @@ class NeoLinkViewModel {
     }
 
     private fun setupLogRedirector() {
+        // [修复] 检查是否已经重定向过，防止递归包装导致日志重复
+        if (isLogRedirected) return
+        isLogRedirected = true
+
         val originalLoggist = NeoLink.loggist
         // 关键：将 gui_internal.log 强制放入 logs 文件夹
         val internalLogFile = File(ConfigOperator.WORKING_DIR, "logs/gui_internal.log")
@@ -185,6 +199,7 @@ class NeoLinkViewModel {
             }
         }
     }
+
 
     private fun addLogSafe(ansiMsg: String) {
         scope.launch(Dispatchers.Main) {

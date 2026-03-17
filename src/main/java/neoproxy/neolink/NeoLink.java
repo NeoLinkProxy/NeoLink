@@ -73,18 +73,19 @@ public class NeoLink {
     public static void main(String[] args) {
         ConfigOperator.initEnvironment();
         parseCommandLineArgs(args);
+        ConfigOperator.readAndSetValue();
         debugOperation("Entering main() method.");
         debugOperation("Command line arguments parsed. Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
 
         if (isGUIMode) {
             debugOperation("GUI Mode detected. Delegating to ComposeEntryKt.main().");
+            ThreadManager.runAsync(NodeFetcher::fetchAndSaveNodes);
             ComposeEntryKt.main(args);
             System.exit(0);
         }
 
         initializeLogger();
         detectLanguage();
-        ConfigOperator.readAndSetValue();
         NodeFetcher.fetchAndSaveNodes();
 
         if (specifiedNodeName != null) {
@@ -352,16 +353,16 @@ public class NeoLink {
 
     public static void printLogo() {
         say("""
-            
-               _____                                    \s
-              / ____|                                   \s
-             | |        ___   _ __    ___   __  __   ___\s
-             | |       / _ \\ | '__|  / _ \\  \\ \\/ /  / _ \\
-             | |____  |  __/ | |    | (_) |  >  <  |  __/
-              \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
-                                                        \s
-                                                         \
-            """);
+                
+                   _____                                    \s
+                  / ____|                                   \s
+                 | |        ___   _ __    ___   __  __   ___\s
+                 | |       / _ \\ | '__|  / _ \\  \\ \\/ /  / _ \\
+                 | |____  |  __/ | |    | (_) |  >  <  |  __/
+                  \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
+                                                            \s
+                                                             \
+                """);
     }
 
     public static void printBasicInfo() {
@@ -389,11 +390,20 @@ public class NeoLink {
     }
 
     public static void say(String str) {
-        loggist.say(new State(LogType.INFO, "HOST-CLIENT", str));
+        // 增加判空保护：如果 loggist 未初始化，直接输出到控制台，防止空指针崩溃
+        if (loggist != null) {
+            loggist.say(new State(LogType.INFO, "HOST-CLIENT", str));
+        } else {
+            System.out.println("[LOG-PENDING] " + str);
+        }
     }
 
     public static void say(String str, LogType logType) {
-        loggist.say(new State(logType, "HOST-CLIENT", str));
+        if (loggist != null) {
+            loggist.say(new State(logType, "HOST-CLIENT", str));
+        } else {
+            System.out.println("[LOG-PENDING] " + str);
+        }
     }
 
     /**
