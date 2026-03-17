@@ -10,8 +10,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
-import neoproxy.neolink.ConfigOperator
-import neoproxy.neolink.NeoLink
+import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.core.NeoLink
 import java.awt.Dimension
 import java.io.PrintStream
 import java.util.*
@@ -19,10 +19,37 @@ import javax.swing.UIManager
 import javax.swing.plaf.ColorUIResource
 import kotlin.system.exitProcess
 
+/**
+ * 渲染状态对象
+ *
+ * 管理应用程序的渲染模式状态：
+ * - 硬件加速（DirectX）
+ * - 软件回退（Software）
+ *
+ * 当检测到硬件兼容性问题时，自动切换到软件渲染模式
+ */
 object RenderState {
+    /** 是否使用软件渲染回退模式 */
     var isSoftwareFallback by mutableStateOf(false)
 }
 
+/**
+ * GUI 应用程序入口点
+ *
+ * 核心职责：
+ * 1. 执行硬件兼容性预检
+ * 2. 配置渲染模式（DirectX 或 Software）
+ * 3. 初始化日志系统和语言设置
+ * 4. 设置 Swing 外观
+ * 5. 创建并显示主窗口
+ *
+ * 渲染策略：
+ * - 优先使用 DirectX 硬件加速
+ * - 检测到兼容性问题时自动回退到软件渲染
+ * - 捕获并处理 RenderException 异常
+ *
+ * @param args 命令行参数
+ */
 fun main(args: Array<String>) {
     val checkResult = NeoLinkPreFlightChecker.runFullCheck()
 

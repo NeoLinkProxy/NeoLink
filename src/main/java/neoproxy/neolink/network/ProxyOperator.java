@@ -1,15 +1,34 @@
-package neoproxy.neolink;
+package neoproxy.neolink.network;
 
 import fun.ceroxe.api.net.SecureSocket;
+import neoproxy.neolink.core.NeoLink;
 
 import java.io.IOException;
 import java.net.*;
 
-import static neoproxy.neolink.NeoLink.localDomainName;
-import static neoproxy.neolink.NeoLink.remoteDomainName;
+import static neoproxy.neolink.core.NeoLink.localDomainName;
+import static neoproxy.neolink.core.NeoLink.remoteDomainName;
 
 /**
- * 代理操作器，用于处理通过 HTTP 或 SOCKS 代理连接到 Neo 服务器或本地服务。
+ * 代理操作器
+ *
+ * 核心职责：
+ * 1. 处理通过 HTTP 或 SOCKS 代理连接到 Neo 服务器
+ * 2. 处理通过代理连接到本地服务
+ * 3. 支持代理认证（用户名/密码）
+ *
+ * 设计特点：
+ * - 支持 HTTP 和 SOCKS 两种代理类型
+ * - 独立的代理配置：到本地服务和到 Neo 服务器可分别配置
+ * - 支持代理认证
+ * - 自动处理代理连接的创建和配置
+ *
+ * 使用场景：
+ * - 企业网络需要通过代理访问外网
+ * - 本地服务位于代理后的网络
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
  */
 public class ProxyOperator {
 
@@ -52,9 +71,18 @@ public class ProxyOperator {
         }
 
         String[] authParts = typeAndProperty[1].split("@", 2);
-        String[] ipPortParts = authParts[0].split(":", 2);
-        String ip = ipPortParts[0];
-        int port = Integer.parseInt(ipPortParts[1]);
+        String ip;
+        int port;
+
+        if (authParts[0].startsWith("[")) {
+            int closingBracket = authParts[0].indexOf(']');
+            ip = authParts[0].substring(1, closingBracket);
+            port = Integer.parseInt(authParts[0].substring(closingBracket + 2));
+        } else {
+            String[] ipPortParts = authParts[0].split(":", 2);
+            ip = ipPortParts[0];
+            port = Integer.parseInt(ipPortParts[1]);
+        }
 
         String username = null;
         String password = null;

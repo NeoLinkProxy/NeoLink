@@ -14,14 +14,38 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import neoproxy.neolink.ConfigOperator
-import neoproxy.neolink.InternetOperator
-import neoproxy.neolink.NeoLink
+import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.core.NeoLink
+import neoproxy.neolink.core.NeoLinkCoreRunner
+import neoproxy.neolink.network.InternetOperator
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.regex.Pattern
 
+/**
+ * NeoLink GUI 视图模型
+ *
+ * 核心职责：
+ * 1. 管理 GUI 界面的所有状态数据
+ * 2. 处理用户输入和配置变更
+ * 3. 协调后台服务的启动和停止
+ * 4. 管理日志显示和 ANSI 颜色解析
+ * 5. 加载和解析节点列表
+ *
+ * 架构设计：
+ * - 使用 Compose 的 mutableStateOf 实现响应式数据绑定
+ * - 使用 CoroutineScope 处理异步操作
+ * - 通过自定义 Loggist 包装器实现日志重定向
+ *
+ * 状态管理：
+ * - 连接配置：远程域名、本地端口、访问密钥等
+ * - 功能开关：TCP/UDP 启用、Proxy Protocol、自动重连等
+ * - 运行时状态：服务运行状态、日志消息列表
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 class NeoLinkViewModel {
     var remoteDomain by mutableStateOf(NeoLink.remoteDomainName)
     var localPort by mutableStateOf(if (NeoLink.localPort == -1) "" else NeoLink.localPort.toString())
@@ -63,7 +87,7 @@ class NeoLinkViewModel {
 
         // 【优化】使用协程后台加载节点，防止阻塞 GUI 初始化
         scope.launch(Dispatchers.IO) {
-            neoproxy.neolink.NodeFetcher.fetchAndSaveNodes()
+            neoproxy.neolink.network.NodeFetcher.fetchAndSaveNodes()
             withContext(Dispatchers.Main) {
                 loadNodes()
             }

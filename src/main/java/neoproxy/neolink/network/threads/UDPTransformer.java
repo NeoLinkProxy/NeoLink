@@ -1,7 +1,9 @@
-package neoproxy.neolink.threads;
+package neoproxy.neolink.network.threads;
 
 import fun.ceroxe.api.net.SecureSocket;
-import neoproxy.neolink.Debugger;
+import neoproxy.neolink.core.NeoLink;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.util.Debugger;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -11,13 +13,30 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-import static neoproxy.neolink.InternetOperator.close;
-import static neoproxy.neolink.NeoLink.localDomainName;
-import static neoproxy.neolink.NeoLink.localPort;
+import static neoproxy.neolink.network.InternetOperator.close;
+import static neoproxy.neolink.core.NeoLink.localDomainName;
+import static neoproxy.neolink.core.NeoLink.localPort;
 
 /**
- * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
- * 【优化版】通过复用实例缓冲区和ByteBuffer来减少GC压力。
+ * UDP 数据转发器
+ *
+ * 核心职责：
+ * 1. 在本地服务和 Neo 服务器之间双向转发 UDP 数据
+ * 2. 使用 ByteBuffer 实现高效的字节操作
+ * 3. 通过复用实例缓冲区减少 GC 压力
+ *
+ * 设计特点：
+ * - 双向转发：支持 Neo 到本地、本地到 Neo 两种模式
+ * - ByteBuffer 优化：使用堆外缓冲区提高 I/O 性能
+ * - 缓冲区复用：每个实例使用独立缓冲区，避免频繁分配内存
+ * - 优雅关闭：支持中断信号，确保资源正确释放
+ *
+ * 性能优化：
+ * - 使用 65535 字节缓冲区，支持最大 UDP 报文
+ * - ByteBuffer 直接操作字节数组，减少拷贝开销
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
  */
 public class UDPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;

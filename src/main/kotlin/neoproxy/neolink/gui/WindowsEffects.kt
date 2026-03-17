@@ -10,6 +10,26 @@ import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.ptr.IntByReference
 import java.awt.Window
 
+/**
+ * Windows 特效管理器
+ *
+ * 核心职责：
+ * 1. 在 Windows 系统上应用 DWM 亚克力/云母特效
+ * 2. 设置窗口为深色模式
+ * 3. 根据预检结果决定是否应用特效
+ *
+ * 设计特点：
+ * - 使用 JNA 调用 Windows DWM API
+ * - 支持深色模式基底设置
+ * - 自动检测软件回退模式，避免无效操作
+ *
+ * 特效类型：
+ * - 亚克力 (Acrylic): 半透明模糊背景
+ * - 云母 (Mica): 基于桌面背景的材质效果
+ *
+ * @author NeoProxy Team
+ * @since 5.11.0
+ */
 object WindowsEffects {
     var isEffectApplied by mutableStateOf(false)
         private set

@@ -1,14 +1,15 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
+    java
     kotlin("jvm") version "1.9.22"
     id("org.jetbrains.compose") version "1.6.1"
     id("com.github.johnrengelman.shadow") version "8.1.1"
-    idea
+    jacoco
 }
 
 group = "neoproxy"
-version = "5.11.2"
+version = "5.11.3"
 
 repositories {
     mavenCentral()
@@ -18,57 +19,45 @@ repositories {
 
 kotlin {
     jvmToolchain(21)
-    sourceSets {
-        val main by getting {
-            kotlin.srcDirs("src/main/kotlin", "src/main/java")
-            resources.srcDirs("src/main/resources")
-        }
-    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 dependencies {
     implementation("fun.ceroxe.api:ceroxe-core:0.2.7")
     implementation("fun.ceroxe.api:ceroxe-detector:0.2.7")
-
-    // 这个你已经配对了，它包含全平台解压库
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
-
     implementation(compose.desktop.common)
-
-    // 【核心修复】不要使用 currentOs，要显式列出所有目标平台
-    // 这样 shadowJar 会把这些平台的原生动态库全部打包进去
     implementation(compose.desktop.windows_x64)
     implementation(compose.desktop.macos_x64)
-    implementation(compose.desktop.macos_arm64) // 适配 M1/M2/M3 芯片
+    implementation(compose.desktop.macos_arm64)
     implementation(compose.desktop.linux_x64)
-
     implementation(compose.material)
     implementation(compose.ui)
     implementation(compose.foundation)
     implementation(compose.runtime)
-
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
-
-    // JNA 本身是跨平台的，会自动根据系统加载内部的 .so/.dylib/.dll
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("org.mockito:mockito-inline:5.2.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
 }
 
-// 资源处理修复
 tasks.withType<ProcessResources> {
     filteringCharset = "UTF-8"
-    inputs.property("version", project.version)
-    filesMatching("app.properties") {
-        expand("version" to project.version)
-    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-// ShadowJar 任务
 tasks.named<ShadowJar>("shadowJar") {
     manifest {
-        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
+        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
     }
     mergeServiceFiles()
     archiveBaseName.set("NeoLink")
@@ -77,7 +66,6 @@ tasks.named<ShadowJar>("shadowJar") {
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
-// 编译编码修复
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }
@@ -88,7 +76,44 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
-// 运行编码修复
-tasks.withType<JavaExec> {
-    jvmArgs("-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8")
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+    }
+    finalizedBy(tasks.jacocoTestReport)
+    jvmArgs("-Dfile.encoding=UTF-8")
+}
+
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        files(classDirectories.files.map {
+            fileTree(it) {
+                exclude(
+                    "neoproxy/neolink/gui/**",
+                    "neoproxy/neolink/**/ComposeEntry*.class"
+                )
+            }
+        })
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = "1.0".toBigDecimal()
+            }
+        }
+    }
 }

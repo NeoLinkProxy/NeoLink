@@ -1,16 +1,34 @@
-package neoproxy.neolink.threads;
+package neoproxy.neolink.network.threads;
 
 import fun.ceroxe.api.net.SecureSocket;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.util.Debugger;
 
 import java.net.Socket;
 
-import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.InternetOperator.*;
+import static neoproxy.neolink.util.Debugger.debugOperation;
+import static neoproxy.neolink.network.InternetOperator.*;
 
 /**
- * 数据传输器，负责在本地服务和 Neo 服务器之间双向转发数据。
- * 【优化版】通过复用实例缓冲区来减少GC压力。
- * 【新功能】支持 Proxy Protocol v2 的剥离或透传。
+ * TCP 数据转发器
+ *
+ * 核心职责：
+ * 1. 在本地服务和 Neo 服务器之间双向转发 TCP 数据
+ * 2. 支持 Proxy Protocol v2 的剥离或透传
+ * 3. 通过复用实例缓冲区减少 GC 压力
+ *
+ * 设计特点：
+ * - 双向转发：支持 Neo 到本地、本地到 Neo 两种模式
+ * - 缓冲区复用：每个实例使用独立缓冲区，避免频繁分配内存
+ * - Proxy Protocol v2 支持：可选剥离或透传真实客户端 IP
+ * - 优雅关闭：支持中断信号，确保资源正确释放
+ *
+ * 性能优化：
+ * - 使用 65535 字节缓冲区，充分利用网络带宽
+ * - 缓冲区实例化后复用，减少 GC 压力
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
  */
 public class TCPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;

@@ -1,15 +1,34 @@
-package neoproxy.neolink;
+package neoproxy.neolink.config;
 
 import fun.ceroxe.api.utils.config.LineConfigReader;
-import neoproxy.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.core.NeoLink;
+import neoproxy.neolink.network.ProxyOperator;
+import neoproxy.neolink.network.threads.CheckAliveThread;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-import static neoproxy.neolink.Debugger.debugOperation;
+import static neoproxy.neolink.util.Debugger.debugOperation;
 
+/**
+ * 配置管理器
+ *
+ * 核心职责：
+ * 1. 检测并初始化应用程序运行环境
+ * 2. 确定工作目录（可写目录优先，否则重定向到系统数据目录）
+ * 3. 读取并解析配置文件 config.cfg
+ * 4. 同步安装包中的配置文件到用户数据目录
+ *
+ * 设计特点：
+ * - 智能目录检测：支持 IDEA 开发环境、Windows 安装版、macOS 安装版
+ * - 自动权限处理：检测到只读环境时自动重定向到用户数据目录
+ * - 配置同步：确保用户数据目录有最新的配置文件
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public final class ConfigOperator {
     public static String WORKING_DIR;
     public static String BASE_PACKAGE_DIR;

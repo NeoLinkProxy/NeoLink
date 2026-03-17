@@ -1,17 +1,40 @@
-package neoproxy.neolink.gui;
+package neoproxy.neolink.core;
 
 import fun.ceroxe.api.net.SecureSocket;
-import neoproxy.neolink.InternetOperator;
-import neoproxy.neolink.NeoLink;
-import neoproxy.neolink.ProxyOperator;
-import neoproxy.neolink.threads.CheckAliveThread;
+import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.network.ProxyOperator;
+import neoproxy.neolink.network.threads.CheckAliveThread;
+import neoproxy.neolink.util.Debugger;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
-import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.NeoLink.enableAutoReconnect;
+import static neoproxy.neolink.util.Debugger.debugOperation;
+import static neoproxy.neolink.core.NeoLink.enableAutoReconnect;
 
+/**
+ * NeoLink 核心运行器（GUI 模式）
+ *
+ * 核心职责：
+ * 1. 在 GUI 模式下管理 NeoLink 核心服务的生命周期
+ * 2. 处理连接、认证、命令监听等核心流程
+ * 3. 支持优雅停止和错误处理
+ * 4. 实现自动重连机制
+ *
+ * 设计特点：
+ * - 与 GUI 解耦，通过回调接口通信
+ * - 支持外部停止请求
+ * - 自动重连逻辑
+ * - 详细的调试日志
+ *
+ * 与 NeoLink.main() 的区别：
+ * - NeoLink.main() 用于 CLI 模式，包含交互式输入
+ * - NeoLinkCoreRunner 用于 GUI 模式，参数由界面传入
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public class NeoLinkCoreRunner {
     private static volatile boolean shouldStop = false;
     private static StopCallback stopCallback;

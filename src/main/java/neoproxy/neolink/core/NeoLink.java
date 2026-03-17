@@ -1,4 +1,4 @@
-package neoproxy.neolink;
+package neoproxy.neolink.core;
 
 import fun.ceroxe.api.OshiUtils;
 import fun.ceroxe.api.net.SecureSocket;
@@ -9,10 +9,17 @@ import fun.ceroxe.api.print.log.State;
 import fun.ceroxe.api.thread.ThreadManager;
 import fun.ceroxe.api.utils.Sleeper;
 import fun.ceroxe.api.utils.TimeUtils;
+import neoproxy.neolink.config.ConfigOperator;
+import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.gui.ComposeEntryKt;
-import neoproxy.neolink.threads.CheckAliveThread;
-import neoproxy.neolink.threads.TCPTransformer;
-import neoproxy.neolink.threads.UDPTransformer;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.network.NodeFetcher;
+import neoproxy.neolink.network.ProxyOperator;
+import neoproxy.neolink.network.threads.CheckAliveThread;
+import neoproxy.neolink.network.threads.TCPTransformer;
+import neoproxy.neolink.network.threads.UDPTransformer;
+import neoproxy.neolink.update.UpdateManager;
+import neoproxy.neolink.util.Debugger;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,10 +34,28 @@ import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.InternetOperator.*;
-import static neoproxy.neolink.UpdateManager.checkUpdate;
+import static neoproxy.neolink.util.Debugger.debugOperation;
+import static neoproxy.neolink.network.InternetOperator.*;
+import static neoproxy.neolink.update.UpdateManager.checkUpdate;
 
+/**
+ * NeoLink 客户端主类
+ *
+ * 核心职责：
+ * 1. 管理客户端与 Neo 服务器之间的连接生命周期
+ * 2. 处理命令行参数解析与配置加载
+ * 3. 协调 TCP/UDP 隧道的建立与维护
+ * 4. 支持 GUI 模式和 CLI 模式双模式运行
+ * 5. 实现自动重连、心跳检测、版本更新等高级功能
+ *
+ * 架构设计：
+ * - 采用静态字段设计，便于跨模块访问核心状态
+ * - 使用 SecureSocket 实现加密通信
+ * - 通过 ThreadManager 管理并发连接
+ *
+ * @author NeoProxy Team
+ * @version 5.11.3
+ */
 public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
@@ -56,7 +81,7 @@ public class NeoLink {
     public static boolean enableProxyProtocol = false;
     public static int reconnectionIntervalSeconds = 30;
 
-    public static Scanner inputScanner = new Scanner(System.in);
+    public static Scanner inputScanner = new Scanner(System.in, StandardCharsets.UTF_8);
     public static boolean isGUIMode = true;
     public static boolean isDisableUDP = false;
     public static boolean isDisableTCP = false;
@@ -351,18 +376,20 @@ public class NeoLink {
         System.exit(exitCode);
     }
 
+    public static final String ASCII_LOGO = """
+            
+               _____                                    
+              / ____|                                   
+             | |        ___   _ __    ___   __  __   ___
+             | |       / _ \\ | '__|  / _ \\  \\ \\\\/ /  / _ \\
+             | |____  |  __/ | |    | (_) |  >  <  |  __/
+              \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
+                                                        
+                                                         \
+            """;
+
     public static void printLogo() {
-        say("""
-                
-                   _____                                    \s
-                  / ____|                                   \s
-                 | |        ___   _ __    ___   __  __   ___\s
-                 | |       / _ \\ | '__|  / _ \\  \\ \\/ /  / _ \\
-                 | |____  |  __/ | |    | (_) |  >  <  |  __/
-                  \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
-                                                            \s
-                                                             \
-                """);
+        say(ASCII_LOGO);
     }
 
     public static void printBasicInfo() {

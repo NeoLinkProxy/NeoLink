@@ -10,6 +10,7 @@ build/
 *.iml
 *.ipr
 out/
+bin/
 
 # Eclipse
 .apt_generated

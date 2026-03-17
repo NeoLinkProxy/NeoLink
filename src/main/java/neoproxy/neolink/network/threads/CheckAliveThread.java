@@ -1,15 +1,39 @@
-package neoproxy.neolink.threads;
+package neoproxy.neolink.network.threads;
 
 import fun.ceroxe.api.utils.Sleeper;
-import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.core.NeoLink;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.util.Debugger;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.InternetOperator.close;
-import static neoproxy.neolink.NeoLink.isDebugMode;
+import static neoproxy.neolink.util.Debugger.debugOperation;
+import static neoproxy.neolink.network.InternetOperator.close;
+import static neoproxy.neolink.core.NeoLink.isDebugMode;
 
+/**
+ * 心跳检测线程
+ *
+ * 核心职责：
+ * 1. 定期向服务器发送心跳包，保持连接活跃
+ * 2. 检测连接状态，识别连接中断
+ * 3. 连续失败达到阈值时自动关闭连接，触发重连机制
+ *
+ * 设计特点：
+ * - 单例模式，确保只有一个心跳线程运行
+ * - 使用原子变量保证线程安全
+ * - 守护线程，不阻止 JVM 退出
+ * - 可安全启动和停止
+ *
+ * 心跳机制：
+ * - 每 HEARTBEAT_PACKET_DELAY 毫秒检测一次
+ * - 如果超过 2 秒未收到服务器消息，发送 PING 心跳
+ * - 连续 MAX_CONSECUTIVE_FAILURES 次失败则判定连接断开
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public final class CheckAliveThread implements Runnable {
 
     private static final String HEARTBEAT_PACKET = "PING";

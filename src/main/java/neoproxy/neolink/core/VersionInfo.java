@@ -1,12 +1,29 @@
-package neoproxy.neolink;
+package neoproxy.neolink.core;
+
+import neoproxy.neolink.util.Debugger;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
-import static neoproxy.neolink.Debugger.debugOperation;
+import static neoproxy.neolink.util.Debugger.debugOperation;
 
-
+/**
+ * 版本信息类
+ *
+ * 核心职责：
+ * 1. 管理应用程序版本号
+ * 2. 生成并输出 EULA 协议文件
+ * 3. 提供版本相关的元数据
+ *
+ * 设计特点：
+ * - 版本号从 manifest 或 gradle.properties 读取
+ * - 支持开发环境和生产环境
+ * - 自动生成 EULA 文件
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public class VersionInfo {
     public static final String VERSION = getAppVersion();
     public static final String AUTHOR = "Ceroxe";

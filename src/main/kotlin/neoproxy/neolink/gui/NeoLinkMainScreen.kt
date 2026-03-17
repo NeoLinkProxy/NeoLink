@@ -62,7 +62,24 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * NeoLink 现代感主题配置
- * 核心逻辑：基于全链路硬件检测结果 (WindowsEffects.isEffectApplied) 动态调整 UI 表现
+ *
+ * 核心职责：
+ * 1. 定义应用程序的视觉主题和配色方案
+ * 2. 根据硬件检测结果动态调整 UI 表现
+ * 3. 提供统一的样式配置（颜色、字体、尺寸等）
+ *
+ * 设计特点：
+ * - 支持透明背景（硬件加速模式）
+ * - 支持不透明背景（软件渲染模式）
+ * - 暗色主题，保护视力
+ * - 统一的圆角和间距设计
+ *
+ * 动态调整：
+ * - 基于 RenderState.isSoftwareFallback 判断是否使用透明背景
+ * - 基于 WindowsEffects.isEffectApplied 调整材质效果
+ *
+ * @author NeoProxy Team
+ * @since 5.11.0
  */
 object ModernTheme {
     // 降级模式检测：如果 RenderState.isSoftwareFallback 为 true，说明已经切换到了 SOFTWARE 渲染
@@ -152,6 +169,28 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
     }
 }
 
+/**
+ * NeoLink 主屏幕 Composable
+ *
+ * 核心职责：
+ * 1. 构建 NeoLink GUI 的主界面布局
+ * 2. 整合标题栏、连接配置区、日志控制台、底部操作栏
+ * 3. 处理窗口拖拽、最小化、最大化、关闭等操作
+ * 4. 应用 Windows 特效（亚克力/云母）
+ *
+ * 界面结构：
+ * - 自定义标题栏（包含窗口控制按钮）
+ * - 连接配置区（节点选择、端口设置、高级选项）
+ * - 日志控制台（实时显示连接日志）
+ * - 底部操作栏（启动/停止按钮）
+ *
+ * @param windowState 窗口状态（位置、大小、最大化等）
+ * @param viewModel 视图模型，管理界面状态和业务逻辑
+ * @param appIcon 应用程序图标
+ * @param onExit 退出应用程序的回调
+ * @author NeoProxy Team
+ * @since 5.11.0
+ */
 @Composable
 fun WindowScope.neoLinkMainScreen(
     windowState: WindowState,
@@ -695,34 +734,34 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                         // 🔴 实时生效：修改时同步更新 NeoLink 静态变量
                         modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
                             viewModel.isTcpEnabled = it
-                            neoproxy.neolink.NeoLink.isDisableTCP = !it
+                            neoproxy.neolink.core.NeoLink.isDisableTCP = !it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("启用 UDP", viewModel.isUdpEnabled) {
                             viewModel.isUdpEnabled = it
-                            neoproxy.neolink.NeoLink.isDisableUDP = !it
+                            neoproxy.neolink.core.NeoLink.isDisableUDP = !it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {
                             viewModel.isPpv2Enabled = it
-                            neoproxy.neolink.NeoLink.enableProxyProtocol = it
+                            neoproxy.neolink.core.NeoLink.enableProxyProtocol = it
                         }
                     }
                     Column(Modifier.weight(1f)) {
                         labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
                         modernCheckbox("自动重连", viewModel.isAutoReconnect) {
                             viewModel.isAutoReconnect = it
-                            neoproxy.neolink.NeoLink.enableAutoReconnect = it
+                            neoproxy.neolink.core.NeoLink.enableAutoReconnect = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("调试模式", viewModel.isDebugMode) {
                             viewModel.isDebugMode = it
-                            neoproxy.neolink.NeoLink.isDebugMode = it
+                            neoproxy.neolink.core.NeoLink.isDebugMode = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("显示详情", viewModel.isShowConnection) {
                             viewModel.isShowConnection = it
-                            neoproxy.neolink.NeoLink.showConnection = it
+                            neoproxy.neolink.core.NeoLink.showConnection = it
                         }
                     }
                 }

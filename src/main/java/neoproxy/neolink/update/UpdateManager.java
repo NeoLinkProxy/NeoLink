@@ -1,9 +1,15 @@
-package neoproxy.neolink;
+package neoproxy.neolink.update;
 
 import fun.ceroxe.api.OshiUtils;
 import fun.ceroxe.api.WindowsOperation;
 import fun.ceroxe.api.print.log.LogType;
-import neoproxy.neolink.gui.NeoLinkCoreRunner;
+import neoproxy.neolink.config.ConfigOperator;
+import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.core.NeoLink;
+import neoproxy.neolink.core.NeoLinkCoreRunner;
+import neoproxy.neolink.core.VersionInfo;
+import neoproxy.neolink.network.InternetOperator;
+import neoproxy.neolink.util.Debugger;
 import net.sf.sevenzipjbinding.*;
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
 
@@ -14,11 +20,35 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
-import static neoproxy.neolink.Debugger.debugOperation;
-import static neoproxy.neolink.InternetOperator.receiveStr;
-import static neoproxy.neolink.InternetOperator.sendStr;
-import static neoproxy.neolink.NeoLink.*;
+import static neoproxy.neolink.util.Debugger.debugOperation;
+import static neoproxy.neolink.network.InternetOperator.receiveStr;
+import static neoproxy.neolink.network.InternetOperator.sendStr;
+import static neoproxy.neolink.core.NeoLink.*;
 
+/**
+ * 更新管理器
+ *
+ * 核心职责：
+ * 1. 检查并下载 NeoLink 客户端更新
+ * 2. 自动解压并替换旧版本
+ * 3. 备份现有版本，确保可回滚
+ *
+ * 设计特点：
+ * - 支持 Windows 和 Linux 自动更新
+ * - 使用 7-Zip 解压更新包
+ * - 文件大小校验，确保下载完整
+ * - 自动备份和替换机制
+ *
+ * 更新流程：
+ * 1. 从服务器下载新版本 7z 包
+ * 2. 解压到临时目录
+ * 3. 备份当前版本
+ * 4. 替换为新版本
+ * 5. 清理临时文件
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public class UpdateManager {
     private static final String tempUpdateDir = CURRENT_DIR_PATH;
 

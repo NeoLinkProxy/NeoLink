@@ -1,18 +1,35 @@
-package neoproxy.neolink;
+package neoproxy.neolink.util;
 
 import fun.ceroxe.api.print.log.LogType;
 import fun.ceroxe.api.print.log.State;
+import neoproxy.neolink.core.NeoLink;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static neoproxy.neolink.NeoLink.isGUIMode;
-import static neoproxy.neolink.NeoLink.loggist;
+import static neoproxy.neolink.core.NeoLink.isGUIMode;
+import static neoproxy.neolink.core.NeoLink.loggist;
 
+/**
+ * 调试器
+ *
+ * 核心职责：
+ * 1. 在调试模式下输出详细的异常堆栈和调试信息
+ * 2. 统一处理调试信息的输出方式（CLI/GUI 兼容）
+ * 3. 提供安全的调试输出，避免空指针异常
+ *
+ * 设计特点：
+ * - 仅在 isDebugMode 为 true 时输出信息
+ * - 自动适配 CLI 和 GUI 模式的输出方式
+ * - Loggist 未初始化时回退到控制台输出
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public class Debugger {
 
     public static void debugOperation(Exception e) {
-        if (NeoLink.isDebugMode) {
+        if (NeoLink.isDebugMode && e != null) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
             e.printStackTrace(pw);

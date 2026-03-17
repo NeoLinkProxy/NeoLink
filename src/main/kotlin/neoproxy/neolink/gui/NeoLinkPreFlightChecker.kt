@@ -9,11 +9,24 @@ import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.ptr.IntByReference
 
 /**
- * NeoLink 全链路环境预检器 (功能实测版)
- * 核心逻辑：
- * 1. 不再检测硬件名称或 ID。
- * 2. 直接创建一个不可见的临时窗口，实测 DWM 是否接受亚克力 (Attr 38) 指令。
- * 3. 如果实测返回 0 (成功)，说明系统具备完整的合成能力，不会出现点击穿透。
+ * NeoLink 全链路环境预检器
+ *
+ * 核心职责：
+ * 1. 检测系统是否支持 DWM（Desktop Window Manager）合成特效
+ * 2. 实测系统渲染能力，决定是否使用硬件加速
+ * 3. 防止在 RDP 或基础显卡驱动环境下出现点击穿透问题
+ *
+ * 检测逻辑：
+ * 1. 不再检测硬件名称或 ID（避免误判）
+ * 2. 直接创建不可见临时窗口，实测 DWM 是否接受亚克力 (Attr 38) 指令
+ * 3. 如果实测返回 0 (成功)，说明系统具备完整的合成能力
+ *
+ * 检测结果：
+ * - isHardwareOk = true: 使用 DirectX 硬件加速
+ * - isHardwareOk = false: 使用 Software 软件渲染
+ *
+ * @author NeoProxy Team
+ * @since 5.11.0
  */
 object NeoLinkPreFlightChecker {
 

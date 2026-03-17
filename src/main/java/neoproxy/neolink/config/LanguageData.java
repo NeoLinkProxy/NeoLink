@@ -1,9 +1,25 @@
-package neoproxy.neolink;
+package neoproxy.neolink.config;
 
 import java.io.Serializable;
 
-import static neoproxy.neolink.NeoLink.say;
+import static neoproxy.neolink.core.NeoLink.say;
 
+/**
+ * 语言数据类
+ *
+ * 核心职责：
+ * 1. 管理应用程序的所有用户界面文本
+ * 2. 支持中英文双语切换
+ * 3. 提供统一的文本访问接口
+ *
+ * 设计特点：
+ * - 使用 public 字段直接暴露文本，便于访问
+ * - 通过 getChineseLanguage() 工厂方法创建中文实例
+ * - 支持序列化，便于配置持久化
+ *
+ * @author NeoProxy Team
+ * @since 5.0.0
+ */
 public class LanguageData implements Serializable {
     public String PLEASE_UPDATE_MANUALLY = "The current version is outdated, please manually download the update.";
     public String A_UDP_CONNECTION = "A UDP connection ";
@@ -26,7 +42,7 @@ public class LanguageData implements Serializable {
     public String CONNECTION_BUILD_UP_SUCCESSFULLY = "Connection build up successfully";
     public String FAIL_TO_BUILD_A_CHANNEL_FROM = "Fail to build a channel from ";
     public String DESTROY = " destroyed";
-    public String FAIL_TO_CONNECT_LOCALHOST = "Fail to connect to " + NeoLink.localDomainName + ":";
+    public String FAIL_TO_CONNECT_LOCALHOST = "Fail to connect to localhost:";
     public String TOO_LONG_LATENCY_MSG = "Delay greater than 200 milliseconds, please note!";
     public String LOAD = "Load ";
     public String AS_A_CERTIFICATE = " as a certificate";
@@ -90,7 +106,7 @@ public class LanguageData implements Serializable {
         languageData.CONNECTION_BUILD_UP_SUCCESSFULLY = "服务器连接成功";
         languageData.FAIL_TO_BUILD_A_CHANNEL_FROM = "连接以下地址失败：";
         languageData.DESTROY = " 的通道关闭";
-        languageData.FAIL_TO_CONNECT_LOCALHOST = "连接本地地址失败：" + NeoLink.localDomainName + ":";
+        languageData.FAIL_TO_CONNECT_LOCALHOST = "连接本地地址失败：localhost:";
         languageData.START_TO_DOWNLOAD_UPDATE = "开始下载更新。";
         languageData.DOWNLOAD_SUCCESS = "下载更新成功。";
         languageData.PLEASE_RUN = "请运行 ";
