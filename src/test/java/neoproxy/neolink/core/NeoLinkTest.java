@@ -63,6 +63,7 @@ class NeoLinkTest {
     private int originalReconnectionIntervalSeconds;
     private String originalSpecifiedNodeName;
     private String originalNkmNodeListUrl;
+    private int originalRemotePort;
 
     @TempDir
     File tempDir;
@@ -92,6 +93,7 @@ class NeoLinkTest {
         originalReconnectionIntervalSeconds = NeoLink.reconnectionIntervalSeconds;
         originalSpecifiedNodeName = NeoLink.specifiedNodeName;
         originalNkmNodeListUrl = NeoLink.nkmNodeListUrl;
+        originalRemotePort = NeoLink.remotePort;
     }
 
     @AfterEach
@@ -119,6 +121,7 @@ class NeoLinkTest {
         NeoLink.reconnectionIntervalSeconds = originalReconnectionIntervalSeconds;
         NeoLink.specifiedNodeName = originalSpecifiedNodeName;
         NeoLink.nkmNodeListUrl = originalNkmNodeListUrl;
+        NeoLink.remotePort = originalRemotePort;
     }
 
     @Test

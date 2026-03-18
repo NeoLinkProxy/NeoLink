@@ -53,6 +53,11 @@ dependencies {
 tasks.withType<ProcessResources> {
     filteringCharset = "UTF-8"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching("app.properties") {
+        expand(
+            "version" to project.version.toString()
+        )
+    }
 }
 
 tasks.named<ShadowJar>("shadowJar") {
@@ -60,7 +65,7 @@ tasks.named<ShadowJar>("shadowJar") {
         attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
     }
     mergeServiceFiles()
-    archiveBaseName.set("NeoLink")
+    archiveBaseName.set("NeoLink-universal")
     archiveClassifier.set("")
     archiveVersion.set(project.version.toString())
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
@@ -116,4 +121,82 @@ tasks.jacocoTestCoverageVerification {
             }
         }
     }
+}
+
+tasks.register<ShadowJar>("shadowJarWindows") {
+    group = "build"
+    description = "Creates a Shadow JAR for Windows platform only"
+    
+    manifest {
+        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+    }
+    mergeServiceFiles()
+    archiveBaseName.set("NeoLink-windows")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    
+    from(sourceSets.main.get().output)
+    configurations.add(project.configurations.runtimeClasspath.get())
+    
+    dependencies {
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.7.97"))
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-macos-x64:0.7.97"))
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:0.7.97"))
+    }
+}
+
+tasks.register<ShadowJar>("shadowJarMacos") {
+    group = "build"
+    description = "Creates a Shadow JAR for macOS platform only"
+    
+    manifest {
+        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+    }
+    mergeServiceFiles()
+    archiveBaseName.set("NeoLink-macos")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    
+    from(sourceSets.main.get().output)
+    configurations.add(project.configurations.runtimeClasspath.get())
+    
+    dependencies {
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.7.97"))
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:0.7.97"))
+    }
+}
+
+tasks.register<ShadowJar>("shadowJarLinux") {
+    group = "build"
+    description = "Creates a Shadow JAR for Linux platform only"
+    
+    manifest {
+        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+    }
+    mergeServiceFiles()
+    archiveBaseName.set("NeoLink-linux")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    
+    from(sourceSets.main.get().output)
+    configurations.add(project.configurations.runtimeClasspath.get())
+    
+    dependencies {
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-macos-x64:0.7.97"))
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:0.7.97"))
+        exclude(dependency("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:0.7.97"))
+    }
+}
+
+tasks.register("shadowJarAll") {
+    group = "build"
+    description = "Creates all platform-specific Shadow JARs plus the universal JAR"
+    
+    dependsOn(tasks.named("shadowJar"))
+    dependsOn(tasks.named("shadowJarWindows"))
+    dependsOn(tasks.named("shadowJarMacos"))
+    dependsOn(tasks.named("shadowJarLinux"))
 }

@@ -92,7 +92,7 @@ class UpdateManagerMockTest {
              MockedStatic<OshiUtils> oshiMock = mockStatic(OshiUtils.class)) {
             
             oshiMock.when(OshiUtils::isWindows).thenReturn(true);
-            windowsOpMock.when(() -> WindowsOperation.runAsAdministrator(anyString(), anyString())).thenAnswer(inv -> null);
+            windowsOpMock.when(() -> WindowsOperation.run(anyString())).thenAnswer(inv -> null);
             
             Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
             method.setAccessible(true);
@@ -102,7 +102,7 @@ class UpdateManagerMockTest {
             
             assertDoesNotThrow(() -> method.invoke(null, tempFile));
             
-            windowsOpMock.verify(() -> WindowsOperation.runAsAdministrator(anyString(), anyString()), times(1));
+            windowsOpMock.verify(() -> WindowsOperation.run(anyString()), times(1));
         }
     }
 
