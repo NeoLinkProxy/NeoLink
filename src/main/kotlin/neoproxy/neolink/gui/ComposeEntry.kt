@@ -51,14 +51,24 @@ object RenderState {
  * @param args 命令行参数
  */
 fun main(args: Array<String>) {
-    val checkResult = NeoLinkPreFlightChecker.runFullCheck()
+    // 检查是否显式指定无特效模式
+    val isNoEffectMode = args.contains("--no-effect")
 
-    if (checkResult.isHardwareOk) {
-        System.setProperty("skiko.renderApi", "DIRECTX")
-        RenderState.isSoftwareFallback = false
-    } else {
+    if (isNoEffectMode) {
+        // 显式禁用特效，强制使用软件渲染
         System.setProperty("skiko.renderApi", "SOFTWARE")
         RenderState.isSoftwareFallback = true
+        println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
+    } else {
+        val checkResult = NeoLinkPreFlightChecker.runFullCheck()
+
+        if (checkResult.isHardwareOk) {
+            System.setProperty("skiko.renderApi", "DIRECTX")
+            RenderState.isSoftwareFallback = false
+        } else {
+            System.setProperty("skiko.renderApi", "SOFTWARE")
+            RenderState.isSoftwareFallback = true
+        }
     }
 
     // 确保在任何组件（包括异步任务）调用 NeoLink.say() 之前，loggist 已经实例化

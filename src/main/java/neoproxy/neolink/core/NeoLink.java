@@ -90,6 +90,7 @@ public class NeoLink {
     public static String nkmNodeListUrl = "";
     private static boolean shouldAutoStartInGUI = false;
     private static boolean noColor = false;
+    public static boolean isNoEffectMode = false;
 
     public static boolean shouldAutoStart() {
         return shouldAutoStartInGUI;
@@ -224,6 +225,7 @@ public class NeoLink {
             case "--disable-udp" -> isDisableUDP = true;
             case "--enable-pp" -> enableProxyProtocol = true;
             case "--test-update" -> isTestUpdate = true;
+            case "--no-effect" -> isNoEffectMode = true;
         }
     }
 
