@@ -78,6 +78,7 @@ java -jar NeoLink-XXXX.jar --nogui --zh-cn
 # --no-show-conn                     不显示详细的连接建立/销毁信息
 # --no-color                         禁用控制台彩色输出
 # --test-update                      测试模式：模拟旧版本触发自动更新检测
+# --no-effect                        禁用 GUI 特效，强制使用软件渲染模式（解决部分显卡兼容性问题）
 ```
 
 ### ✨ **一键启动 (GUI 模式)**
