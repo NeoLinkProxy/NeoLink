@@ -58,7 +58,10 @@ import androidx.compose.ui.window.WindowState
 import kotlinx.coroutines.launch
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
+import java.io.StringReader
+import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
+import org.xml.sax.InputSource
 
 /**
  * NeoLink 现代感主题配置
@@ -719,12 +722,12 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                     Column(Modifier.weight(1f)) {
                         labelText("Hook端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
                         viewModel.hostHookPort,
-                        { viewModel.hostHookPort = it })
+                        { if (it.all { c -> c.isDigit() }) viewModel.hostHookPort = it })
                     }
                     Column(Modifier.weight(1f)) {
                         labelText("连接端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
                         viewModel.hostConnectPort,
-                        { viewModel.hostConnectPort = it })
+                        { if (it.all { c -> c.isDigit() }) viewModel.hostConnectPort = it })
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -981,7 +984,11 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
                     if (isCustomMode && viewModel.remoteDomain.isBlank()) errors.add("远程服务器地址不能为空")
                     if (!isCustomMode && viewModel.selectedNode == null) errors.add("请选择一个远程连接节点")
                     if (viewModel.localPort.isBlank()) errors.add("本地端口不能为空")
+                    if (viewModel.localPort.isNotBlank() && !isValidPort(viewModel.localPort)) errors.add("本地端口必须在 1~65535 之间")
+                    if (!isValidPort(viewModel.hostHookPort)) errors.add("Hook端口必须在 1~65535 之间")
+                    if (!isValidPort(viewModel.hostConnectPort)) errors.add("连接端口必须在 1~65535 之间")
                     if (viewModel.accessKey.isBlank()) errors.add("访问密钥 (Token) 不能为空")
+                    if (!viewModel.isTcpEnabled && !viewModel.isUdpEnabled) errors.add("TCP 和 UDP 不能同时关闭")
 
                     if (errors.isNotEmpty()) {
                         onValidationError(errors.joinToString("\n") { "• $it" })
@@ -1006,6 +1013,8 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
         }
     }
 }
+
+private fun isValidPort(value: String): Boolean = value.toIntOrNull()?.let { it in 1..65535 } == true
 
 @Composable
 fun labelText(text: String) {
@@ -1104,14 +1113,16 @@ fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) ->
 
 @Composable
 fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
-    if (svgContent.isNullOrBlank()) {
+    if (svgContent.isNullOrBlank() || svgContent.length > 16_384) {
         Canvas(modifier = Modifier.size(size)) { drawCircle(Color(0xFF3B82F6), style = Stroke(width = 2f)) }; return
     }
     val drawInstructions = remember(svgContent) {
         try {
             val factory = DocumentBuilderFactory.newInstance();
+            configureSecureXmlFactory(factory)
             val builder = factory.newDocumentBuilder();
-            val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray()));
+            builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
+            val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray(Charsets.UTF_8)));
             val root = doc.documentElement
             val vbAttr = root.getAttribute("viewBox").split(Regex("[\\s,]+"))
             val viewBox = if (vbAttr.size == 4) Rect(
@@ -1159,6 +1170,16 @@ fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
             }
         }
     }
+}
+
+private fun configureSecureXmlFactory(factory: DocumentBuilderFactory) {
+    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+    factory.isXIncludeAware = false
+    factory.isExpandEntityReferences = false
 }
 
 sealed class DrawOp {

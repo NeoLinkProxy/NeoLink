@@ -12,16 +12,16 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.config.NodeConfig
 import neoproxy.neolink.core.NeoLink
 import neoproxy.neolink.core.NeoLinkCoreRunner
 import neoproxy.neolink.network.InternetOperator
 import java.io.File
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.util.regex.Pattern
 
 /**
  * NeoLink GUI 视图模型
@@ -63,7 +63,7 @@ class NeoLinkViewModel {
     var isShowConnection by mutableStateOf(NeoLink.showConnection)
     var isRunning by mutableStateOf(false)
     val logMessages = mutableStateListOf<AnnotatedString>()
-    private val scope = CoroutineScope(Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     var logFontSize by mutableStateOf(12.sp)
 
     private var isInitialized = false
@@ -76,9 +76,11 @@ class NeoLinkViewModel {
         ConfigOperator.initEnvironment()
         File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
 
-        NeoLink.initializeLogger()
-        NeoLink.detectLanguage()
         ConfigOperator.readAndSetValue()
+        NeoLink.applyCommandLineArgs(args)
+        NeoLink.detectLanguage()
+        syncStateFromCore()
+        NeoLink.initializeLogger()
 
         setupLogRedirector()
 
@@ -102,62 +104,36 @@ class NeoLinkViewModel {
         val nodeFile = File(ConfigOperator.WORKING_DIR, "node.json")
         if (!nodeFile.exists()) return
         try {
-            var content = Files.readString(nodeFile.toPath(), StandardCharsets.UTF_8).replace("\uFEFF", "").trim()
-            if (content.startsWith("[") && content.endsWith("]")) {
-                val objectPattern = Pattern.compile("\\{([^{}]+)\\}")
-                val matcher = objectPattern.matcher(content)
-                while (matcher.find()) {
-                    val objStr = matcher.group(1)
-                    val name = extractJsonValue(objStr, "name")
-                    val address = extractJsonValue(objStr, "address")
-                    val icon = extractJsonValue(objStr, "icon")
-                    val hookPort = extractJsonValue(objStr, "HOST_HOOK_PORT")?.toIntOrNull() ?: 44801
-                    val connPort = extractJsonValue(objStr, "HOST_CONNECT_PORT")?.toIntOrNull() ?: 44802
-                    if (!name.isNullOrBlank() && !address.isNullOrBlank()) nodeList.add(
-                        NeoNode(
-                            name,
-                            address,
-                            icon,
-                            hookPort,
-                            connPort
-                        )
+            for (node in NodeConfig.loadAll(nodeFile)) {
+                nodeList.add(
+                    NeoNode(
+                        node.name,
+                        node.address,
+                        node.icon,
+                        node.hostHookPort,
+                        node.hostConnectPort
                     )
-                }
-                if (nodeList.isNotEmpty()) selectNode(nodeList[0])
+                )
             }
+            if (nodeList.isNotEmpty()) selectNode(nodeList[0])
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun extractJsonValue(json: String, key: String): String? {
-        val searchKey = "\"$key\"";
-        val startIdx = json.indexOf(searchKey)
-        if (startIdx == -1) return null
-        var cursor = startIdx + searchKey.length
-        while (cursor < json.length && json[cursor] != ':') cursor++; cursor++
-        while (cursor < json.length && json[cursor].isWhitespace()) cursor++
-        if (cursor >= json.length) return null
-        if (json[cursor] == '"') {
-            cursor++;
-            val sb = StringBuilder();
-            var inEscape = false
-            while (cursor < json.length) {
-                val c = json[cursor]
-                if (inEscape) {
-                    sb.append(c); inEscape = false
-                } else {
-                    if (c == '\\') inEscape = true else if (c == '"') return sb.toString() else sb.append(c)
-                }
-                cursor++
-            }; return null
-        } else {
-            val sb = StringBuilder()
-            while (cursor < json.length) {
-                val c = json[cursor]; if (c.isDigit()) sb.append(c) else break; cursor++
-            }
-            return sb.toString()
-        }
+    private fun syncStateFromCore() {
+        remoteDomain = NeoLink.remoteDomainName
+        localPort = if (NeoLink.localPort == -1) "" else NeoLink.localPort.toString()
+        accessKey = NeoLink.key ?: ""
+        localDomain = NeoLink.localDomainName
+        hostHookPort = NeoLink.hostHookPort.toString()
+        hostConnectPort = NeoLink.hostConnectPort.toString()
+        isTcpEnabled = !NeoLink.isDisableTCP
+        isUdpEnabled = !NeoLink.isDisableUDP
+        isPpv2Enabled = NeoLink.enableProxyProtocol
+        isAutoReconnect = NeoLink.enableAutoReconnect
+        isDebugMode = NeoLink.isDebugMode
+        isShowConnection = NeoLink.showConnection
     }
 
     fun selectNode(node: NeoNode) {
@@ -166,11 +142,13 @@ class NeoLinkViewModel {
     }
 
     fun startService() {
-        if (isRunning || remoteDomain.isBlank() || localPort.isBlank() || accessKey.isBlank()) return
-        NeoLink.remoteDomainName = remoteDomain; NeoLink.localPort = localPort.toIntOrNull() ?: -1; NeoLink.key =
-            accessKey
-        NeoLink.localDomainName = localDomain; NeoLink.hostHookPort =
-            hostHookPort.toIntOrNull() ?: 44801; NeoLink.hostConnectPort = hostConnectPort.toIntOrNull() ?: 44802
+        if (isRunning || remoteDomain.isBlank() || localPort.isBlank() || accessKey.isBlank() || localDomain.isBlank()) return
+        val parsedLocalPort = localPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
+        val parsedHookPort = hostHookPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
+        val parsedConnectPort = hostConnectPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
+        NeoLink.remoteDomainName = remoteDomain.trim(); NeoLink.localPort = parsedLocalPort; NeoLink.key = accessKey
+        NeoLink.localDomainName = localDomain.trim(); NeoLink.hostHookPort = parsedHookPort; NeoLink.hostConnectPort =
+            parsedConnectPort
         NeoLink.isDisableTCP = !isTcpEnabled; NeoLink.isDisableUDP = !isUdpEnabled; NeoLink.enableProxyProtocol =
             isPpv2Enabled; NeoLink.enableAutoReconnect = isAutoReconnect; NeoLink.isDebugMode =
             isDebugMode; NeoLink.showConnection = isShowConnection
@@ -182,6 +160,11 @@ class NeoLinkViewModel {
                 withContext(Dispatchers.Main) { isRunning = false; appendLog("\n[SYSTEM] 服务已停止") }
             }
         }
+    }
+
+    fun dispose() {
+        stopService()
+        scope.cancel()
     }
 
     fun stopService() {

@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "neoproxy"
-version = "5.11.4"
+version = "5.11.5"
 
 repositories {
     mavenCentral()
@@ -29,6 +29,7 @@ java {
 dependencies {
     implementation("fun.ceroxe.api:ceroxe-core:0.2.7")
     implementation("fun.ceroxe.api:ceroxe-detector:0.2.7")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
     implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
     implementation(compose.desktop.common)
@@ -85,7 +86,7 @@ tasks.test {
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
-        showStandardStreams = true
+        showStandardStreams = false
     }
     finalizedBy(tasks.jacocoTestReport)
     jvmArgs("-Dfile.encoding=UTF-8")
@@ -114,13 +115,21 @@ tasks.jacocoTestReport {
 }
 
 tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
     violationRules {
         rule {
             limit {
-                minimum = "1.0".toBigDecimal()
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.50".toBigDecimal()
             }
         }
     }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
 tasks.register<ShadowJar>("shadowJarWindows") {

@@ -104,7 +104,7 @@ fun main(args: Array<String>) {
         val useTransparentWindow = !RenderState.isSoftwareFallback
 
         val closeApp = {
-            viewModel.stopService()
+            viewModel.dispose()
             exitApplication()
             exitProcess(0)
         }

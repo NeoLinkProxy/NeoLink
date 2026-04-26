@@ -98,18 +98,44 @@ public final class ConfigOperator {
             reader.load();
             NeoLink.remoteDomainName = reader.getOptional("REMOTE_DOMAIN_NAME").orElse("localhost");
             NeoLink.localDomainName = reader.getOptional("LOCAL_DOMAIN_NAME").orElse("localhost");
-            NeoLink.hostHookPort = reader.getOptional("HOST_HOOK_PORT").map(Integer::parseInt).orElse(44801);
-            NeoLink.hostConnectPort = reader.getOptional("HOST_CONNECT_PORT").map(Integer::parseInt).orElse(44802);
+            NeoLink.hostHookPort = readPort(reader, "HOST_HOOK_PORT", NodeConfig.DEFAULT_HOST_HOOK_PORT);
+            NeoLink.hostConnectPort = readPort(reader, "HOST_CONNECT_PORT", NodeConfig.DEFAULT_HOST_CONNECT_PORT);
             NeoLink.enableAutoReconnect = reader.getOptional("ENABLE_AUTO_RECONNECT").map(Boolean::parseBoolean).orElse(true);
             NeoLink.enableAutoUpdate = reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true);
-            NeoLink.reconnectionIntervalSeconds = reader.getOptional("RECONNECTION_INTERVAL").map(Integer::parseInt).orElse(30);
+            NeoLink.reconnectionIntervalSeconds = readPositiveInt(reader, "RECONNECTION_INTERVAL", 30);
             NeoLink.enableProxyProtocol = reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false);
             NeoLink.nkmNodeListUrl = reader.getOptional("NKM_NODELIST_URL").orElse("");
             ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
             ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
-            CheckAliveThread.HEARTBEAT_PACKET_DELAY = reader.getOptional("HEARTBEAT_PACKET_DELAY").map(Integer::parseInt).orElse(1000);
-        } catch (IOException e) {
-            System.exit(-1);
+            CheckAliveThread.HEARTBEAT_PACKET_DELAY = readPositiveInt(reader, "HEARTBEAT_PACKET_DELAY", 1000);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid config.cfg: " + e.getMessage(), e);
+        }
+    }
+
+    private static int readPort(LineConfigReader reader, String key, int defaultValue) {
+        return reader.getOptional(key)
+                .filter(value -> !value.isBlank())
+                .map(value -> parseIntegerInRange(key, value, 1, 65535))
+                .orElse(defaultValue);
+    }
+
+    private static int readPositiveInt(LineConfigReader reader, String key, int defaultValue) {
+        return reader.getOptional(key)
+                .filter(value -> !value.isBlank())
+                .map(value -> parseIntegerInRange(key, value, 1, Integer.MAX_VALUE))
+                .orElse(defaultValue);
+    }
+
+    private static int parseIntegerInRange(String key, String value, int min, int max) {
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            if (parsed < min || parsed > max) {
+                throw new IllegalArgumentException(key + " must be between " + min + " and " + max + ".");
+            }
+            return parsed;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(key + " must be an integer.", e);
         }
     }
 

@@ -11,6 +11,7 @@ import fun.ceroxe.api.utils.Sleeper;
 import fun.ceroxe.api.utils.TimeUtils;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.config.NodeConfig;
 import neoproxy.neolink.gui.ComposeEntryKt;
 import neoproxy.neolink.network.InternetOperator;
 import neoproxy.neolink.network.NodeFetcher;
@@ -28,11 +29,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Locale;
 import java.util.Scanner;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
 import static neoproxy.neolink.network.InternetOperator.*;
@@ -54,7 +52,7 @@ import static neoproxy.neolink.update.UpdateManager.checkUpdate;
  * - 通过 ThreadManager 管理并发连接
  *
  * @author NeoProxy Team
- * @version 5.11.3
+ * @version 5.11.5
  */
 public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
@@ -64,8 +62,8 @@ public class NeoLink {
     public static int remotePort;
     public static String remoteDomainName = "localhost";
     public static String localDomainName = "localhost";
-    public static int hostHookPort = 44801;
-    public static int hostConnectPort = 44802;
+    public static int hostHookPort = NodeConfig.DEFAULT_HOST_HOOK_PORT;
+    public static int hostConnectPort = NodeConfig.DEFAULT_HOST_CONNECT_PORT;
     public static volatile SecureSocket hookSocket;
     public static volatile Socket connectingSocket = null;
     public static String key = null;
@@ -98,8 +96,14 @@ public class NeoLink {
 
     public static void main(String[] args) {
         ConfigOperator.initEnvironment();
-        parseCommandLineArgs(args);
-        ConfigOperator.readAndSetValue();
+        try {
+            ConfigOperator.readAndSetValue();
+            applyCommandLineArgs(args);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[NeoLink] " + e.getMessage());
+            System.exit(-1);
+            return;
+        }
         debugOperation("Entering main() method.");
         debugOperation("Command line arguments parsed. Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
 
@@ -148,34 +152,21 @@ public class NeoLink {
             if (!nodeFile.exists()) {
                 throw new IOException("node.json file not found.");
             }
-            String jsonContent = new String(Files.readAllBytes(nodeFile.toPath()), StandardCharsets.UTF_8);
-            String[] rawObjects = jsonContent.split("}");
-            boolean nodeFound = false;
-
-            for (String obj : rawObjects) {
-                Pattern namePattern = Pattern.compile("\"name\"\\s*:\\s*\"" + Pattern.quote(specifiedNodeName) + "\"");
-                Matcher nameMatcher = namePattern.matcher(obj);
-
-                if (nameMatcher.find()) {
-                    nodeFound = true;
-                    Pattern addressPattern = Pattern.compile("\"address\"\\s*:\\s*\"(.*?)\"");
-                    Matcher addressMatcher = addressPattern.matcher(obj);
-                    if (addressMatcher.find()) remoteDomainName = addressMatcher.group(1);
-
-                    Pattern hookPortPattern = Pattern.compile("\"(HOST_HOOK_PORT|hookPort)\"\\s*:\\s*(\\d+)");
-                    Matcher hookPortMatcher = hookPortPattern.matcher(obj);
-                    if (hookPortMatcher.find()) hostHookPort = Integer.parseInt(hookPortMatcher.group(2));
-
-                    Pattern connectPortPattern = Pattern.compile("\"(HOST_CONNECT_PORT|connectPort)\"\\s*:\\s*(\\d+)");
-                    Matcher connectPortMatcher = connectPortPattern.matcher(obj);
-                    if (connectPortMatcher.find()) hostConnectPort = Integer.parseInt(connectPortMatcher.group(2));
-                    break;
-                }
+            NodeConfig node = NodeConfig.findByName(nodeFile, specifiedNodeName);
+            if (node == null) {
+                throw new IOException("Node not found.");
             }
-            if (!nodeFound) throw new IOException("Node not found.");
+
+            remoteDomainName = node.getAddress();
+            hostHookPort = node.getHostHookPort();
+            hostConnectPort = node.getHostConnectPort();
         } catch (Exception e) {
             debugOperation("Failed to load node config: " + e.getMessage());
         }
+    }
+
+    public static void applyCommandLineArgs(String[] args) {
+        parseCommandLineArgs(args);
     }
 
     public static void detectLanguage() {
@@ -190,6 +181,9 @@ public class NeoLink {
     }
 
     private static void parseCommandLineArgs(String[] args) {
+        if (args == null) {
+            return;
+        }
         boolean hasKey = false;
         boolean hasLocalPort = false;
         for (String arg : args) {
@@ -206,9 +200,12 @@ public class NeoLink {
 
     private static void parseKeyValueArgument(String arg) {
         String[] parts = arg.split("=", 2);
+        if (parts.length != 2 || parts[1].isBlank()) {
+            throw new IllegalArgumentException(parts[0] + " requires a value.");
+        }
         switch (parts[0]) {
             case "--key" -> key = parts[1];
-            case "--local-port" -> localPort = Integer.parseInt(parts[1]);
+            case "--local-port" -> localPort = parsePort(parts[1], "--local-port");
             case "--output-file" -> outputFilePath = parts[1];
             case "--node" -> specifiedNodeName = parts[1];
         }
@@ -234,10 +231,39 @@ public class NeoLink {
     public static void initializeLogger() {
         File logsDir = new File(ConfigOperator.WORKING_DIR, "logs");
         if (!logsDir.exists()) logsDir.mkdirs();
-        File logFile = new File(logsDir, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
+        File logFile = resolveLogFile(logsDir);
         loggist = new Loggist(logFile);
         if (noColor) loggist.disableColor();
         loggist.openWriteChannel();
+    }
+
+    private static File resolveLogFile(File defaultLogsDir) {
+        if (outputFilePath == null || outputFilePath.isBlank()) {
+            return new File(defaultLogsDir, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
+        }
+
+        File logFile = new File(outputFilePath);
+        if (!logFile.isAbsolute()) {
+            logFile = new File(ConfigOperator.WORKING_DIR, outputFilePath);
+        }
+
+        File parent = logFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IllegalArgumentException("Failed to create log directory: " + parent.getAbsolutePath());
+        }
+        return logFile;
+    }
+
+    private static int parsePort(String value, String source) {
+        try {
+            int port = Integer.parseInt(value.trim());
+            if (port < 1 || port > 65535) {
+                throw new IllegalArgumentException(source + " must be between 1 and 65535.");
+            }
+            return port;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(source + " must be an integer.", e);
+        }
     }
 
     private static void connectToNeoServer() throws IOException {

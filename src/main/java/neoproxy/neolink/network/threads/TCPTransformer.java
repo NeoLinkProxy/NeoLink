@@ -39,6 +39,7 @@ public class TCPTransformer implements Runnable {
             (byte) 0x00, (byte) 0x0D, (byte) 0x0A, (byte) 0x51,
             (byte) 0x55, (byte) 0x49, (byte) 0x54, (byte) 0x0A
     };
+    private static final int PPV2_MIN_HEADER_LENGTH = 16;
     public static int BUFFER_LENGTH = 65535; // 可以保持为静态常量
     private final Socket plainSocket;
     private final SecureSocket secureSocket;
@@ -114,7 +115,11 @@ public class TCPTransformer implements Runnable {
                             // 配置为开启：透传给本地后端
                             outputToLocal.write(data);
                         } else {
-                            // 配置为关闭：丢弃该数据包
+                            // 配置为关闭：只剥离 PPv2 头，保留同一帧中已经携带的真实业务数据。
+                            int headerLength = proxyProtocolV2HeaderLength(data);
+                            if (data.length > headerLength) {
+                                outputToLocal.write(data, headerLength, data.length - headerLength);
+                            }
                             continue;
                         }
                     } else {
@@ -142,15 +147,27 @@ public class TCPTransformer implements Runnable {
      * 检查数据包是否以 Proxy Protocol v2 签名开头
      */
     private boolean isProxyProtocolV2Signature(byte[] data) {
-        if (data == null || data.length < 12) {
+        if (data == null || data.length < PPV2_SIG.length) {
             return false;
         }
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < PPV2_SIG.length; i++) {
             if (data[i] != PPV2_SIG[i]) {
                 return false;
             }
         }
         return true;
+    }
+
+    private int proxyProtocolV2HeaderLength(byte[] data) {
+        if (data.length < PPV2_MIN_HEADER_LENGTH) {
+            return data.length;
+        }
+        int payloadLength = ((data[14] & 0xFF) << 8) | (data[15] & 0xFF);
+        long headerLength = (long) PPV2_MIN_HEADER_LENGTH + payloadLength;
+        if (headerLength > data.length) {
+            return data.length;
+        }
+        return (int) headerLength;
     }
 
     @Override

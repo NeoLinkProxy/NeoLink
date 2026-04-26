@@ -29,7 +29,7 @@ bin/
 
 # NeoLink 运行产物
 logs/
-config.cfg
+/config.cfg
 node.json
 eula.txt
 

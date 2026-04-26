@@ -74,7 +74,7 @@ class ProxyOperatorTest {
         ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = null;
         ProxyOperator.PROXY_IP_TO_NEO_SERVER = null;
 
-        assertThrows(NullPointerException.class, () -> ProxyOperator.init());
+        assertDoesNotThrow(() -> ProxyOperator.init());
     }
 
     @Test

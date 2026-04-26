@@ -1,7 +1,6 @@
 package neoproxy.neolink.update;
 
 import fun.ceroxe.api.OshiUtils;
-import fun.ceroxe.api.WindowsOperation;
 import fun.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
@@ -267,7 +266,7 @@ public class UpdateManager {
                         return null;
                     }
 
-                    currentFile = new File(destination, path);
+                    currentFile = resolveArchiveEntry(destination, path);
                     File parent = currentFile.getParentFile();
                     if (parent != null && !parent.exists()) {
                         if (!parent.mkdirs()) {
@@ -370,29 +369,28 @@ public class UpdateManager {
 
             // 根据操作系统选择启动方式
             if (OshiUtils.isWindows()) {
-                // Windows: 使用 cmd.exe 启动
-                StringBuilder command = new StringBuilder("cmd.exe /c start \"\" \"");
-                command.append(exeFile.getAbsolutePath()).append("\"");
+                List<String> command = new ArrayList<>();
+                command.add(exeFile.getAbsolutePath());
 
                 if (key != null) {
-                    command.append(" --key=").append(key);
+                    command.add("--key=" + key);
                 }
                 if (localPort != INVALID_LOCAL_PORT) {
-                    command.append(" --local-port=").append(localPort);
+                    command.add("--local-port=" + localPort);
                 }
                 if (!isGUIMode) {
-                    command.append(" --nogui");
+                    command.add("--nogui");
                 }
                 if (isDebugMode) {
-                    command.append(" --debug");
+                    command.add("--debug");
                 }
                 if (outputFilePath != null) {
-                    command.append(" --output-file=").append(outputFilePath);
+                    command.add("--output-file=" + outputFilePath);
                 }
 
-                say(languageData.STARTING_NEW_VERSION + command);
+                say(languageData.STARTING_NEW_VERSION + String.join(" ", command));
                 debugOperation("Executing command: " + command);
-                WindowsOperation.run(command.toString());
+                new ProcessBuilder(command).start();
                 say(languageData.NEW_VERSION_STARTED);
 
                 try {
@@ -451,6 +449,22 @@ public class UpdateManager {
         } catch (Exception e) {
             Debugger.debugOperation(e);
             say(languageData.FAILED_TO_START_NEW_VERSION + e.getMessage(), LogType.ERROR);
+        }
+    }
+
+    private static File resolveArchiveEntry(File destination, String entryPath) throws SevenZipException {
+        try {
+            File canonicalDestination = destination.getCanonicalFile();
+            File target = new File(canonicalDestination, entryPath).getCanonicalFile();
+            String destinationPath = canonicalDestination.getPath();
+            String targetPath = target.getPath();
+
+            if (!targetPath.equals(destinationPath) && !targetPath.startsWith(destinationPath + File.separator)) {
+                throw new SevenZipException("Archive entry escapes destination directory: " + entryPath);
+            }
+            return target;
+        } catch (IOException e) {
+            throw new SevenZipException(e);
         }
     }
 

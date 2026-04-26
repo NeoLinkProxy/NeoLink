@@ -41,6 +41,10 @@ import static neoproxy.neolink.core.NeoLink.localPort;
 public class UDPTransformer implements Runnable {
     public static final int MODE_NEO_TO_LOCAL = 0;
     public static final int MODE_LOCAL_TO_NEO = 1;
+    private static final int MAGIC = 0xDEADBEEF;
+    private static final int SERIALIZED_HEADER_FIXED_LENGTH = 4 + 4 + 4 + 2;
+    private static final int IPV4_LENGTH = 4;
+    private static final int IPV6_LENGTH = 16;
     public static int BUFFER_LENGTH = 65535; // 可以保持为静态常量
 
     private final DatagramSocket plainSocket;
@@ -52,7 +56,9 @@ public class UDPTransformer implements Runnable {
 
     // 🔥【性能优化】为序列化创建一个可复用的ByteBuffer
     // 注意：这个大小需要根据你的最大UDP包来设定，要足够大。
-    private final ByteBuffer serializationBuffer = ByteBuffer.allocate(65560);
+    private final ByteBuffer serializationBuffer = ByteBuffer.allocate(
+            SERIALIZED_HEADER_FIXED_LENGTH + IPV6_LENGTH + BUFFER_LENGTH
+    );
 
     /**
      * 构造函数：用于从 Neo 服务器接收数据并转发到本地服务。
@@ -76,16 +82,32 @@ public class UDPTransformer implements Runnable {
      * 这个方法可以保持为静态，因为它不依赖实例状态。
      */
     public static DatagramPacket deserializeToDatagramPacket(byte[] serializedData) {
+        if (serializedData == null || serializedData.length < SERIALIZED_HEADER_FIXED_LENGTH + IPV4_LENGTH) {
+            throw new IllegalArgumentException("Serialized UDP packet is too short");
+        }
+
         ByteBuffer buffer = ByteBuffer.wrap(serializedData);
         buffer.order(ByteOrder.BIG_ENDIAN);
 
         int magic = buffer.getInt();
-        if (magic != 0xDEADBEEF) {
+        if (magic != MAGIC) {
             throw new IllegalArgumentException("Invalid magic number in serialized data");
         }
 
         int dataLen = buffer.getInt();
         int ipLen = buffer.getInt();
+        if (dataLen < 0 || dataLen > BUFFER_LENGTH) {
+            throw new IllegalArgumentException("Invalid UDP data length: " + dataLen);
+        }
+        if (ipLen != IPV4_LENGTH && ipLen != IPV6_LENGTH) {
+            throw new IllegalArgumentException("Invalid IP address length: " + ipLen);
+        }
+
+        int expectedLength = SERIALIZED_HEADER_FIXED_LENGTH + ipLen + dataLen;
+        if (serializedData.length != expectedLength) {
+            throw new IllegalArgumentException("Serialized UDP packet length mismatch");
+        }
+
         byte[] ipBytes = new byte[ipLen];
         buffer.get(ipBytes);
         InetAddress address;
@@ -141,16 +163,10 @@ public class UDPTransformer implements Runnable {
         // 或者直接抛出异常，让调用者知道包太大
         int totalLen = 4 + 4 + 4 + ipLength + 2 + length;
         if (totalLen > serializationBuffer.capacity()) {
-            // 实际生产中，可能需要更大的固定缓冲区或更复杂的处理
-            Debugger.debugOperation(new IOException("UDP packet too large for serialization buffer"));
-            // 回退到原始方式
-            ByteBuffer tempBuffer = ByteBuffer.allocate(totalLen);
-            tempBuffer.order(ByteOrder.BIG_ENDIAN);
-            // ... (填充逻辑) ...
-            return tempBuffer.array();
+            throw new IllegalArgumentException("UDP packet too large for serialization buffer: " + totalLen);
         }
 
-        serializationBuffer.putInt(0xDEADBEEF);
+        serializationBuffer.putInt(MAGIC);
         serializationBuffer.putInt(length);
         serializationBuffer.putInt(ipLength);
         serializationBuffer.put(ipBytes);

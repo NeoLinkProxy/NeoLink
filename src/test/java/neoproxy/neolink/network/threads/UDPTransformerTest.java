@@ -128,7 +128,7 @@ class UDPTransformerTest {
         bufferField.setAccessible(true);
         java.nio.ByteBuffer buffer = (java.nio.ByteBuffer) bufferField.get(transformer);
         assertNotNull(buffer);
-        assertEquals(65560, buffer.capacity());
+        assertEquals(65565, buffer.capacity());
     }
 
     @Test

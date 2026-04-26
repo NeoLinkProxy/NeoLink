@@ -133,6 +133,8 @@ HEARTBEAT_PACKET_DELAY=1000
 ENABLE_AUTO_RECONNECT=true
 #重连间隔时间 (秒)
 RECONNECTION_INTERVAL=30
+#向 NKM 获取的有效节点列表，留空则不自动拉取
+NKM_NODELIST_URL=
 ```
 
 ### 2. 🗄️ **多节点配置** (`node.json`)

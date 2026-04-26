@@ -33,9 +33,9 @@ import static neoproxy.neolink.core.NeoLink.remoteDomainName;
 public class ProxyOperator {
 
     // 代理到本地服务的配置
-    public static String PROXY_IP_TO_LOCAL_SERVER = null;
+    public static String PROXY_IP_TO_LOCAL_SERVER = "";
     // 代理到 Neo 服务器的配置
-    public static String PROXY_IP_TO_NEO_SERVER = null;
+    public static String PROXY_IP_TO_NEO_SERVER = "";
     private static Proxy.Type proxyToLocalType = null;
     private static String proxyToLocalIp = null;
     private static int proxyToLocalPort;
@@ -51,16 +51,38 @@ public class ProxyOperator {
      * 初始化代理配置，解析命令行或配置文件中提供的代理字符串。
      */
     public static void init() {
-        if (!PROXY_IP_TO_LOCAL_SERVER.isEmpty()) {
+        resetParsedProxyState();
+        if (hasText(PROXY_IP_TO_LOCAL_SERVER)) {
             parseProxyConfig(PROXY_IP_TO_LOCAL_SERVER, true);
         }
-        if (!PROXY_IP_TO_NEO_SERVER.isEmpty()) {
+        if (hasText(PROXY_IP_TO_NEO_SERVER)) {
             parseProxyConfig(PROXY_IP_TO_NEO_SERVER, false);
         }
     }
 
+    private static void resetParsedProxyState() {
+        proxyToLocalType = null;
+        proxyToLocalIp = null;
+        proxyToLocalPort = 0;
+        proxyToLocalUsername = null;
+        proxyToLocalPassword = null;
+        proxyToNeoType = null;
+        proxyToNeoIp = null;
+        proxyToNeoPort = 0;
+        proxyToNeoUsername = null;
+        proxyToNeoPassword = null;
+    }
+
     private static void parseProxyConfig(String proxyConfig, boolean isLocalProxy) {
+        if (!hasText(proxyConfig)) {
+            return;
+        }
+
         String[] typeAndProperty = proxyConfig.split("->", 2);
+        if (typeAndProperty.length != 2 || !hasText(typeAndProperty[1])) {
+            throw new IllegalArgumentException("Invalid proxy format. Expected type->host:port[@user;password].");
+        }
+
         Proxy.Type proxyType;
         if ("socks".equals(typeAndProperty[0])) {
             proxyType = Proxy.Type.SOCKS;
@@ -76,18 +98,27 @@ public class ProxyOperator {
 
         if (authParts[0].startsWith("[")) {
             int closingBracket = authParts[0].indexOf(']');
+            if (closingBracket <= 1 || closingBracket + 2 > authParts[0].length() || authParts[0].charAt(closingBracket + 1) != ':') {
+                throw new IllegalArgumentException("Invalid IPv6 proxy address: " + authParts[0]);
+            }
             ip = authParts[0].substring(1, closingBracket);
-            port = Integer.parseInt(authParts[0].substring(closingBracket + 2));
+            port = parseProxyPort(authParts[0].substring(closingBracket + 2));
         } else {
             String[] ipPortParts = authParts[0].split(":", 2);
+            if (ipPortParts.length != 2 || !hasText(ipPortParts[0])) {
+                throw new IllegalArgumentException("Invalid proxy address: " + authParts[0]);
+            }
             ip = ipPortParts[0];
-            port = Integer.parseInt(ipPortParts[1]);
+            port = parseProxyPort(ipPortParts[1]);
         }
 
         String username = null;
         String password = null;
         if (authParts.length > 1) {
             String[] userPass = authParts[1].split(";", 2);
+            if (userPass.length != 2) {
+                throw new IllegalArgumentException("Invalid proxy authentication format. Expected user;password.");
+            }
             username = userPass[0];
             password = userPass[1];
         }
@@ -107,78 +138,91 @@ public class ProxyOperator {
         }
     }
 
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static int parseProxyPort(String value) {
+        try {
+            int port = Integer.parseInt(value.trim());
+            if (port < 1 || port > 65535) {
+                throw new IllegalArgumentException("Proxy port must be between 1 and 65535.");
+            }
+            return port;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Proxy port must be an integer.", e);
+        }
+    }
+
     /**
      * 创建一个经过代理处理的普通 Socket。
      */
     public synchronized static Socket getHandledSocket(int socketType, int targetPort) throws IOException {
-        Proxy proxy;
-        String targetHost;
-        int proxyPort;
-        String proxyUsername;
-        String proxyPassword;
-
-        if (socketType == Type.TO_NEO) {
-            proxy = new Proxy(proxyToNeoType, new InetSocketAddress(proxyToNeoIp, proxyToNeoPort));
-            targetHost = remoteDomainName;
-            proxyPort = proxyToNeoPort;
-            proxyUsername = proxyToNeoUsername;
-            proxyPassword = proxyToNeoPassword;
-        } else {
-            proxy = new Proxy(proxyToLocalType, new InetSocketAddress(proxyToLocalIp, proxyToLocalPort));
-            targetHost = localDomainName;
-            proxyPort = proxyToLocalPort;
-            proxyUsername = proxyToLocalUsername;
-            proxyPassword = proxyToLocalPassword;
-        }
-
-        if (proxyUsername != null) {
-            Authenticator.setDefault(new Authenticator() {
-                @Override
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(proxyUsername, proxyPassword.toCharArray());
-                }
-            });
-        }
-
-        Socket socket = new Socket(proxy);
-        socket.connect(new InetSocketAddress(targetHost, targetPort));
-        return socket;
+        ProxySettings settings = settingsFor(socketType);
+        return withProxyAuthenticator(settings, () -> {
+            Socket socket = new Socket(settings.proxy());
+            socket.connect(new InetSocketAddress(settings.targetHost(), targetPort));
+            return socket;
+        });
     }
 
     /**
      * 创建一个经过代理处理的 SecureSocket。
      */
     public synchronized static SecureSocket getHandledSecureSocket(int socketType, int targetPort) throws IOException {
-        Proxy proxy;
-        String targetHost;
-        int proxyPort;
-        String proxyUsername;
-        String proxyPassword;
+        ProxySettings settings = settingsFor(socketType);
+        return withProxyAuthenticator(settings, () -> new SecureSocket(settings.proxy(), settings.targetHost(), targetPort));
+    }
 
+    private static ProxySettings settingsFor(int socketType) {
         if (socketType == Type.TO_NEO) {
-            proxy = new Proxy(proxyToNeoType, new InetSocketAddress(proxyToNeoIp, proxyToNeoPort));
-            targetHost = remoteDomainName;
-            proxyPort = proxyToNeoPort;
-            proxyUsername = proxyToNeoUsername;
-            proxyPassword = proxyToNeoPassword;
-        } else {
-            proxy = new Proxy(proxyToLocalType, new InetSocketAddress(proxyToLocalIp, proxyToLocalPort));
-            targetHost = localDomainName; // 修复：这里应该是 localDomainName
-            proxyPort = proxyToLocalPort;
-            proxyUsername = proxyToLocalUsername;
-            proxyPassword = proxyToLocalPassword;
+            return new ProxySettings(proxyToNeoType, proxyToNeoIp, proxyToNeoPort, remoteDomainName, proxyToNeoUsername, proxyToNeoPassword);
+        }
+        return new ProxySettings(proxyToLocalType, proxyToLocalIp, proxyToLocalPort, localDomainName, proxyToLocalUsername, proxyToLocalPassword);
+    }
+
+    private static <T> T withProxyAuthenticator(ProxySettings settings, IOExceptionSupplier<T> supplier) throws IOException {
+        if (!settings.hasCredentials()) {
+            return supplier.get();
         }
 
-        if (proxyUsername != null) {
+        Authenticator previous = Authenticator.getDefault();
+        try {
             Authenticator.setDefault(new Authenticator() {
                 @Override
                 protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(proxyUsername, proxyPassword.toCharArray());
+                    return new PasswordAuthentication(settings.username(), settings.password().toCharArray());
                 }
             });
+            return supplier.get();
+        } finally {
+            Authenticator.setDefault(previous);
+        }
+    }
+
+    private record ProxySettings(
+            Proxy.Type proxyType,
+            String proxyHost,
+            int proxyPort,
+            String targetHost,
+            String username,
+            String password
+    ) {
+        Proxy proxy() {
+            if (proxyType == null || proxyType == Proxy.Type.DIRECT) {
+                return Proxy.NO_PROXY;
+            }
+            return new Proxy(proxyType, new InetSocketAddress(proxyHost, proxyPort));
         }
 
-        return new SecureSocket(proxy, targetHost, targetPort);
+        boolean hasCredentials() {
+            return proxyType != null && proxyType != Proxy.Type.DIRECT && username != null && password != null;
+        }
+    }
+
+    @FunctionalInterface
+    private interface IOExceptionSupplier<T> {
+        T get() throws IOException;
     }
 
     public static class Type {
