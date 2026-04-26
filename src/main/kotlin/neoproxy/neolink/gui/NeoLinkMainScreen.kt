@@ -68,28 +68,27 @@ import org.xml.sax.InputSource
  *
  * 核心职责：
  * 1. 定义应用程序的视觉主题和配色方案
- * 2. 根据硬件检测结果动态调整 UI 表现
+ * 2. 根据 GUI 渲染决策动态调整 UI 表现
  * 3. 提供统一的样式配置（颜色、字体、尺寸等）
  *
  * 设计特点：
- * - 支持透明背景（硬件加速模式）
- * - 支持不透明背景（软件渲染模式）
+ * - 支持透明背景（DirectX + 亚克力模式）
+ * - 支持不透明背景（软件渲染或运行时特效失败）
  * - 暗色主题，保护视力
  * - 统一的圆角和间距设计
  *
  * 动态调整：
- * - 基于 RenderState.isSoftwareFallback 判断是否使用透明背景
+ * - 基于 RenderState.isOpaqueFallback 判断是否使用透明背景
  * - 基于 WindowsEffects.isEffectApplied 调整材质效果
  *
  * @author NeoProxy Team
  * @since 5.11.0
  */
 object ModernTheme {
-    // 降级模式检测：如果 RenderState.isSoftwareFallback 为 true，说明已经切换到了 SOFTWARE 渲染
-    // 此时必须使用不透明背景，否则软件渲染无法正确处理 Alpha 通道
+    // 不透明安全态检测：软件渲染、用户禁用特效或真实窗口注入失败时，都不能继续绘制半透明根背景。
     val background: Color
-        get() = if (RenderState.isSoftwareFallback) {
-            Color(0xFF121214) // 100% 不透明，防止消失
+        get() = if (RenderState.isOpaqueFallback) {
+            Color(0xFF121214) // 100% 不透明，防止透明窗口残态导致内容消失或点击穿透
         } else if (WindowsEffects.isEffectApplied) {
             Color(0xCC121214)
         } else {
@@ -97,7 +96,7 @@ object ModernTheme {
         }
 
     val surface: Color
-        get() = if (RenderState.isSoftwareFallback || !WindowsEffects.isEffectApplied)
+        get() = if (RenderState.isOpaqueFallback || !WindowsEffects.isEffectApplied)
             Color(0xFF1E1E20)
         else
             Color(0xCC1E1E20)
@@ -179,7 +178,7 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
  * 1. 构建 NeoLink GUI 的主界面布局
  * 2. 整合标题栏、连接配置区、日志控制台、底部操作栏
  * 3. 处理窗口拖拽、最小化、最大化、关闭等操作
- * 4. 应用 Windows 特效（亚克力/云母）
+ * 4. 应用 Windows 亚克力特效
  *
  * 界面结构：
  * - 自定义标题栏（包含窗口控制按钮）
@@ -212,9 +211,9 @@ fun WindowScope.neoLinkMainScreen(
 
     val isMaximized = windowState.placement == WindowPlacement.Maximized
 
-    // 🔴 核心逻辑：如果处于软件渲染降级模式，或者窗口已最大化，则强制使用直角 (RectangleShape)
-    // 只有在硬件渲染正常且非最大化时，才应用 ModernTheme.shapeWindow (8.dp 圆角)
-    val currentShape = if (isMaximized || RenderState.isSoftwareFallback) {
+    // 核心逻辑：如果处于不透明安全态，或者窗口已最大化，则强制使用直角 (RectangleShape)。
+    // 只有在真实亚克力背板可用且非最大化时，才应用 ModernTheme.shapeWindow (8.dp 圆角)。
+    val currentShape = if (isMaximized || RenderState.isOpaqueFallback) {
         RectangleShape
     } else {
         ModernTheme.shapeWindow
@@ -237,11 +236,11 @@ fun WindowScope.neoLinkMainScreen(
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    // 颜色逻辑在 ModernTheme 中已处理：降级时为不透明，正常时带 Alpha
+                    // 颜色逻辑在 ModernTheme 中已处理：安全态为不透明，真实亚克力可用时带 Alpha
                     color = ModernTheme.background,
                     shape = currentShape,
-                    // 🔴 细节优化：降级模式下也禁用 1dp 的半透明高亮边框，保持直角窗口的纯粹感
-                    border = if (!isMaximized && !RenderState.isSoftwareFallback) {
+                    // 不透明安全态下禁用半透明高亮边框，避免透明残留和窗口边缘伪影。
+                    border = if (!isMaximized && !RenderState.isOpaqueFallback) {
                         BorderStroke(1.dp, Color(0x1AFFFFFF))
                     } else null
                 ) {

@@ -20,32 +20,18 @@ import javax.swing.plaf.ColorUIResource
 import kotlin.system.exitProcess
 
 /**
- * 渲染状态对象
- *
- * 管理应用程序的渲染模式状态：
- * - 硬件加速（DirectX）
- * - 软件回退（Software）
- *
- * 当检测到硬件兼容性问题时，自动切换到软件渲染模式
- */
-object RenderState {
-    /** 是否使用软件渲染回退模式 */
-    var isSoftwareFallback by mutableStateOf(false)
-}
-
-/**
  * GUI 应用程序入口点
  *
  * 核心职责：
- * 1. 执行硬件兼容性预检
- * 2. 配置渲染模式（DirectX 或 Software）
+ * 1. 执行 DWM 透明背板预检
+ * 2. 配置 GUI 渲染决策（DirectX + 亚克力，或 Software + 不透明）
  * 3. 初始化日志系统和语言设置
  * 4. 设置 Swing 外观
  * 5. 创建并显示主窗口
  *
  * 渲染策略：
- * - 优先使用 DirectX 硬件加速
- * - 检测到兼容性问题时自动回退到软件渲染
+ * - 优先使用 DirectX + 亚克力窗口
+ * - 检测到 DWM/透明窗口风险时自动回退到 Software + 不透明窗口
  * - 捕获并处理 RenderException 异常
  *
  * @param args 命令行参数
@@ -56,18 +42,15 @@ fun main(args: Array<String>) {
 
     if (isNoEffectMode) {
         // 显式禁用特效，强制使用软件渲染
-        System.setProperty("skiko.renderApi", "SOFTWARE")
-        RenderState.isSoftwareFallback = true
+        RenderState.useSoftwareOpaque("用户通过 --no-effect 显式禁用 GUI 特效", forcedByUser = true)
         println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
     } else {
         val checkResult = NeoLinkPreFlightChecker.runFullCheck()
 
-        if (checkResult.isHardwareOk) {
-            System.setProperty("skiko.renderApi", "DIRECTX")
-            RenderState.isSoftwareFallback = false
+        if (checkResult.allowsAcrylicDirectX) {
+            RenderState.useDirectXAcrylic(checkResult.description)
         } else {
-            System.setProperty("skiko.renderApi", "SOFTWARE")
-            RenderState.isSoftwareFallback = true
+            RenderState.useSoftwareOpaque(checkResult.description)
         }
     }
 
@@ -81,9 +64,10 @@ fun main(args: Array<String>) {
         override fun write(buf: ByteArray, off: Int, len: Int) {
             val msg = String(buf, off, len)
             if (msg.contains("RenderException") || msg.contains("DirectX12")) {
-                if (!RenderState.isSoftwareFallback) {
-                    RenderState.isSoftwareFallback = true
-                    System.setProperty("skiko.renderApi", "SOFTWARE")
+                if (!RenderState.isOpaqueFallback) {
+                    WindowsEffects.markEffectUnavailable()
+                    RenderState.disableEffectsForCurrentProcess("Skiko 渲染异常，当前进程关闭透明背板")
+                    System.setProperty("skiko.renderApi", GuiRenderBackend.SOFTWARE.skikoValue)
                 }
             }
             super.write(buf, off, len)
@@ -101,7 +85,7 @@ fun main(args: Array<String>) {
             size = DpSize(920.dp, 650.dp)
         )
 
-        val useTransparentWindow = !RenderState.isSoftwareFallback
+        val useTransparentWindow = RenderState.shouldUseTransparentWindow
 
         val closeApp = {
             viewModel.dispose()
@@ -126,8 +110,8 @@ fun main(args: Array<String>) {
                 java.awt.Color(18, 18, 20)
             }
 
-            LaunchedEffect(RenderState.isSoftwareFallback) {
-                if (RenderState.isSoftwareFallback) {
+            LaunchedEffect(RenderState.decision) {
+                if (RenderState.isOpaqueFallback) {
                     window.background = java.awt.Color(18, 18, 20)
                     window.revalidate()
                     window.repaint()
