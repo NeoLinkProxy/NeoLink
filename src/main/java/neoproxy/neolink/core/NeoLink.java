@@ -128,6 +128,8 @@ public class NeoLink {
         try {
             promptForAccessKey();
             connectToNeoServer();
+            // 确保旧心跳线程完全停止后再发送客户端信息，防止并发问题
+            CheckAliveThread.stopThread();
             exchangeClientInfoWithServer();
             CheckAliveThread.startThread();
             promptForLocalPort();

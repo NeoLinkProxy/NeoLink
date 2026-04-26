@@ -78,7 +78,21 @@ public final class CheckAliveThread implements Runnable {
     private void stop() {
         if (isRunning.compareAndSet(true, false)) {
             debugOperation("[DEBUG] Stopping CheckAliveThread...");
-            if (heartbeatThreadInstance != null) heartbeatThreadInstance.interrupt();
+            if (heartbeatThreadInstance != null) {
+                heartbeatThreadInstance.interrupt();
+                // 等待线程真正结束，防止旧线程在新连接建立后仍发送 PING
+                try {
+                    heartbeatThreadInstance.join(3000); // 最多等待 3 秒
+                    if (heartbeatThreadInstance.isAlive()) {
+                        System.err.println("[WARNING] CheckAliveThread did not stop within timeout!");
+                    } else {
+                        debugOperation("[DEBUG] CheckAliveThread stopped successfully.");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); // 恢复中断状态
+                    System.err.println("[WARNING] Interrupted while waiting for CheckAliveThread to stop.");
+                }
+            }
         }
     }
 
