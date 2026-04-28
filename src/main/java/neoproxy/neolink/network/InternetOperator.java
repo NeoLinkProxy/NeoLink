@@ -79,6 +79,6 @@ public class InternetOperator {
 
 
     public static byte[] receiveBytes() throws IOException {
-        return hookSocket.receiveByte();
+        return hookSocket.receiveBytes();
     }
 }

@@ -44,9 +44,13 @@ public final class NodeConfig {
         List<NodeConfig> nodes = new ArrayList<>();
         for (JsonNode item : root) {
             NodeConfig parsed = parseNode(item);
-            if (parsed != null) {
-                nodes.add(parsed);
+            if (parsed == null) {
+                throw new IOException("node.json contains an invalid node entry.");
             }
+            nodes.add(parsed);
+        }
+        if (nodes.isEmpty()) {
+            throw new IOException("node.json must contain at least one valid node.");
         }
         return nodes;
     }

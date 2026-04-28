@@ -135,7 +135,7 @@ public class UDPTransformer implements Runnable {
                 plainSocket.receive(incomingPacket);
                 // 🔥 调用实例方法进行序列化
                 byte[] serializedData = serializeDatagramPacket(incomingPacket);
-                secureSocket.sendByte(serializedData);
+                secureSocket.sendBytes(serializedData);
             }
         } catch (IOException e) {
             Debugger.debugOperation(e);
@@ -183,7 +183,7 @@ public class UDPTransformer implements Runnable {
     private void transferDataToLocalServer() {
         try {
             byte[] data;
-            while ((data = secureSocket.receiveByte()) != null) {
+            while ((data = secureSocket.receiveBytes()) != null) {
                 DatagramPacket datagramPacket = deserializeToDatagramPacket(data);
                 if (datagramPacket != null) {
                     DatagramPacket outgoingPacket = new DatagramPacket(

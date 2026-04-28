@@ -5,15 +5,12 @@ import fun.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
 import neoproxy.neolink.util.Debugger;
-import net.sf.sevenzipjbinding.*;
-import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
 
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -27,21 +24,19 @@ import static neoproxy.neolink.core.NeoLink.*;
  *
  * 核心职责：
  * 1. 检查并下载 NeoLink 客户端更新
- * 2. 自动解压并替换旧版本
- * 3. 备份现有版本，确保可回滚
+ * 2. Windows 直接启动上游提供的 installer exe
+ * 3. 非 Windows 保持 JAR 更新与备份流程
  *
  * 设计特点：
  * - 支持 Windows 和 Linux 自动更新
- * - 使用 7-Zip 解压更新包
  * - 文件大小校验，确保下载完整
- * - 自动备份和替换机制
+ * - Windows installer 由安装器接管替换逻辑，避免在运行中覆盖自身
+ * - 非 Windows 自动备份和替换机制
  *
  * 更新流程：
- * 1. 从服务器下载新版本 7z 包
- * 2. 解压到临时目录
- * 3. 备份当前版本
- * 4. 替换为新版本
- * 5. 清理临时文件
+ * 1. 从服务器下载对应平台的更新文件
+ * 2. Windows 启动 installer exe
+ * 3. 非 Windows 备份当前 JAR 并替换为新版本
  *
  * @author NeoProxy Team
  * @since 5.0.0
@@ -56,7 +51,7 @@ public class UpdateManager {
             debugOperation("OS is Windows: " + isWindows);
 
             // 1. 告诉服务端当前需要的格式
-            sendStr(isWindows ? "7z" : "jar");
+            sendStr(isWindows ? "exe" : "jar");
 
             // 2. 接收服务端返回的下载地址 (URL)
             String responseUrl = receiveStr();
@@ -76,7 +71,7 @@ public class UpdateManager {
             }
 
             // 4. 准备本地文件路径
-            String fileExtension = isWindows ? ".7z" : ".jar";
+            String fileExtension = isWindows ? ".exe" : ".jar";
             File clientFile = new File(tempUpdateDir, fileName + fileExtension);
             debugOperation("Target local file: " + clientFile.getAbsolutePath());
 
@@ -89,34 +84,22 @@ public class UpdateManager {
 
             if (!downloadSuccess) {
                 say(languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE, LogType.ERROR);
-                exitAndFreeze(-1);
+                finishUpdateProcess(-1);
                 return;
             }
 
             say(languageData.DOWNLOAD_SUCCESS);
 
-            // 6. 后续解压和安装逻辑保持不变
+            // 6. Windows 上游现在返回 installer exe，下载后直接交给安装器接管。
             if (isWindows) {
-                debugOperation("Extracting 7z file...");
-                boolean extractionSuccess = extractSevenZFile(clientFile, new File(CURRENT_DIR_PATH));
-                if (!extractionSuccess) {
-                    say(languageData.FAILED_TO_EXTRACT_7Z_FILE, LogType.ERROR);
-                    exitAndFreeze(-1);
+                if (!startInstaller(clientFile)) {
+                    finishUpdateProcess(-1);
                     return;
                 }
 
-                File extractedExe = findExtractedExe(new File(CURRENT_DIR_PATH));
-                if (extractedExe == null) {
-                    debugOperation("Extracted EXE not found.");
-                    say(languageData.NEOLINK_EXE_NOT_FOUND, LogType.ERROR);
-                    exitAndFreeze(-1);
-                    return;
-                }
-
-                deleteFileOrDirectory(clientFile);
-                debugOperation("Deleted temporary archive.");
-
-                startNewVersion(extractedExe);
+                // 安装器需要接管文件替换，成功拉起后必须立即释放当前进程。
+                exitAfterInstallerStarted();
+                return;
             } else {
                 debugOperation("Updating JAR file...");
                 File finalJar = new File(CURRENT_DIR_PATH, fileName + fileExtension);
@@ -125,13 +108,13 @@ public class UpdateManager {
                     if (!backupFile.exists()) {
                         if (!finalJar.renameTo(backupFile)) {
                             say(languageData.FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
-                            exitAndFreeze(-1);
+                            finishUpdateProcess(-1);
                             return;
                         }
                     } else {
                         if (!finalJar.delete()) {
                             say(languageData.FAILED_TO_DELETE_EXISTING_JAR, LogType.ERROR);
-                            exitAndFreeze(-1);
+                            finishUpdateProcess(-1);
                             return;
                         }
                     }
@@ -143,15 +126,15 @@ public class UpdateManager {
                 say(languageData.PLEASE_RUN + finalJar.getAbsolutePath());
             }
 
-            exitAndFreeze(0);
+            finishUpdateProcess(0);
         } catch (IOException e) {
             Debugger.debugOperation(e);
             say(languageData.FAILED_TO_CHECK_UPDATES + e.getMessage(), LogType.ERROR);
-            exitAndFreeze(0);
+            finishUpdateProcess(0);
         } catch (Exception e) {
             Debugger.debugOperation(e);
             say(languageData.UNEXPECTED_ERROR_DURING_UPDATE + e.getMessage(), LogType.ERROR);
-            exitAndFreeze(0);
+            finishUpdateProcess(0);
         }
     }
 
@@ -232,240 +215,50 @@ public class UpdateManager {
         }
     }
 
-    // --- 下面的代码为原有的解压和清理逻辑，保持不变 ---
+    private static boolean startInstaller(File installerFile) {
+        if (installerFile == null) {
+            say(languageData.EXECUTABLE_NOT_FOUND + "null", LogType.ERROR);
+            return false;
+        }
 
-    private static boolean extractSevenZFile(File sevenZFile, File destination) {
-        debugOperation("Starting 7z extraction.");
-        RandomAccessFile randomAccessFile = null;
-        IInArchive inArchive = null;
-
+        debugOperation("Preparing to start update installer: " + installerFile.getName());
         try {
-            SevenZip.initSevenZipFromPlatformJAR();
-            randomAccessFile = new RandomAccessFile(sevenZFile, "r");
-            inArchive = SevenZip.openInArchive(null, new RandomAccessFileInStream(randomAccessFile));
-
-            int[] in = new int[inArchive.getNumberOfItems()];
-            for (int i = 0; i < in.length; i++) {
-                in[i] = i;
+            if (!installerFile.exists() || !installerFile.isFile()) {
+                say(languageData.EXECUTABLE_NOT_FOUND + installerFile.getAbsolutePath(), LogType.ERROR);
+                return false;
             }
 
-            IInArchive finalInArchive = inArchive;
-            inArchive.extract(in, false, new IArchiveExtractCallback() {
-                private FileOutputStream outputStream;
-                private File currentFile;
+            List<String> command = List.of(installerFile.getAbsolutePath());
+            say(languageData.STARTING_INSTALLER + installerFile.getAbsolutePath());
+            debugOperation("Executing installer command: " + command);
+            new ProcessBuilder(command).start();
+            say(languageData.INSTALLER_STARTED);
 
-                @Override
-                public ISequentialOutStream getStream(int index, ExtractAskMode extractAskMode) throws SevenZipException {
-                    if (extractAskMode != ExtractAskMode.EXTRACT) {
-                        return null;
-                    }
-                    String path = finalInArchive.getStringProperty(index, PropID.PATH);
-                    boolean isFolder = (Boolean) finalInArchive.getProperty(index, PropID.IS_FOLDER);
-
-                    if (isFolder) {
-                        return null;
-                    }
-
-                    currentFile = resolveArchiveEntry(destination, path);
-                    File parent = currentFile.getParentFile();
-                    if (parent != null && !parent.exists()) {
-                        if (!parent.mkdirs()) {
-                            say(languageData.FAILED_TO_CREATE_DIRECTORY + parent.getAbsolutePath(), LogType.ERROR);
-                            throw new SevenZipException("Failed to create directory: " + parent.getAbsolutePath());
-                        }
-                    }
-
-                    try {
-                        outputStream = new FileOutputStream(currentFile);
-                        return data -> {
-                            try {
-                                outputStream.write(data);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                            return data.length;
-                        };
-                    } catch (IOException e) {
-                        throw new SevenZipException(e);
-                    }
+            if (!isRunningInUnitTest()) {
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-
-                @Override
-                public void prepareOperation(ExtractAskMode extractAskMode) throws SevenZipException {
-                }
-
-                @Override
-                public void setOperationResult(ExtractOperationResult extractOperationResult) throws SevenZipException {
-                    if (outputStream != null) {
-                        try {
-                            outputStream.close();
-                            outputStream = null;
-                        } catch (IOException e) {
-                            throw new SevenZipException(e);
-                        }
-                    }
-                    if (extractOperationResult != ExtractOperationResult.OK) {
-                        throw new SevenZipException("Extraction failed for file: " + currentFile.getAbsolutePath());
-                    }
-                }
-
-                @Override
-                public void setCompleted(long completeValue) throws SevenZipException {
-                }
-
-                @Override
-                public void setTotal(long total) throws SevenZipException {
-                }
-            });
-
-            say(languageData.SEVENZ_FILE_EXTRACTED_SUCCESSFULLY + destination.getAbsolutePath());
+            }
             return true;
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.FAILED_TO_EXTRACT_7Z_FILE + e.getMessage(), LogType.ERROR);
+            say(languageData.FAILED_TO_START_INSTALLER + e.getMessage(), LogType.ERROR);
             return false;
-        } finally {
-            try {
-                if (inArchive != null) inArchive.close();
-                if (randomAccessFile != null) randomAccessFile.close();
-            } catch (IOException e) {
-                Debugger.debugOperation(e);
-                say(languageData.ERROR_CLOSING_7Z_FILE + e.getMessage(), LogType.WARNING);
-            }
         }
     }
 
-    private static File findExtractedExe(File directory) {
-        if (directory == null || !directory.exists() || !directory.isDirectory()) {
-            return null;
-        }
-
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return null;
-        }
-
-        for (File file : files) {
-            if (file.isDirectory()) {
-                File result = findExtractedExe(file);
-                if (result != null) {
-                    return result;
-                }
-            } else if (file.getName().equalsIgnoreCase("NeoLink.exe") && file.isFile()) {
-                return file;
-            }
-        }
-
-        return null;
-    }
-
-    private static void startNewVersion(File exeFile) {
-        debugOperation("Preparing to start new version: " + exeFile.getName());
-        try {
-            if (!exeFile.exists() || !exeFile.isFile()) {
-                say(languageData.EXECUTABLE_NOT_FOUND + exeFile.getAbsolutePath(), LogType.ERROR);
-                return;
-            }
-
-            // 根据操作系统选择启动方式
-            if (OshiUtils.isWindows()) {
-                List<String> command = new ArrayList<>();
-                command.add(exeFile.getAbsolutePath());
-
-                if (key != null) {
-                    command.add("--key=" + key);
-                }
-                if (localPort != INVALID_LOCAL_PORT) {
-                    command.add("--local-port=" + localPort);
-                }
-                if (!isGUIMode) {
-                    command.add("--nogui");
-                }
-                if (isDebugMode) {
-                    command.add("--debug");
-                }
-                if (outputFilePath != null) {
-                    command.add("--output-file=" + outputFilePath);
-                }
-
-                say(languageData.STARTING_NEW_VERSION + String.join(" ", command));
-                debugOperation("Executing command: " + command);
-                new ProcessBuilder(command).start();
-                say(languageData.NEW_VERSION_STARTED);
-
-                try {
-                    TimeUnit.SECONDS.sleep(2);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-
-                // 检查是否在单元测试环境中运行（通过检查调用栈）
-                if (!isRunningInUnitTest()) {
-                    exitAndFreeze(0);
-                }
-            } else {
-                // 非 Windows: 使用 ProcessBuilder 启动 JAR
-                List<String> command = new ArrayList<>();
-                command.add("java");
-                command.add("-jar");
-                command.add(exeFile.getAbsolutePath());
-
-                if (key != null) {
-                    command.add("--key=" + key);
-                }
-                if (localPort != INVALID_LOCAL_PORT) {
-                    command.add("--local-port=" + localPort);
-                }
-                if (!isGUIMode) {
-                    command.add("--nogui");
-                }
-                if (isDebugMode) {
-                    command.add("--debug");
-                }
-                if (outputFilePath != null) {
-                    command.add("--output-file=" + outputFilePath);
-                }
-
-                say(languageData.STARTING_NEW_VERSION + String.join(" ", command));
-                debugOperation("Executing command: " + command);
-
-                ProcessBuilder processBuilder = new ProcessBuilder(command);
-                processBuilder.inheritIO();
-                processBuilder.start();
-
-                say(languageData.NEW_VERSION_STARTED);
-
-                try {
-                    TimeUnit.SECONDS.sleep(2);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-
-                // 检查是否在单元测试环境中运行（通过检查调用栈）
-                if (!isRunningInUnitTest()) {
-                    exitAndFreeze(0);
-                }
-            }
-        } catch (Exception e) {
-            Debugger.debugOperation(e);
-            say(languageData.FAILED_TO_START_NEW_VERSION + e.getMessage(), LogType.ERROR);
+    private static void finishUpdateProcess(int exitCode) {
+        if (isGUIMode) {
+            System.exit(exitCode);
+        } else {
+            exitAndFreeze(exitCode);
         }
     }
 
-    private static File resolveArchiveEntry(File destination, String entryPath) throws SevenZipException {
-        try {
-            File canonicalDestination = destination.getCanonicalFile();
-            File target = new File(canonicalDestination, entryPath).getCanonicalFile();
-            String destinationPath = canonicalDestination.getPath();
-            String targetPath = target.getPath();
-
-            if (!targetPath.equals(destinationPath) && !targetPath.startsWith(destinationPath + File.separator)) {
-                throw new SevenZipException("Archive entry escapes destination directory: " + entryPath);
-            }
-            return target;
-        } catch (IOException e) {
-            throw new SevenZipException(e);
-        }
+    private static void exitAfterInstallerStarted() {
+        System.exit(0);
     }
 
     /**

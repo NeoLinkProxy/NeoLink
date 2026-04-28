@@ -61,7 +61,7 @@ class UDPTransformerIntegrationTest {
     private static void handleUdpClient(SecureSocket socket) {
         try {
             while (!socket.isClosed()) {
-                byte[] data = socket.receiveByte(1000);
+                byte[] data = socket.receiveBytes(1000);
                 if (data == null) break;
                 
                 DatagramPacket packet = UDPTransformer.deserializeToDatagramPacket(data);
@@ -71,7 +71,7 @@ class UDPTransformerIntegrationTest {
                         packet.getAddress(),
                         packet.getPort()
                     );
-                    socket.sendByte(responseData);
+                    socket.sendBytes(responseData);
                 }
             }
         } catch (Exception e) {
@@ -237,7 +237,7 @@ class UDPTransformerIntegrationTest {
             localUdpPort
         );
         
-        assertDoesNotThrow(() -> secureClient.sendByte(serializedData));
+        assertDoesNotThrow(() -> secureClient.sendBytes(serializedData));
         
         Thread.sleep(100);
         

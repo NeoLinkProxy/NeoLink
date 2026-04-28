@@ -51,8 +51,6 @@ public class LanguageData implements Serializable {
 
     // UpdateManager类中的字符串
     public String FAILED_TO_DOWNLOAD_UPDATE_FILE = "Failed to download update file.";
-    public String FAILED_TO_EXTRACT_7Z_FILE = "Failed to extract 7z file.";
-    public String NEOLINK_EXE_NOT_FOUND = "NeoLink.exe not found in extracted files.";
     public String FAILED_TO_BACKUP_EXISTING_JAR = "Failed to backup existing jar file.";
     public String FAILED_TO_DELETE_EXISTING_JAR = "Failed to delete existing jar file.";
     public String FAILED_TO_CHECK_UPDATES = "Failed to check updates: ";
@@ -64,17 +62,14 @@ public class LanguageData implements Serializable {
     public String FILE_SIZE_MISMATCH = "File size mismatch. Expected: ";
     public String ERROR_WHILE_DOWNLOADING_FILE = "Error while downloading file: ";
     public String ERROR_RECEIVING_FILE = "Error receiving file: ";
-    public String SEVENZ_FILE_EXTRACTED_SUCCESSFULLY = "7z file extracted successfully to: ";
-    public String FAILED_TO_CREATE_DIRECTORY = "Failed to create directory: ";
     public String EXECUTABLE_NOT_FOUND = "Executable file not found or is not a file: ";
-    public String STARTING_NEW_VERSION = "Starting new version with command: ";
-    public String NEW_VERSION_STARTED = "New version started successfully.";
-    public String FAILED_TO_START_NEW_VERSION = "Failed to start new version: ";
+    public String STARTING_INSTALLER = "Starting update installer: ";
+    public String INSTALLER_STARTED = "Update installer started successfully.";
+    public String FAILED_TO_START_INSTALLER = "Failed to start update installer: ";
     public String FAILED_TO_DELETE = "Failed to delete: ";
     public String SUCCESSFULLY_DELETED = "Successfully deleted: ";
     public String ERROR_DELETING_FILE = "Error deleting file: ";
     public String FILE_DOWNLOAD_COMPLETED = "File download completed successfully.";
-    public String ERROR_CLOSING_7Z_FILE = "Error closing 7z file: ";
     public String WARNING_TCP_DISABLED = "TCP service is disabled !";
     public String WARNING_UDP_DISABLED = "UDP service is disabled !";
 
@@ -118,8 +113,6 @@ public class LanguageData implements Serializable {
         languageData.PLEASE_UPDATE_MANUALLY = "当前版本过旧，请手动下载更新。";
 
         languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE = "下载更新文件失败。";
-        languageData.FAILED_TO_EXTRACT_7Z_FILE = "解压7z文件失败。";
-        languageData.NEOLINK_EXE_NOT_FOUND = "在解压的文件中未找到NeoLink.exe。";
         languageData.FAILED_TO_BACKUP_EXISTING_JAR = "备份现有jar文件失败。";
         languageData.FAILED_TO_DELETE_EXISTING_JAR = "删除现有jar文件失败。";
         languageData.FAILED_TO_CHECK_UPDATES = "检查更新失败：";
@@ -131,17 +124,14 @@ public class LanguageData implements Serializable {
         languageData.FILE_SIZE_MISMATCH = "文件大小不匹配。预期：";
         languageData.ERROR_WHILE_DOWNLOADING_FILE = "下载文件时出错：";
         languageData.ERROR_RECEIVING_FILE = "接收文件时出错：";
-        languageData.SEVENZ_FILE_EXTRACTED_SUCCESSFULLY = "7z文件成功解压到：";
-        languageData.FAILED_TO_CREATE_DIRECTORY = "创建目录失败：";
         languageData.EXECUTABLE_NOT_FOUND = "找不到可执行文件或不是文件：";
-        languageData.STARTING_NEW_VERSION = "正在启动新版本，命令：";
-        languageData.NEW_VERSION_STARTED = "新版本启动成功。";
-        languageData.FAILED_TO_START_NEW_VERSION = "启动新版本失败：";
+        languageData.STARTING_INSTALLER = "正在启动更新安装器：";
+        languageData.INSTALLER_STARTED = "更新安装器启动成功。";
+        languageData.FAILED_TO_START_INSTALLER = "启动更新安装器失败：";
         languageData.FAILED_TO_DELETE = "删除失败：";
         languageData.SUCCESSFULLY_DELETED = "成功删除：";
         languageData.ERROR_DELETING_FILE = "删除文件时出错：";
         languageData.FILE_DOWNLOAD_COMPLETED = "文件下载成功完成。";
-        languageData.ERROR_CLOSING_7Z_FILE = "关闭7z文件时出错：";
         languageData.WARNING_TCP_DISABLED = "TCP 服务已禁用！";
         languageData.WARNING_UDP_DISABLED = "UDP 服务已禁用！";
 

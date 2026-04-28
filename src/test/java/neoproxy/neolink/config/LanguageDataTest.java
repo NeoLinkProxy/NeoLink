@@ -173,8 +173,6 @@ class LanguageDataTest {
     @DisplayName("中文实例应包含所有翻译后的更新管理器消息")
     void testChineseInstanceContainsUpdateManagerMessages() {
         assertEquals("下载更新文件失败。", chineseData.FAILED_TO_DOWNLOAD_UPDATE_FILE);
-        assertEquals("解压7z文件失败。", chineseData.FAILED_TO_EXTRACT_7Z_FILE);
-        assertEquals("在解压的文件中未找到NeoLink.exe。", chineseData.NEOLINK_EXE_NOT_FOUND);
         assertEquals("备份现有jar文件失败。", chineseData.FAILED_TO_BACKUP_EXISTING_JAR);
         assertEquals("删除现有jar文件失败。", chineseData.FAILED_TO_DELETE_EXISTING_JAR);
         assertEquals("检查更新失败：", chineseData.FAILED_TO_CHECK_UPDATES);
@@ -186,17 +184,14 @@ class LanguageDataTest {
         assertEquals("文件大小不匹配。预期：", chineseData.FILE_SIZE_MISMATCH);
         assertEquals("下载文件时出错：", chineseData.ERROR_WHILE_DOWNLOADING_FILE);
         assertEquals("接收文件时出错：", chineseData.ERROR_RECEIVING_FILE);
-        assertEquals("7z文件成功解压到：", chineseData.SEVENZ_FILE_EXTRACTED_SUCCESSFULLY);
-        assertEquals("创建目录失败：", chineseData.FAILED_TO_CREATE_DIRECTORY);
         assertEquals("找不到可执行文件或不是文件：", chineseData.EXECUTABLE_NOT_FOUND);
-        assertEquals("正在启动新版本，命令：", chineseData.STARTING_NEW_VERSION);
-        assertEquals("新版本启动成功。", chineseData.NEW_VERSION_STARTED);
-        assertEquals("启动新版本失败：", chineseData.FAILED_TO_START_NEW_VERSION);
+        assertEquals("正在启动更新安装器：", chineseData.STARTING_INSTALLER);
+        assertEquals("更新安装器启动成功。", chineseData.INSTALLER_STARTED);
+        assertEquals("启动更新安装器失败：", chineseData.FAILED_TO_START_INSTALLER);
         assertEquals("删除失败：", chineseData.FAILED_TO_DELETE);
         assertEquals("成功删除：", chineseData.SUCCESSFULLY_DELETED);
         assertEquals("删除文件时出错：", chineseData.ERROR_DELETING_FILE);
         assertEquals("文件下载成功完成。", chineseData.FILE_DOWNLOAD_COMPLETED);
-        assertEquals("关闭7z文件时出错：", chineseData.ERROR_CLOSING_7Z_FILE);
         assertEquals("TCP 服务已禁用！", chineseData.WARNING_TCP_DISABLED);
         assertEquals("UDP 服务已禁用！", chineseData.WARNING_UDP_DISABLED);
     }

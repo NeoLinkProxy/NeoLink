@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ExternalStorageConfigurationManager" enabled="true" />
-  <component name="MaterialThemeProjectNewConfig">
-    <option name="metadata">
-      <MTProjectMetadataState>
-        <option name="migrated" value="true" />
-        <option name="pristineConfig" value="false" />
-        <option name="userId" value="3146cb1:17f50348107:-8000" />
-        <option name="version" value="6.13.0" />
-      </MTProjectMetadataState>
-    </option>
-  </component>
   <component name="ProjectInspectionProfilesVisibleTreeState">
     <entry key="Project Default">
       <profile-state>

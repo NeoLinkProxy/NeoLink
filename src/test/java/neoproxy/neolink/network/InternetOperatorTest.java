@@ -149,16 +149,16 @@ class InternetOperatorTest {
     }
 
     @Test
-    @DisplayName("receiveBytes 应调用 hookSocket.receiveByte")
+    @DisplayName("receiveBytes 应调用 hookSocket.receiveBytes")
     void testReceiveBytes() throws IOException {
         NeoLink.hookSocket = mockSecureSocket;
         byte[] expected = new byte[]{1, 2, 3, 4, 5};
-        when(mockSecureSocket.receiveByte()).thenReturn(expected);
+        when(mockSecureSocket.receiveBytes()).thenReturn(expected);
 
         byte[] result = InternetOperator.receiveBytes();
 
         assertArrayEquals(expected, result);
-        verify(mockSecureSocket).receiveByte();
+        verify(mockSecureSocket).receiveBytes();
     }
 
     @Test

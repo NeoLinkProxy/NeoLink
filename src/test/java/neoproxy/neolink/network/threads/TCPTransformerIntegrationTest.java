@@ -26,6 +26,11 @@ class TCPTransformerIntegrationTest {
     private static SecureServerSocket secureServerSocket;
     private static volatile boolean serverRunning = false;
 
+    @FunctionalInterface
+    private interface SecureSocketHandler {
+        void handle(SecureSocket socket) throws Exception;
+    }
+
     @BeforeAll
     static void setUpServer() throws IOException {
         secureServerSocket = new SecureServerSocket(TEST_PORT);
@@ -72,6 +77,27 @@ class TCPTransformerIntegrationTest {
         }
     }
 
+    private static Thread startOneShotServer(
+            SecureServerSocket serverSocket,
+            AtomicReference<Throwable> serverError,
+            SecureSocketHandler handler
+    ) {
+        return Thread.ofVirtual().start(() -> {
+            try (SecureSocket socket = serverSocket.accept()) {
+                handler.handle(socket);
+            } catch (Throwable e) {
+                serverError.set(e);
+            }
+        });
+    }
+
+    private static void failIfServerError(AtomicReference<Throwable> serverError) {
+        Throwable error = serverError.get();
+        if (error != null) {
+            fail("SecureSocket test server failed", error);
+        }
+    }
+
     @Test
     @DisplayName("SecureSocket 应能连接到 SecureServerSocket")
     void testSecureSocketConnection() throws IOException {
@@ -99,29 +125,45 @@ class TCPTransformerIntegrationTest {
 
     @Test
     @DisplayName("SecureSocket 应能发送和接收字节数组")
-    void testSecureSocketSendReceiveBytes() throws IOException {
-        SecureSocket client = new SecureSocket("localhost", TEST_PORT);
-        
-        byte[] data = new byte[]{1, 2, 3, 4, 5};
-        client.sendByte(data);
-        
-        byte[] response = client.receiveByte(2000);
-        assertNotNull(response);
-        assertTrue(response.length >= 5);
-        
-        client.close();
+    void testSecureSocketSendReceiveBytes() throws Exception {
+        AtomicReference<Throwable> serverError = new AtomicReference<>();
+        try (SecureServerSocket server = new SecureServerSocket(0)) {
+            Thread serverThread = startOneShotServer(server, serverError, socket -> {
+                byte[] data = socket.receiveBytes(2000);
+                socket.sendBytes(data);
+            });
+
+            try (SecureSocket client = new SecureSocket("localhost", server.getLocalPort())) {
+                byte[] data = new byte[]{1, 2, 3, 4, 5};
+                client.sendBytes(data);
+
+                byte[] response = client.receiveBytes(2000);
+                assertArrayEquals(data, response);
+            }
+
+            serverThread.join(2000);
+            failIfServerError(serverError);
+        }
     }
 
     @Test
     @DisplayName("SecureSocket 应能发送和接收整数")
-    void testSecureSocketSendReceiveInt() throws IOException {
-        SecureSocket client = new SecureSocket("localhost", TEST_PORT);
-        
-        client.sendInt(12345);
-        byte[] response = client.receiveByte(2000);
-        assertNotNull(response);
-        
-        client.close();
+    void testSecureSocketSendReceiveInt() throws Exception {
+        AtomicReference<Throwable> serverError = new AtomicReference<>();
+        try (SecureServerSocket server = new SecureServerSocket(0)) {
+            Thread serverThread = startOneShotServer(server, serverError, socket -> {
+                int value = socket.receiveInt(2000);
+                socket.sendInt(value);
+            });
+
+            try (SecureSocket client = new SecureSocket("localhost", server.getLocalPort())) {
+                client.sendInt(12345);
+                assertEquals(12345, client.receiveInt(2000));
+            }
+
+            serverThread.join(2000);
+            failIfServerError(serverError);
+        }
     }
 
     @Test
@@ -179,8 +221,14 @@ class TCPTransformerIntegrationTest {
     void testTCPTransformerNeoToLocal() throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<String> receivedData = new AtomicReference<>();
+        AtomicReference<Throwable> serverError = new AtomicReference<>();
         
-        try (ServerSocket localServer = new ServerSocket(LOCAL_SERVER_PORT)) {
+        try (SecureServerSocket server = new SecureServerSocket(0);
+             ServerSocket localServer = new ServerSocket(LOCAL_SERVER_PORT)) {
+            Thread secureServerThread = startOneShotServer(server, serverError, socket -> {
+                socket.sendBytes("TEST_DATA".getBytes());
+                socket.sendBytes(null);
+            });
             Thread localServerThread = Thread.ofVirtual().start(() -> {
                 try {
                     Socket localClient = localServer.accept();
@@ -196,14 +244,12 @@ class TCPTransformerIntegrationTest {
                 }
             });
             
-            SecureSocket secureClient = new SecureSocket("localhost", TEST_PORT);
+            SecureSocket secureClient = new SecureSocket("localhost", server.getLocalPort());
             Socket localSocket = new Socket("localhost", LOCAL_SERVER_PORT);
             
             TCPTransformer transformer = new TCPTransformer(secureClient, localSocket, false);
             Thread transformerThread = Thread.ofVirtual().start(transformer);
-            
-            secureClient.sendStr("TEST_DATA");
-            
+
             latch.await(5, TimeUnit.SECONDS);
             
             assertNotNull(receivedData.get());
@@ -213,6 +259,8 @@ class TCPTransformerIntegrationTest {
             localSocket.close();
             transformerThread.interrupt();
             localServerThread.interrupt();
+            secureServerThread.join(2000);
+            failIfServerError(serverError);
         }
     }
 
@@ -227,8 +275,14 @@ class TCPTransformerIntegrationTest {
         
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<byte[]> receivedData = new AtomicReference<>();
+        AtomicReference<Throwable> serverError = new AtomicReference<>();
         
-        try (ServerSocket localServer = new ServerSocket(LOCAL_SERVER_PORT + 1)) {
+        try (SecureServerSocket server = new SecureServerSocket(0);
+             ServerSocket localServer = new ServerSocket(LOCAL_SERVER_PORT + 1)) {
+            Thread secureServerThread = startOneShotServer(server, serverError, socket -> {
+                socket.sendBytes(ppv2Header);
+                socket.sendBytes(null);
+            });
             Thread localServerThread = Thread.ofVirtual().start(() -> {
                 try {
                     Socket localClient = localServer.accept();
@@ -245,14 +299,12 @@ class TCPTransformerIntegrationTest {
                 }
             });
             
-            SecureSocket secureClient = new SecureSocket("localhost", TEST_PORT);
+            SecureSocket secureClient = new SecureSocket("localhost", server.getLocalPort());
             Socket localSocket = new Socket("localhost", LOCAL_SERVER_PORT + 1);
             
             TCPTransformer transformer = new TCPTransformer(secureClient, localSocket, true);
             Thread transformerThread = Thread.ofVirtual().start(transformer);
-            
-            secureClient.sendByte(ppv2Header);
-            
+
             latch.await(5, TimeUnit.SECONDS);
             
             assertNotNull(receivedData.get());
@@ -262,6 +314,8 @@ class TCPTransformerIntegrationTest {
             localSocket.close();
             transformerThread.interrupt();
             localServerThread.interrupt();
+            secureServerThread.join(2000);
+            failIfServerError(serverError);
         }
     }
 }

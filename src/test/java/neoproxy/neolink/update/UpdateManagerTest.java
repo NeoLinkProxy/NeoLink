@@ -167,94 +167,6 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("findExtractedExe 应对 null 目录返回 null")
-    void testFindExtractedExeNullDirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File result = (File) method.invoke(null, (File) null);
-        assertNull(result);
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应对不存在的目录返回 null")
-    void testFindExtractedExeNonExistentDirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File nonExistent = new File("/non/existent/directory");
-        File result = (File) method.invoke(null, nonExistent);
-        assertNull(result);
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应对空目录返回 null")
-    void testFindExtractedExeEmptyDirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File emptyDir = tempDir.toFile();
-        File result = (File) method.invoke(null, emptyDir);
-        assertNull(result);
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应找到 NeoLink.exe")
-    void testFindExtractedExeFound() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File exeFile = tempDir.resolve("NeoLink.exe").toFile();
-        exeFile.createNewFile();
-
-        File result = (File) method.invoke(null, tempDir.toFile());
-        assertNotNull(result);
-        assertEquals("NeoLink.exe", result.getName());
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应在子目录中查找")
-    void testFindExtractedExeInSubdirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        Path subDir = tempDir.resolve("subdir");
-        Files.createDirectories(subDir);
-        File exeFile = subDir.resolve("NeoLink.exe").toFile();
-        exeFile.createNewFile();
-
-        File result = (File) method.invoke(null, tempDir.toFile());
-        assertNotNull(result);
-        assertEquals("NeoLink.exe", result.getName());
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应忽略非 exe 文件")
-    void testFindExtractedExeIgnoreNonExe() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File txtFile = tempDir.resolve("NeoLink.txt").toFile();
-        txtFile.createNewFile();
-
-        File result = (File) method.invoke(null, tempDir.toFile());
-        assertNull(result);
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应忽略目录名为 NeoLink.exe")
-    void testFindExtractedExeIgnoreDirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        Path dir = tempDir.resolve("NeoLink.exe");
-        Files.createDirectories(dir);
-
-        File result = (File) method.invoke(null, tempDir.toFile());
-        assertNull(result);
-    }
-
-    @Test
     @DisplayName("deleteFileOrDirectory 应对 null 安全处理")
     void testDeleteFileOrDirectoryNull() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
@@ -372,25 +284,40 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("startNewVersion 对不存在的文件应安全处理")
-    void testStartNewVersionNonExistentFile() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
+    @DisplayName("startInstaller 对 null 文件应返回 false")
+    void testStartInstallerNullFile() throws Exception {
+        Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
+        method.setAccessible(true);
+
+        Boolean result = (Boolean) method.invoke(null, (File) null);
+
+        assertFalse(result);
+    }
+
+    @Test
+    @DisplayName("startInstaller 对不存在的文件应返回 false")
+    void testStartInstallerNonExistentFile() throws Exception {
+        Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
 
         File nonExistent = new File(tempDir.toFile(), "non-existent.exe");
 
-        assertDoesNotThrow(() -> method.invoke(null, nonExistent));
+        Boolean result = (Boolean) method.invoke(null, nonExistent);
+
+        assertFalse(result);
     }
 
     @Test
-    @DisplayName("startNewVersion 对目录应安全处理")
-    void testStartNewVersionDirectory() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
+    @DisplayName("startInstaller 对目录应返回 false")
+    void testStartInstallerDirectory() throws Exception {
+        Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
 
         File directory = tempDir.toFile();
 
-        assertDoesNotThrow(() -> method.invoke(null, directory));
+        Boolean result = (Boolean) method.invoke(null, directory);
+
+        assertFalse(result);
     }
 
     @Test
@@ -429,21 +356,6 @@ class UpdateManagerTest {
 
         String result = (String) method.invoke(null, -1L);
         assertNotNull(result);
-    }
-
-    @Test
-    @DisplayName("findExtractedExe 应处理 listFiles 返回 null 的情况")
-    void testFindExtractedExeListFilesNull() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
-        method.setAccessible(true);
-
-        File mockFile = mock(File.class);
-        when(mockFile.exists()).thenReturn(true);
-        when(mockFile.isDirectory()).thenReturn(true);
-        when(mockFile.listFiles()).thenReturn(null);
-
-        File result = (File) method.invoke(null, mockFile);
-        assertNull(result);
     }
 
     @Test

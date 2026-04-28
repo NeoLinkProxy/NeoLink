@@ -3,6 +3,7 @@ package neoproxy.neolink.network;
 import fun.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.config.NodeConfig;
 import neoproxy.neolink.core.NeoLink;
 
 import java.io.BufferedReader;
@@ -12,6 +13,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -79,27 +81,36 @@ public class NodeFetcher {
 
             int responseCode = con.getResponseCode();
 
-            if (responseCode == 200) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8));
-                String inputLine;
-                StringBuilder response = new StringBuilder();
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-                in.close();
-
-                String json = response.toString();
-
-                // 确保返回值是合法的 JSON 数组结构
-                if (json.trim().startsWith("[") && json.trim().endsWith("]")) {
-                    File nodeFile = new File(ConfigOperator.WORKING_DIR, "node.json");
-                    Files.writeString(nodeFile.toPath(), json, StandardCharsets.UTF_8);
-                    NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_SUCCESS, LogType.INFO);
-                } else {
-                    NeoLink.say(NeoLink.languageData.NODE_LIST_INVALID_JSON, LogType.WARNING);
-                }
-            } else {
+            if (responseCode != 200) {
                 throw new RuntimeException("HTTP Status " + responseCode);
+            }
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8));
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+
+            String json = response.toString();
+            File nodeFile = new File(ConfigOperator.WORKING_DIR, "node.json");
+            File tempFile = File.createTempFile("node-list-", ".json", new File(ConfigOperator.WORKING_DIR));
+            try {
+                Files.writeString(tempFile.toPath(), json, StandardCharsets.UTF_8);
+                NodeConfig.loadAll(tempFile);
+                try {
+                    Files.move(tempFile.toPath(), nodeFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                    Files.move(tempFile.toPath(), nodeFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_SUCCESS, LogType.INFO);
+            } catch (Exception invalidNodeList) {
+                NeoLink.say(NeoLink.languageData.NODE_LIST_INVALID_JSON, LogType.WARNING);
+            } finally {
+                Files.deleteIfExists(tempFile.toPath());
             }
         } catch (Exception e) {
             // 发生任何异常：直接跳过，不修改本地配置，仅打印警告

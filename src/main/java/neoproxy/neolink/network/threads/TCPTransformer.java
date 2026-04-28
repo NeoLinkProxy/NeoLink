@@ -83,9 +83,9 @@ public class TCPTransformer implements Runnable {
             // 🔥 使用实例的 buffer，实现对象复用
             // 直接从 Socket 读入 64KB buffer，减少内存拷贝和系统调用
             while ((bytesRead = inputFromLocal.read(buffer)) != -1) {
-                secureSocket.sendByte(buffer, 0, bytesRead);
+                secureSocket.sendBytes(buffer, 0, bytesRead);
             }
-            secureSocket.sendByte(null); // 发送结束信号
+            secureSocket.sendBytes(null); // 发送结束信号
             shutdownInput(plainSocket);
         } catch (Exception e) {
             debugOperation(e);
@@ -104,7 +104,7 @@ public class TCPTransformer implements Runnable {
             byte[] data;
             boolean isFirstPacket = true;
 
-            while ((data = secureSocket.receiveByte()) != null) {
+            while ((data = secureSocket.receiveBytes()) != null) {
                 if (data.length == 0) continue;
 
                 if (isFirstPacket) {

@@ -1,14 +1,14 @@
 package neoproxy.neolink.update;
 
-import fun.ceroxe.api.OshiUtils;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.core.NeoLink;
 import org.junit.jupiter.api.*;
 import org.mockito.MockedConstruction;
-import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -56,73 +56,40 @@ class UpdateManagerMockTest {
     }
 
     @Test
-    @DisplayName("findExtractedExe 应处理 null 目录")
-    void testFindExtractedExeNull() throws Exception {
-        Method method = UpdateManager.class.getDeclaredMethod("findExtractedExe", File.class);
+    @DisplayName("startInstaller 应安全处理不存在的文件")
+    void testStartInstallerNonExistentFile() throws Exception {
+        Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
 
-        File result = (File) method.invoke(null, (File) null);
-        assertNull(result);
+        File nonExistent = new File("non_existent_file.exe");
+
+        Boolean result = (Boolean) method.invoke(null, nonExistent);
+
+        assertFalse(result);
     }
 
     @Test
-    @DisplayName("startNewVersion 应安全处理不存在的文件")
-    void testStartNewVersionNonExistentFile() throws Exception {
-        try (MockedStatic<OshiUtils> oshiMock = mockStatic(OshiUtils.class)) {
-            
-            oshiMock.when(OshiUtils::isWindows).thenReturn(true);
-            
-            Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
-            method.setAccessible(true);
+    @DisplayName("startInstaller 应只启动 installer 本身")
+    void testStartInstallerUsesInstallerOnly() throws Exception {
+        AtomicReference<List<?>> constructorArguments = new AtomicReference<>();
 
-            File nonExistent = new File("non_existent_file.exe");
-            
-            assertDoesNotThrow(() -> method.invoke(null, nonExistent));
-        }
-    }
+        try (MockedConstruction<ProcessBuilder> processBuilderMock = mockConstruction(ProcessBuilder.class,
+                (builder, context) -> {
+                    constructorArguments.set(context.arguments());
+                    when(builder.start()).thenReturn(mock(Process.class));
+                })) {
 
-    @Test
-    @DisplayName("startNewVersion 在 Windows 上应使用 ProcessBuilder")
-    void testStartNewVersionWindows() throws Exception {
-        try (MockedStatic<OshiUtils> oshiMock = mockStatic(OshiUtils.class);
-             MockedConstruction<ProcessBuilder> processBuilderMock = mockConstruction(ProcessBuilder.class,
-                     (builder, context) -> when(builder.start()).thenReturn(mock(Process.class)))) {
-            
-            oshiMock.when(OshiUtils::isWindows).thenReturn(true);
-            
-            Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
+            Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
             method.setAccessible(true);
 
             File tempFile = File.createTempFile("test", ".exe");
             tempFile.deleteOnExit();
-            
-            assertDoesNotThrow(() -> method.invoke(null, tempFile));
-            assertEquals(1, processBuilderMock.constructed().size());
-            verify(processBuilderMock.constructed().get(0)).start();
-        }
-    }
 
-    @Test
-    @DisplayName("startNewVersion 在非 Windows 上应使用 ProcessBuilder")
-    void testStartNewVersionNonWindows() throws Exception {
-        try (MockedStatic<OshiUtils> oshiMock = mockStatic(OshiUtils.class);
-             MockedConstruction<ProcessBuilder> processBuilderMock = mockConstruction(ProcessBuilder.class,
-                     (builder, context) -> {
-                         when(builder.inheritIO()).thenReturn(builder);
-                         when(builder.start()).thenReturn(mock(Process.class));
-                     })) {
-            
-            oshiMock.when(OshiUtils::isWindows).thenReturn(false);
-            
-            Method method = UpdateManager.class.getDeclaredMethod("startNewVersion", File.class);
-            method.setAccessible(true);
+            Boolean result = (Boolean) method.invoke(null, tempFile);
 
-            File tempFile = File.createTempFile("test", ".exe");
-            tempFile.deleteOnExit();
-            
-            assertDoesNotThrow(() -> method.invoke(null, tempFile));
+            assertTrue(result);
             assertEquals(1, processBuilderMock.constructed().size());
-            verify(processBuilderMock.constructed().get(0)).inheritIO();
+            assertEquals(List.of(tempFile.getAbsolutePath()), constructorArguments.get().get(0));
             verify(processBuilderMock.constructed().get(0)).start();
         }
     }

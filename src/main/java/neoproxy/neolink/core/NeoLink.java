@@ -52,7 +52,7 @@ import static neoproxy.neolink.update.UpdateManager.checkUpdate;
  * - 通过 ThreadManager 管理并发连接
  *
  * @author NeoProxy Team
- * @version 5.11.5
+ * @version 6.0.0
  */
 public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";

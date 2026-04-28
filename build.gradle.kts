@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "neoproxy"
-version = "5.11.5"
+version = "6.0.0"
 
 repositories {
     mavenCentral()
@@ -27,11 +27,9 @@ java {
 }
 
 dependencies {
-    implementation("fun.ceroxe.api:ceroxe-core:0.2.7")
-    implementation("fun.ceroxe.api:ceroxe-detector:0.2.7")
+    implementation("fun.ceroxe.api:ceroxe-core:1.0.0")
+    implementation("fun.ceroxe.api:ceroxe-detector:1.0.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
-    implementation("net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01")
-    implementation("net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01")
     implementation(compose.desktop.common)
     implementation(compose.desktop.windows_x64)
     implementation(compose.desktop.macos_x64)
