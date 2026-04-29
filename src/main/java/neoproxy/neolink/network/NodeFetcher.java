@@ -1,5 +1,6 @@
 package neoproxy.neolink.network;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fun.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
@@ -9,6 +10,7 @@ import neoproxy.neolink.core.NeoLink;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * 核心职责：
  * 1. 从 NKM（Neo Key Management）服务器获取最新可用节点列表
- * 2. 将获取的节点配置保存到本地 node.json 文件
+ * 2. 将获取的节点配置保存到本地 nodes.json 文件
  * 3. 防止并发重复请求（使用原子锁机制）
  *
  * 设计特点：
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 5.11.0
  */
 public class NodeFetcher {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 原子锁，用于防止并发重复请求节点列表
@@ -93,11 +96,11 @@ public class NodeFetcher {
             }
             in.close();
 
-            String json = response.toString();
-            File nodeFile = new File(ConfigOperator.WORKING_DIR, "node.json");
+            String formattedJson = formatNodeListJson(response.toString());
+            File nodeFile = new File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME);
             File tempFile = File.createTempFile("node-list-", ".json", new File(ConfigOperator.WORKING_DIR));
             try {
-                Files.writeString(tempFile.toPath(), json, StandardCharsets.UTF_8);
+                Files.writeString(tempFile.toPath(), formattedJson, StandardCharsets.UTF_8);
                 NodeConfig.loadAll(tempFile);
                 try {
                     Files.move(tempFile.toPath(), nodeFile.toPath(),
@@ -117,5 +120,10 @@ public class NodeFetcher {
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_FAIL + msg, LogType.WARNING);
         }
+    }
+
+    private static String formatNodeListJson(String json) throws IOException {
+        Object parsedNodeList = OBJECT_MAPPER.readValue(json, Object.class);
+        return OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(parsedNodeList);
     }
 }

@@ -9,13 +9,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Centralized parser for node.json.
+ * Centralized parser for nodes.json.
  *
  * The CLI and GUI used to parse the same file with separate regular-expression
  * implementations. Keeping the schema rules here prevents drift between the two
- * entry points while preserving the existing node.json field names.
+ * entry points while preserving the existing node-list schema field names.
  */
 public final class NodeConfig {
+    public static final String NODE_LIST_FILE_NAME = "nodes.json";
     public static final int DEFAULT_HOST_HOOK_PORT = 44801;
     public static final int DEFAULT_HOST_CONNECT_PORT = 44802;
 
@@ -38,19 +39,19 @@ public final class NodeConfig {
     public static List<NodeConfig> loadAll(File nodeFile) throws IOException {
         JsonNode root = OBJECT_MAPPER.readTree(nodeFile);
         if (root == null || !root.isArray()) {
-            throw new IOException("node.json root must be a JSON array.");
+            throw new IOException(NODE_LIST_FILE_NAME + " root must be a JSON array.");
         }
 
         List<NodeConfig> nodes = new ArrayList<>();
         for (JsonNode item : root) {
             NodeConfig parsed = parseNode(item);
             if (parsed == null) {
-                throw new IOException("node.json contains an invalid node entry.");
+                throw new IOException(NODE_LIST_FILE_NAME + " contains an invalid node entry.");
             }
             nodes.add(parsed);
         }
         if (nodes.isEmpty()) {
-            throw new IOException("node.json must contain at least one valid node.");
+            throw new IOException(NODE_LIST_FILE_NAME + " must contain at least one valid node.");
         }
         return nodes;
     }
@@ -62,7 +63,7 @@ public final class NodeConfig {
 
         JsonNode root = OBJECT_MAPPER.readTree(nodeFile);
         if (root == null || !root.isArray()) {
-            throw new IOException("node.json root must be a JSON array.");
+            throw new IOException(NODE_LIST_FILE_NAME + " root must be a JSON array.");
         }
 
         for (JsonNode item : root) {

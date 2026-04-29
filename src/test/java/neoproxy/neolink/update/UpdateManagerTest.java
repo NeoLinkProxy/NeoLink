@@ -1,6 +1,8 @@
 package neoproxy.neolink.update;
 
 import fun.ceroxe.api.net.SecureSocket;
+import com.sun.net.httpserver.HttpServer;
+import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.core.NeoLink;
 import org.junit.jupiter.api.AfterEach;
@@ -11,8 +13,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
+import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -40,6 +44,7 @@ class UpdateManagerTest {
     private int originalLocalPort;
     private String originalOutputFilePath;
     private SecureSocket originalHookSocket;
+    private String originalBasePackageDir;
 
     @TempDir
     Path tempDir;
@@ -53,6 +58,7 @@ class UpdateManagerTest {
         originalLocalPort = NeoLink.localPort;
         originalOutputFilePath = NeoLink.outputFilePath;
         originalHookSocket = NeoLink.hookSocket;
+        originalBasePackageDir = ConfigOperator.BASE_PACKAGE_DIR;
 
         NeoLink.isDebugMode = false;
         NeoLink.languageData = new LanguageData();
@@ -60,6 +66,7 @@ class UpdateManagerTest {
         NeoLink.key = "test-key";
         NeoLink.localPort = 8080;
         NeoLink.outputFilePath = null;
+        ConfigOperator.BASE_PACKAGE_DIR = tempDir.toString();
     }
 
     @AfterEach
@@ -71,6 +78,7 @@ class UpdateManagerTest {
         NeoLink.localPort = originalLocalPort;
         NeoLink.outputFilePath = originalOutputFilePath;
         NeoLink.hookSocket = originalHookSocket;
+        ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
     }
 
     @Test
@@ -251,36 +259,146 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("tempUpdateDir 常量应为当前目录路径")
-    void testTempUpdateDirConstant() throws Exception {
-        var field = UpdateManager.class.getDeclaredField("tempUpdateDir");
-        field.setAccessible(true);
-        String value = (String) field.get(null);
-        assertEquals(NeoLink.CURRENT_DIR_PATH, value);
+    @DisplayName("resolveUpdateDirectory 应优先使用运行包基准目录")
+    void testResolveUpdateDirectoryUsesBasePackageDir() throws Exception {
+        Method method = UpdateManager.class.getDeclaredMethod("resolveUpdateDirectory");
+        method.setAccessible(true);
+
+        File value = (File) method.invoke(null);
+
+        assertEquals(tempDir.toFile().getAbsoluteFile(), value.getAbsoluteFile());
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 对无效 URL 应返回 false")
+    @DisplayName("downloadFileFromUrl 对无效 URL 应返回 null")
     void testDownloadFileFromUrlInvalidUrl() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
         method.setAccessible(true);
 
         File outputFile = tempDir.resolve("output.txt").toFile();
 
-        Boolean result = (Boolean) method.invoke(null, "not-a-valid-url", outputFile);
-        assertFalse(result);
+        File result = (File) method.invoke(null, "not-a-valid-url", outputFile);
+        assertNull(result);
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 对不存在的域名应返回 false")
+    @DisplayName("downloadFileFromUrl 应按 URL 下载 Windows installer exe")
+    void testDownloadFileFromUrlDownloadsInstallerExe() throws Exception {
+        byte[] installerBytes = "MZ fake installer payload".getBytes(StandardCharsets.UTF_8);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/NeoLink-latest.exe", exchange -> {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+                return;
+            }
+
+            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.sendResponseHeaders(200, installerBytes.length);
+            try (OutputStream response = exchange.getResponseBody()) {
+                response.write(installerBytes);
+            }
+        });
+        server.start();
+
+        try {
+            Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
+            method.setAccessible(true);
+
+            String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/NeoLink-latest.exe";
+            File fallbackOutputFile = tempDir.resolve("NeoLink-6.0.X.exe").toFile();
+            File expectedOutputFile = tempDir.resolve("NeoLink-latest.exe").toFile();
+
+            File result = (File) method.invoke(null, url, fallbackOutputFile);
+
+            assertEquals(expectedOutputFile.getAbsoluteFile(), result);
+            assertArrayEquals(installerBytes, Files.readAllBytes(result.toPath()));
+            assertFalse(fallbackOutputFile.exists());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("downloadFileFromUrl 应尊重 Content-Disposition 文件名")
+    void testDownloadFileFromUrlUsesContentDispositionFileName() throws Exception {
+        byte[] installerBytes = "MZ named installer payload".getBytes(StandardCharsets.UTF_8);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/win", exchange -> {
+            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"NeoLink-6.0.0-Windows-amd64-installer.exe\"");
+            exchange.sendResponseHeaders(200, installerBytes.length);
+            try (OutputStream response = exchange.getResponseBody()) {
+                response.write(installerBytes);
+            }
+        });
+        server.start();
+
+        try {
+            Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
+            method.setAccessible(true);
+
+            String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/win";
+            File fallbackOutputFile = tempDir.resolve("NeoLink-6.0.X.exe").toFile();
+            File expectedOutputFile = tempDir.resolve("NeoLink-6.0.0-Windows-amd64-installer.exe").toFile();
+
+            File result = (File) method.invoke(null, url, fallbackOutputFile);
+
+            assertEquals(expectedOutputFile.getAbsoluteFile(), result);
+            assertArrayEquals(installerBytes, Files.readAllBytes(result.toPath()));
+            assertFalse(fallbackOutputFile.exists());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("downloadFileFromUrl 应显式跟随 301 重定向下载 installer exe")
+    void testDownloadFileFromUrlFollowsMovedPermanentlyRedirect() throws Exception {
+        byte[] installerBytes = "MZ redirected installer payload".getBytes(StandardCharsets.UTF_8);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/win", exchange -> {
+            exchange.getResponseHeaders().set("Location", "/NeoLink-latest.exe");
+            exchange.sendResponseHeaders(301, -1);
+            exchange.close();
+        });
+        server.createContext("/NeoLink-latest.exe", exchange -> {
+            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.sendResponseHeaders(200, installerBytes.length);
+            try (OutputStream response = exchange.getResponseBody()) {
+                response.write(installerBytes);
+            }
+        });
+        server.start();
+
+        try {
+            Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
+            method.setAccessible(true);
+
+            String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/win";
+            File fallbackOutputFile = tempDir.resolve("NeoLink-6.0.X.exe").toFile();
+            File expectedOutputFile = tempDir.resolve("NeoLink-latest.exe").toFile();
+
+            File result = (File) method.invoke(null, url, fallbackOutputFile);
+
+            assertEquals(expectedOutputFile.getAbsoluteFile(), result);
+            assertArrayEquals(installerBytes, Files.readAllBytes(result.toPath()));
+            assertFalse(fallbackOutputFile.exists());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("downloadFileFromUrl 对不存在的域名应返回 null")
     void testDownloadFileFromUrlNonExistentDomain() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
         method.setAccessible(true);
 
         File outputFile = tempDir.resolve("output.txt").toFile();
 
-        Boolean result = (Boolean) method.invoke(null, "http://non-existent-domain-12345.com/file.txt", outputFile);
-        assertFalse(result);
+        File result = (File) method.invoke(null, "http://non-existent-domain-12345.com/file.txt", outputFile);
+        assertNull(result);
     }
 
     @Test

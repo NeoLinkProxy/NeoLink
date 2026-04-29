@@ -70,6 +70,16 @@ public class LanguageData implements Serializable {
     public String SUCCESSFULLY_DELETED = "Successfully deleted: ";
     public String ERROR_DELETING_FILE = "Error deleting file: ";
     public String FILE_DOWNLOAD_COMPLETED = "File download completed successfully.";
+    public String UPDATE_DOWNLOAD_TARGET = "Update will be saved under: ";
+    public String UPDATE_SAVED_TO = "Update saved to: ";
+    public String DOWNLOAD_REDIRECTED_TO = "Download redirected to: ";
+    public String DOWNLOAD_FAILED_HTTP_CODE = "Download failed. Server replied HTTP code: ";
+    public String DOWNLOAD_REDIRECT_WITHOUT_LOCATION = "Download redirect missing Location header. HTTP code: ";
+    public String TOO_MANY_DOWNLOAD_REDIRECTS = "Too many download redirects. Limit: ";
+    public String UNSUPPORTED_DOWNLOAD_PROTOCOL = "Unsupported download protocol: ";
+    public String INVALID_DOWNLOAD_URL = "Invalid download URL: ";
+    public String INVALID_DOWNLOAD_TARGET = "Invalid download target: ";
+    public String DOWNLOADING_FILE_SIZE_UNKNOWN = "Downloading file (size unknown)...";
     public String WARNING_TCP_DISABLED = "TCP service is disabled !";
     public String WARNING_UDP_DISABLED = "UDP service is disabled !";
 
@@ -132,6 +142,16 @@ public class LanguageData implements Serializable {
         languageData.SUCCESSFULLY_DELETED = "成功删除：";
         languageData.ERROR_DELETING_FILE = "删除文件时出错：";
         languageData.FILE_DOWNLOAD_COMPLETED = "文件下载成功完成。";
+        languageData.UPDATE_DOWNLOAD_TARGET = "更新文件将保存到目录：";
+        languageData.UPDATE_SAVED_TO = "更新文件已保存到：";
+        languageData.DOWNLOAD_REDIRECTED_TO = "下载已重定向到：";
+        languageData.DOWNLOAD_FAILED_HTTP_CODE = "下载失败，服务端返回 HTTP 状态码：";
+        languageData.DOWNLOAD_REDIRECT_WITHOUT_LOCATION = "下载重定向缺少 Location 响应头，HTTP 状态码：";
+        languageData.TOO_MANY_DOWNLOAD_REDIRECTS = "下载重定向次数过多，限制：";
+        languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL = "不支持的下载协议：";
+        languageData.INVALID_DOWNLOAD_URL = "无效的下载地址：";
+        languageData.INVALID_DOWNLOAD_TARGET = "无效的下载目标：";
+        languageData.DOWNLOADING_FILE_SIZE_UNKNOWN = "正在下载文件，大小未知...";
         languageData.WARNING_TCP_DISABLED = "TCP 服务已禁用！";
         languageData.WARNING_UDP_DISABLED = "UDP 服务已禁用！";
 

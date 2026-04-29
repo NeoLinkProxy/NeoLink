@@ -56,6 +56,7 @@ import static neoproxy.neolink.update.UpdateManager.checkUpdate;
  */
 public class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
+    public static final String TEST_UPDATE_VERSION = "0.0.1";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static final int INVALID_LOCAL_PORT = -1;
     public static volatile long lastReceivedTime = System.currentTimeMillis();
@@ -146,11 +147,11 @@ public class NeoLink {
 
     private static void loadNodeConfiguration() {
         debugOperation("Attempting to load configuration for node: " + specifiedNodeName);
-        File nodeFile = new File(ConfigOperator.WORKING_DIR, "node.json");
+        File nodeFile = new File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME);
 
         try {
             if (!nodeFile.exists()) {
-                throw new IOException("node.json file not found.");
+                throw new IOException(NodeConfig.NODE_LIST_FILE_NAME + " file not found.");
             }
             NodeConfig node = NodeConfig.findByName(nodeFile, specifiedNodeName);
             if (node == null) {
@@ -424,7 +425,7 @@ public class NeoLink {
 
     public static void printBasicInfo() {
         speakAnnouncement();
-        say(languageData.VERSION + VersionInfo.VERSION);
+        say(languageData.VERSION + getClientVersionToReport());
         if (isDisableTCP) say(languageData.WARNING_TCP_DISABLED, LogType.WARNING);
         if (isDisableUDP) say(languageData.WARNING_UDP_DISABLED, LogType.WARNING);
     }
@@ -435,11 +436,17 @@ public class NeoLink {
     }
 
     public static String formatClientInfoString(LanguageData languageData, String key) {
-        String versionToReport = isTestUpdate ? "0.0.1" : VersionInfo.VERSION;
+        String versionToReport = getClientVersionToReport();
         String info = languageData.getCurrentLanguage() + ";" + versionToReport + ";" + key + ";";
         if (!isDisableTCP) info = info.concat("T");
         if (!isDisableUDP) info = info.concat("U");
         return info;
+    }
+
+    static String getClientVersionToReport() {
+        // --test-update 的目标是模拟旧客户端；启动日志和握手必须使用同一个版本源，
+        // 否则用户看到的版本与服务端收到的版本会互相矛盾。
+        return isTestUpdate ? TEST_UPDATE_VERSION : VersionInfo.VERSION;
     }
 
     public static void sayInfoNoNewLine(String str) {

@@ -2,6 +2,7 @@ package neoproxy.neolink.update;
 
 import fun.ceroxe.api.OshiUtils;
 import fun.ceroxe.api.print.log.LogType;
+import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
 import neoproxy.neolink.util.Debugger;
@@ -9,9 +10,14 @@ import neoproxy.neolink.util.Debugger;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
@@ -42,7 +48,10 @@ import static neoproxy.neolink.core.NeoLink.*;
  * @since 5.0.0
  */
 public class UpdateManager {
-    private static final String tempUpdateDir = CURRENT_DIR_PATH;
+    private static final int DOWNLOAD_BUFFER_SIZE = 8192;
+    private static final int MAX_DOWNLOAD_REDIRECTS = 8;
+    private static final int DOWNLOAD_CONNECT_TIMEOUT_MS = 15000;
+    private static final int DOWNLOAD_READ_TIMEOUT_MS = 300000;
 
     public static void checkUpdate(String fileName) {
         debugOperation("Checking for updates: " + fileName);
@@ -61,9 +70,7 @@ public class UpdateManager {
             if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
                 if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
-                    // [修改] 以前是调用 Controller.stopService()，现在调用 Runner 的停止请求
-                    // 这会通过回调通知 UI (ViewModel) 停止运行状态
-                    NeoLinkCoreRunner.requestStop();
+                    finishUpdateProcess(-1);
                 } else {
                     exitAndFreeze(-1);
                 }
@@ -72,17 +79,19 @@ public class UpdateManager {
 
             // 4. 准备本地文件路径
             String fileExtension = isWindows ? ".exe" : ".jar";
-            File clientFile = new File(tempUpdateDir, fileName + fileExtension);
-            debugOperation("Target local file: " + clientFile.getAbsolutePath());
+            File updateDirectory = resolveUpdateDirectory();
+            File fallbackClientFile = new File(updateDirectory, fileName + fileExtension);
+            debugOperation("Target update directory: " + updateDirectory.getAbsolutePath());
 
             say(languageData.START_TO_DOWNLOAD_UPDATE);
             say("Download Source: " + responseUrl);
+            say(languageData.UPDATE_DOWNLOAD_TARGET + updateDirectory.getAbsolutePath());
 
             // 5. 下载文件
-            boolean downloadSuccess = downloadFileFromUrl(responseUrl, clientFile);
-            debugOperation("Download success: " + downloadSuccess);
+            File clientFile = downloadFileFromUrl(responseUrl, fallbackClientFile);
+            debugOperation("Downloaded update file: " + (clientFile == null ? "null" : clientFile.getAbsolutePath()));
 
-            if (!downloadSuccess) {
+            if (clientFile == null) {
                 say(languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE, LogType.ERROR);
                 finishUpdateProcess(-1);
                 return;
@@ -102,9 +111,9 @@ public class UpdateManager {
                 return;
             } else {
                 debugOperation("Updating JAR file...");
-                File finalJar = new File(CURRENT_DIR_PATH, fileName + fileExtension);
+                File finalJar = new File(resolveUpdateDirectory(), fileName + fileExtension);
                 if (finalJar.exists()) {
-                    File backupFile = new File(CURRENT_DIR_PATH, fileName + " - copy" + fileExtension);
+                    File backupFile = new File(resolveUpdateDirectory(), fileName + " - copy" + fileExtension);
                     if (!backupFile.exists()) {
                         if (!finalJar.renameTo(backupFile)) {
                             say(languageData.FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
@@ -138,68 +147,367 @@ public class UpdateManager {
         }
     }
 
-    // [新增] HTTP下载工具方法
-    private static boolean downloadFileFromUrl(String urlString, File outputFile) {
-        HttpURLConnection httpConn = null;
+    private static File downloadFileFromUrl(String urlString, File fallbackOutputFile) {
         try {
-            URL url = new URL(urlString);
-            httpConn = (HttpURLConnection) url.openConnection();
-            httpConn.setInstanceFollowRedirects(true);
-            httpConn.setConnectTimeout(10000);
-            httpConn.setReadTimeout(30000); // 下载大文件时允许读取时间较长
-            httpConn.setRequestMethod("GET");
-            // 伪装 User-Agent 避免部分 CDN 拦截
-            httpConn.setRequestProperty("User-Agent", "NeoLink-Updater/" + VersionInfo.VERSION);
-
-            int responseCode = httpConn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                long fileSize = httpConn.getContentLengthLong();
-
-                // 打印文件大小信息
-                if (fileSize > 0) {
-                    say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
-                } else {
-                    say("Downloading file (size unknown)...");
-                }
-
-                try (InputStream inputStream = new BufferedInputStream(httpConn.getInputStream());
-                     FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
-                     BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(fileOutputStream)) {
-
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    long totalBytesRead = 0;
-                    int progress = 0;
-
-                    while ((bytesRead = inputStream.read(buffer)) != -1) {
-                        bufferedOutputStream.write(buffer, 0, bytesRead);
-                        totalBytesRead += bytesRead;
-
-                        // 简单的进度显示
-                        if (fileSize > 0) {
-                            int newProgress = (int) (totalBytesRead * 100 / fileSize);
-                            if (newProgress > progress) { // 避免刷屏，只有进度变化时才显示
-                                progress = newProgress;
-                                say(languageData.DOWNLOAD_PROGRESS + progress + "%");
-                            }
-                        }
-                    }
-                }
-
-                say(languageData.FILE_DOWNLOAD_COMPLETED);
-                return true;
-            } else {
-                say("Download failed. Server replied HTTP code: " + responseCode, LogType.ERROR);
-                return false;
+            if (urlString == null || urlString.isBlank()) {
+                say(languageData.INVALID_DOWNLOAD_URL + urlString, LogType.ERROR);
+                return null;
             }
+            if (fallbackOutputFile == null) {
+                say(languageData.INVALID_DOWNLOAD_TARGET + "null", LogType.ERROR);
+                return null;
+            }
+
+            URL initialUrl = new URL(urlString.trim());
+            if (!isSupportedHttpUrl(initialUrl)) {
+                say(languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL + initialUrl.getProtocol(), LogType.ERROR);
+                return null;
+            }
+
+            File absoluteFallbackOutputFile = fallbackOutputFile.getAbsoluteFile();
+            File parent = absoluteFallbackOutputFile.getParentFile();
+            if (parent != null) {
+                Files.createDirectories(parent.toPath());
+            }
+
+            return downloadFileFollowingRedirects(initialUrl, absoluteFallbackOutputFile);
         } catch (Exception e) {
             Debugger.debugOperation(e);
             say(languageData.ERROR_WHILE_DOWNLOADING_FILE + e.getMessage(), LogType.ERROR);
-            return false;
-        } finally {
-            if (httpConn != null) {
+            return null;
+        }
+    }
+
+    private static File resolveUpdateDirectory() {
+        if (ConfigOperator.BASE_PACKAGE_DIR != null && !ConfigOperator.BASE_PACKAGE_DIR.isBlank()) {
+            return new File(ConfigOperator.BASE_PACKAGE_DIR);
+        }
+
+        File currentFile = getCurrentFile();
+        File currentParent = currentFile != null ? currentFile.getParentFile() : null;
+        if (currentParent != null) {
+            return currentParent;
+        }
+
+        return new File(CURRENT_DIR_PATH);
+    }
+
+    private static File createTemporaryDownloadFile(File outputFile) throws IOException {
+        File parent = outputFile.getParentFile();
+        Path parentPath = parent == null ? Path.of(CURRENT_DIR_PATH) : parent.toPath();
+        return Files.createTempFile(parentPath, outputFile.getName() + ".", ".download").toFile();
+    }
+
+    private static File downloadFileFollowingRedirects(URL initialUrl, File fallbackOutputFile) throws IOException {
+        URL currentUrl = initialUrl;
+        int redirects = 0;
+
+        while (true) {
+            HttpURLConnection httpConn = openDownloadConnection(currentUrl);
+            try {
+                int responseCode = httpConn.getResponseCode();
+
+                if (isRedirectResponse(responseCode)) {
+                    redirects++;
+                    if (redirects > MAX_DOWNLOAD_REDIRECTS) {
+                        say(languageData.TOO_MANY_DOWNLOAD_REDIRECTS + MAX_DOWNLOAD_REDIRECTS, LogType.ERROR);
+                        return null;
+                    }
+
+                    String location = httpConn.getHeaderField("Location");
+                    if (location == null || location.isBlank()) {
+                        say(languageData.DOWNLOAD_REDIRECT_WITHOUT_LOCATION + responseCode, LogType.ERROR);
+                        return null;
+                    }
+
+                    URL redirectedUrl = new URL(currentUrl, location.trim());
+                    if (!isSupportedHttpUrl(redirectedUrl)) {
+                        say(languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL + redirectedUrl.getProtocol(), LogType.ERROR);
+                        return null;
+                    }
+
+                    currentUrl = redirectedUrl;
+                    say(languageData.DOWNLOAD_REDIRECTED_TO + currentUrl);
+                    continue;
+                }
+
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    say(languageData.DOWNLOAD_FAILED_HTTP_CODE + responseCode + " " + safeResponseMessage(httpConn), LogType.ERROR);
+                    return null;
+                }
+
+                File outputFile = resolveDownloadOutputFile(fallbackOutputFile, currentUrl, httpConn);
+                return downloadResponseBodyToFile(httpConn, outputFile);
+            } finally {
                 httpConn.disconnect();
             }
+        }
+    }
+
+    private static HttpURLConnection openDownloadConnection(URL url) throws IOException {
+        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
+        // 显式处理重定向，才能记录 Location，并覆盖 HTTP->HTTPS 等 JDK 自动跟随不稳定的场景。
+        httpConn.setInstanceFollowRedirects(false);
+        httpConn.setConnectTimeout(DOWNLOAD_CONNECT_TIMEOUT_MS);
+        httpConn.setReadTimeout(DOWNLOAD_READ_TIMEOUT_MS);
+        httpConn.setRequestMethod("GET");
+        httpConn.setRequestProperty("User-Agent", "NeoLink-Updater/" + VersionInfo.VERSION);
+        httpConn.setRequestProperty("Accept", "application/octet-stream,*/*");
+        httpConn.setRequestProperty("Accept-Encoding", "identity");
+        return httpConn;
+    }
+
+    private static File resolveDownloadOutputFile(File fallbackOutputFile, URL finalUrl, HttpURLConnection httpConn) {
+        String suggestedFileName = extractFileNameFromContentDisposition(httpConn.getHeaderField("Content-Disposition"));
+        if (suggestedFileName == null || suggestedFileName.isBlank()) {
+            suggestedFileName = extractFileNameFromUrl(finalUrl);
+        }
+
+        String safeFileName = sanitizeDownloadFileName(suggestedFileName, fallbackOutputFile.getName());
+        String expectedExtension = extractExtension(fallbackOutputFile.getName());
+        if (!expectedExtension.isEmpty()
+                && !safeFileName.toLowerCase(Locale.ROOT).endsWith(expectedExtension.toLowerCase(Locale.ROOT))) {
+            safeFileName = fallbackOutputFile.getName();
+        }
+
+        File parent = fallbackOutputFile.getParentFile();
+        return parent == null ? new File(safeFileName).getAbsoluteFile() : new File(parent, safeFileName).getAbsoluteFile();
+    }
+
+    private static File downloadResponseBodyToFile(HttpURLConnection httpConn, File outputFile) throws IOException {
+        if (outputFile.exists() && outputFile.isDirectory()) {
+            say(languageData.INVALID_DOWNLOAD_TARGET + outputFile.getAbsolutePath(), LogType.ERROR);
+            return null;
+        }
+
+        File parent = outputFile.getParentFile();
+        if (parent != null) {
+            Files.createDirectories(parent.toPath());
+        }
+
+        File temporaryFile = null;
+        boolean movedToDestination = false;
+        try {
+            // 先下载到同目录临时文件，成功后再替换目标，避免失败时留下半截 installer。
+            temporaryFile = createTemporaryDownloadFile(outputFile);
+            if (!writeResponseBody(httpConn, temporaryFile)) {
+                return null;
+            }
+
+            Files.move(temporaryFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            movedToDestination = true;
+            say(languageData.UPDATE_SAVED_TO + outputFile.getAbsolutePath());
+            return outputFile;
+        } finally {
+            if (!movedToDestination && temporaryFile != null) {
+                deleteFileOrDirectory(temporaryFile);
+            }
+        }
+    }
+
+    private static boolean writeResponseBody(HttpURLConnection httpConn, File outputFile) throws IOException {
+        long fileSize = httpConn.getContentLengthLong();
+
+        if (fileSize > 0) {
+            say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
+        } else {
+            say(languageData.DOWNLOADING_FILE_SIZE_UNKNOWN);
+        }
+
+        try (InputStream inputStream = new BufferedInputStream(httpConn.getInputStream());
+             OutputStream outputStream = new BufferedOutputStream(Files.newOutputStream(outputFile.toPath()))) {
+
+            byte[] buffer = new byte[DOWNLOAD_BUFFER_SIZE];
+            int bytesRead;
+            long totalBytesRead = 0;
+            int progress = 0;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+
+                if (fileSize > 0) {
+                    int newProgress = (int) (totalBytesRead * 100 / fileSize);
+                    if (newProgress > progress) {
+                        progress = newProgress;
+                        say(languageData.DOWNLOAD_PROGRESS + progress + "%");
+                    }
+                }
+            }
+            outputStream.flush();
+
+            if (totalBytesRead <= 0) {
+                say(languageData.INVALID_FILE_SIZE_RECEIVED + totalBytesRead, LogType.ERROR);
+                return false;
+            }
+            if (fileSize >= 0 && totalBytesRead != fileSize) {
+                say(languageData.FILE_SIZE_MISMATCH + fileSize + ", actual: " + totalBytesRead, LogType.ERROR);
+                return false;
+            }
+        }
+
+        say(languageData.FILE_DOWNLOAD_COMPLETED);
+        return true;
+    }
+
+    private static String extractFileNameFromContentDisposition(String contentDisposition) {
+        if (contentDisposition == null || contentDisposition.isBlank()) {
+            return null;
+        }
+
+        String fallbackFileName = null;
+        for (String part : contentDisposition.split(";")) {
+            String trimmedPart = part.trim();
+            int separatorIndex = trimmedPart.indexOf('=');
+            if (separatorIndex <= 0) {
+                continue;
+            }
+
+            String key = trimmedPart.substring(0, separatorIndex).trim().toLowerCase(Locale.ROOT);
+            String value = trimmedPart.substring(separatorIndex + 1).trim();
+            if ("filename*".equals(key)) {
+                String decodedFileName = decodeRfc5987FileName(value);
+                if (decodedFileName != null && !decodedFileName.isBlank()) {
+                    return decodedFileName;
+                }
+            } else if ("filename".equals(key)) {
+                fallbackFileName = stripQuotes(value);
+            }
+        }
+        return fallbackFileName;
+    }
+
+    private static String decodeRfc5987FileName(String value) {
+        try {
+            String normalizedValue = stripQuotes(value);
+            int firstQuote = normalizedValue.indexOf('\'');
+            int secondQuote = firstQuote < 0 ? -1 : normalizedValue.indexOf('\'', firstQuote + 1);
+            if (firstQuote > 0 && secondQuote > firstQuote) {
+                String charsetName = normalizedValue.substring(0, firstQuote);
+                String encodedFileName = normalizedValue.substring(secondQuote + 1);
+                return URLDecoder.decode(encodedFileName, Charset.forName(charsetName));
+            }
+            return URLDecoder.decode(normalizedValue, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            Debugger.debugOperation(e);
+            return null;
+        }
+    }
+
+    private static String extractFileNameFromUrl(URL url) {
+        String path = url.getPath();
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+
+        int lastSlashIndex = path.lastIndexOf('/');
+        String rawFileName = lastSlashIndex >= 0 ? path.substring(lastSlashIndex + 1) : path;
+        if (rawFileName.isBlank()) {
+            return null;
+        }
+
+        try {
+            return URLDecoder.decode(rawFileName, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            Debugger.debugOperation(e);
+            return rawFileName;
+        }
+    }
+
+    private static String sanitizeDownloadFileName(String fileName, String fallbackFileName) {
+        String normalizedFileName = fileName == null || fileName.isBlank() ? fallbackFileName : fileName;
+        normalizedFileName = normalizedFileName.replace('\\', '/');
+        int lastSlashIndex = normalizedFileName.lastIndexOf('/');
+        if (lastSlashIndex >= 0) {
+            normalizedFileName = normalizedFileName.substring(lastSlashIndex + 1);
+        }
+
+        StringBuilder sanitizedFileName = new StringBuilder(normalizedFileName.length());
+        for (int i = 0; i < normalizedFileName.length(); i++) {
+            char currentChar = normalizedFileName.charAt(i);
+            boolean invalidWindowsFileNameChar = currentChar < 32
+                    || currentChar == 127
+                    || currentChar == '<'
+                    || currentChar == '>'
+                    || currentChar == ':'
+                    || currentChar == '"'
+                    || currentChar == '/'
+                    || currentChar == '\\'
+                    || currentChar == '|'
+                    || currentChar == '?'
+                    || currentChar == '*';
+            sanitizedFileName.append(invalidWindowsFileNameChar ? '_' : currentChar);
+        }
+
+        String result = trimUnsafeTrailingCharacters(sanitizedFileName.toString().trim());
+        if (result.isBlank() || ".".equals(result) || "..".equals(result)) {
+            return fallbackFileName;
+        }
+        return isReservedWindowsDeviceName(result) ? "_" + result : result;
+    }
+
+    private static String stripQuotes(String value) {
+        if (value == null) {
+            return null;
+        }
+        String strippedValue = value.trim();
+        if (strippedValue.length() >= 2 && strippedValue.startsWith("\"") && strippedValue.endsWith("\"")) {
+            return strippedValue.substring(1, strippedValue.length() - 1);
+        }
+        return strippedValue;
+    }
+
+    private static String trimUnsafeTrailingCharacters(String value) {
+        int endExclusive = value.length();
+        while (endExclusive > 0) {
+            char currentChar = value.charAt(endExclusive - 1);
+            if (currentChar != '.' && currentChar != ' ') {
+                break;
+            }
+            endExclusive--;
+        }
+        return value.substring(0, endExclusive);
+    }
+
+    private static boolean isReservedWindowsDeviceName(String fileName) {
+        String upperCaseBaseName = fileName;
+        int dotIndex = upperCaseBaseName.indexOf('.');
+        if (dotIndex >= 0) {
+            upperCaseBaseName = upperCaseBaseName.substring(0, dotIndex);
+        }
+        upperCaseBaseName = upperCaseBaseName.toUpperCase(Locale.ROOT);
+        return upperCaseBaseName.equals("CON")
+                || upperCaseBaseName.equals("PRN")
+                || upperCaseBaseName.equals("AUX")
+                || upperCaseBaseName.equals("NUL")
+                || upperCaseBaseName.matches("COM[1-9]")
+                || upperCaseBaseName.matches("LPT[1-9]");
+    }
+
+    private static String extractExtension(String fileName) {
+        int lastDotIndex = fileName.lastIndexOf('.');
+        return lastDotIndex < 0 ? "" : fileName.substring(lastDotIndex);
+    }
+
+    private static boolean isRedirectResponse(int responseCode) {
+        return responseCode == HttpURLConnection.HTTP_MOVED_PERM
+                || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
+                || responseCode == HttpURLConnection.HTTP_SEE_OTHER
+                || responseCode == 307
+                || responseCode == 308;
+    }
+
+    private static boolean isSupportedHttpUrl(URL url) {
+        String protocol = url.getProtocol();
+        return "http".equalsIgnoreCase(protocol) || "https".equalsIgnoreCase(protocol);
+    }
+
+    private static String safeResponseMessage(HttpURLConnection httpConn) {
+        try {
+            String message = httpConn.getResponseMessage();
+            return message == null ? "" : message;
+        } catch (IOException e) {
+            return "";
         }
     }
 
@@ -251,7 +559,8 @@ public class UpdateManager {
 
     private static void finishUpdateProcess(int exitCode) {
         if (isGUIMode) {
-            System.exit(exitCode);
+            NeoLinkCoreRunner.requestStop();
+            closeActiveConnectionForGuiUpdateExit();
         } else {
             exitAndFreeze(exitCode);
         }
@@ -259,6 +568,21 @@ public class UpdateManager {
 
     private static void exitAfterInstallerStarted() {
         System.exit(0);
+    }
+
+    private static void closeActiveConnectionForGuiUpdateExit() {
+        try {
+            if (connectingSocket != null) {
+                connectingSocket.close();
+                connectingSocket = null;
+            }
+            if (hookSocket != null) {
+                hookSocket.close();
+                hookSocket = null;
+            }
+        } catch (Exception e) {
+            Debugger.debugOperation(e);
+        }
     }
 
     /**

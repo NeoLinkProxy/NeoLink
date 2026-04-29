@@ -56,24 +56,24 @@ public final class ConfigOperator {
 
             // 强制同步安装包里的文件到 AppData
             forceSyncBaseline("config.cfg");
-            forceSyncBaseline("node.json");
+            forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
             debugOperation("Redirected to AppData: " + WORKING_DIR);
         }
     }
 
     private static String findBasePackageDir(String programDir) {
         // 1. IDEA 项目根目录
-        if (new File(System.getProperty("user.dir"), "node.json").exists())
+        if (new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME).exists())
             return System.getProperty("user.dir");
 
         // 2. Windows 安装目录或其 app 子目录
-        if (new File(programDir, "node.json").exists()) return programDir;
-        File s2 = new File(programDir + File.separator + "app", "node.json");
+        if (new File(programDir, NodeConfig.NODE_LIST_FILE_NAME).exists()) return programDir;
+        File s2 = new File(programDir + File.separator + "app", NodeConfig.NODE_LIST_FILE_NAME);
         if (s2.exists()) return s2.getParent();
 
         // 3. macOS Resources 目录
         if (System.getProperty("os.name").toLowerCase().contains("mac")) {
-            File s3 = new File(programDir + "/../Resources/node.json");
+            File s3 = new File(programDir + "/../Resources/" + NodeConfig.NODE_LIST_FILE_NAME);
             if (s3.exists()) return s3.getParent();
         }
         return programDir;

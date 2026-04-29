@@ -132,7 +132,7 @@ class ConfigOperatorTest {
     @Test
     @DisplayName("findBasePackageDir 在 IDEA 环境应返回 user.dir")
     void testFindBasePackageDirIdeaEnvironment() throws Exception {
-        File nodeJson = new File(System.getProperty("user.dir"), "node.json");
+        File nodeJson = new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME);
         boolean created = false;
 
         if (!nodeJson.exists()) {
@@ -150,6 +150,28 @@ class ConfigOperatorTest {
             if (created) {
                 nodeJson.delete();
             }
+        }
+    }
+
+    @Test
+    @DisplayName("findBasePackageDir 不应再识别废弃的 node.json")
+    void testFindBasePackageDirIgnoresDeprecatedNodeJson() throws Exception {
+        File legacyUserDir = new File(tempDir, "legacy-user-dir");
+        File programDir = new File(tempDir, "program-dir");
+        assertTrue(legacyUserDir.mkdirs());
+        assertTrue(programDir.mkdirs());
+        Files.writeString(new File(legacyUserDir, "node.json").toPath(), "[]");
+
+        Method method = ConfigOperator.class.getDeclaredMethod("findBasePackageDir", String.class);
+        method.setAccessible(true);
+
+        String originalUserDir = System.getProperty("user.dir");
+        System.setProperty("user.dir", legacyUserDir.getAbsolutePath());
+        try {
+            String result = (String) method.invoke(null, programDir.getAbsolutePath());
+            assertEquals(programDir.getAbsolutePath(), result);
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
         }
     }
 

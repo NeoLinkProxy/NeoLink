@@ -37,7 +37,7 @@ NeoLink 项目同时提供 **命令行 (CLI)** 与 **Compose Multiplatform 图�
 - ☕ **Java 21 + Kotlin 驱动**：利用现代强类型语言特性，性能更优，转发更稳定。
 - ↔️ **通用 TCP/UDP**：几乎所有类型的服务均可穿透。
 - 🆔 **真实 IP 透传**：支持 **Proxy Protocol v2**，配合 Nginx 等后端可获取用户真实 IP。
-- 🗄️ **多节点管理**：通过 `node.json` 配置多个服务端节点，启动时灵活切换。
+- 🗄️ **多节点管理**：通过 `nodes.json` 配置多个服务端节点，启动时灵活切换。
 - 🔄 **稳定可靠**：自动重连、心跳保活，防止 NAT 超时断开。
 - ⬆️ **自动更新**：支持自动检测并下载新版本，简化维护流程。
 - 🔌 **代理支持**：支持 HTTP/SOCKS5 代理连接 NeoProxyServer 或本地服务。
@@ -66,7 +66,7 @@ java -jar NeoLink-XXXX.jar --nogui --zh-cn
 # 可选参数追加到后面
 # --key=...                          访问密钥
 # --local-port=...                   本地要被穿透的端口
-# --node=NodeName                    指定要连接的节点名称（需配置 node.json）
+# --node=NodeName                    指定要连接的节点名称（需配置 nodes.json）
 # --output-file=path/to/logfile.log  将日志写入指定文件
 # --enable-pp                        启用 Proxy Protocol v2 (透传真实 IP)
 # --debug                            打印调试信息
@@ -137,9 +137,9 @@ RECONNECTION_INTERVAL=30
 NKM_NODELIST_URL=
 ```
 
-### 2. 🗄️ **多节点配置** (`node.json`)
+### 2. 🗄️ **多节点配置** (`nodes.json`)
 
-在程序同级目录下创建 `node.json` 文件，可以配置多个服务器节点。
+在程序同级目录下创建 `nodes.json` 文件，可以配置多个服务器节点。
 
 **文件格式示例：**
 
@@ -180,7 +180,7 @@ NKM_NODELIST_URL=
 ## 🤔 常见问题 (FAQ)
 
 Q: 为什么连接不上 NeoProxyServer？  
-A: 请检查防火墙端口是否开放，以及 `node.json` 或 `config.cfg` 中的端口是否与服务端对应。
+A: 请检查防火墙端口是否开放，以及 `nodes.json` 或 `config.cfg` 中的端口是否与服务端对应。
 
 Q: 如何获取访问者的真实 IP？  
 A: 客户端开启透传功能（`--enable-pp`），并确保后端（如 Nginx）配置了 `proxy_protocol` 监听。

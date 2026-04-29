@@ -4,6 +4,7 @@ import fun.ceroxe.api.print.log.LogType;
 import fun.ceroxe.api.print.log.Loggist;
 import fun.ceroxe.api.print.log.State;
 import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.config.NodeConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -131,6 +132,12 @@ class NeoLinkTest {
     }
 
     @Test
+    @DisplayName("TEST_UPDATE_VERSION 应为服务端可判定过旧的低版本号")
+    void testTestUpdateVersionConstant() {
+        assertEquals("0.0.1", NeoLink.TEST_UPDATE_VERSION);
+    }
+
+    @Test
     @DisplayName("INVALID_LOCAL_PORT 应为 -1")
     void testInvalidLocalPortConstant() {
         assertEquals(-1, NeoLink.INVALID_LOCAL_PORT);
@@ -213,6 +220,22 @@ class NeoLinkTest {
         String result = NeoLink.formatClientInfoString(langData, key);
 
         assertTrue(result.contains("0.0.1"));
+    }
+
+    @Test
+    @DisplayName("getClientVersionToReport 默认应返回真实版本号")
+    void testGetClientVersionToReportDefaultVersion() {
+        NeoLink.isTestUpdate = false;
+
+        assertEquals(VersionInfo.VERSION, NeoLink.getClientVersionToReport());
+    }
+
+    @Test
+    @DisplayName("getClientVersionToReport 测试更新模式应返回低版本号")
+    void testGetClientVersionToReportTestUpdateVersion() {
+        NeoLink.isTestUpdate = true;
+
+        assertEquals(NeoLink.TEST_UPDATE_VERSION, NeoLink.getClientVersionToReport());
     }
 
     @Test
@@ -394,6 +417,23 @@ class NeoLinkTest {
         NeoLink.printBasicInfo();
 
         verify(mockLoggist, atLeastOnce()).say(any(State.class));
+    }
+
+    @Test
+    @DisplayName("printBasicInfo 测试更新模式应输出与握手一致的低版本号")
+    void testPrintBasicInfoUsesTestUpdateVersion() {
+        Loggist mockLoggist = mock(Loggist.class);
+        NeoLink.loggist = mockLoggist;
+        NeoLink.languageData = new LanguageData();
+        NeoLink.isTestUpdate = true;
+        NeoLink.isDisableTCP = false;
+        NeoLink.isDisableUDP = false;
+
+        NeoLink.printBasicInfo();
+
+        verify(mockLoggist).say(argThat(state ->
+                state != null && (NeoLink.languageData.VERSION + NeoLink.TEST_UPDATE_VERSION).equals(state.getContent())
+        ));
     }
 
     @Test
@@ -755,7 +795,7 @@ class NeoLinkTest {
     @DisplayName("loadNodeConfiguration 存在的文件应正确解析")
     void testLoadNodeConfigurationExistingFile() throws Exception {
         String jsonContent = "[{\"name\":\"test-node\",\"address\":\"test.example.com\",\"HOST_HOOK_PORT\":44801,\"HOST_CONNECT_PORT\":44802}]";
-        File nodeFile = new File(tempDir, "node.json");
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
         Files.writeString(nodeFile.toPath(), jsonContent);
 
         Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");
@@ -1038,7 +1078,7 @@ class NeoLinkTest {
     @DisplayName("loadNodeConfiguration 应解析 HOST_HOOK_PORT 和 HOST_CONNECT_PORT")
     void testLoadNodeConfigurationPortParsing() throws Exception {
         String jsonContent = "[{\"name\":\"test-node\",\"address\":\"test.example.com\",\"HOST_HOOK_PORT\":44901,\"HOST_CONNECT_PORT\":44902}]";
-        File nodeFile = new File(tempDir, "node.json");
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
         Files.writeString(nodeFile.toPath(), jsonContent);
 
         Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");
@@ -1064,7 +1104,7 @@ class NeoLinkTest {
     @DisplayName("loadNodeConfiguration 应解析 hookPort 和 connectPort (小写)")
     void testLoadNodeConfigurationLowercasePorts() throws Exception {
         String jsonContent = "[{\"name\":\"test-node\",\"address\":\"test.example.com\",\"hookPort\":44901,\"connectPort\":44902}]";
-        File nodeFile = new File(tempDir, "node.json");
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
         Files.writeString(nodeFile.toPath(), jsonContent);
 
         Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");
@@ -1090,7 +1130,7 @@ class NeoLinkTest {
     @DisplayName("loadNodeConfiguration 节点不存在时应安全处理")
     void testLoadNodeConfigurationNodeNotFound() throws Exception {
         String jsonContent = "[{\"name\":\"other-node\",\"address\":\"other.example.com\"}]";
-        File nodeFile = new File(tempDir, "node.json");
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
         Files.writeString(nodeFile.toPath(), jsonContent);
 
         Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");
@@ -1109,7 +1149,7 @@ class NeoLinkTest {
     @DisplayName("loadNodeConfiguration 空 JSON 应安全处理")
     void testLoadNodeConfigurationEmptyJson() throws Exception {
         String jsonContent = "[]";
-        File nodeFile = new File(tempDir, "node.json");
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
         Files.writeString(nodeFile.toPath(), jsonContent);
 
         Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");

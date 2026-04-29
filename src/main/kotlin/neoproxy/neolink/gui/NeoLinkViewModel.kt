@@ -101,7 +101,7 @@ class NeoLinkViewModel {
 
     private fun loadNodes() {
         // [修改] 使用 ConfigOperator.WORKING_DIR 构造文件路径
-        val nodeFile = File(ConfigOperator.WORKING_DIR, "node.json")
+        val nodeFile = File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME)
         if (!nodeFile.exists()) return
         try {
             for (node in NodeConfig.loadAll(nodeFile)) {

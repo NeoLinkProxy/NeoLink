@@ -192,6 +192,16 @@ class LanguageDataTest {
         assertEquals("成功删除：", chineseData.SUCCESSFULLY_DELETED);
         assertEquals("删除文件时出错：", chineseData.ERROR_DELETING_FILE);
         assertEquals("文件下载成功完成。", chineseData.FILE_DOWNLOAD_COMPLETED);
+        assertEquals("更新文件将保存到目录：", chineseData.UPDATE_DOWNLOAD_TARGET);
+        assertEquals("更新文件已保存到：", chineseData.UPDATE_SAVED_TO);
+        assertEquals("下载已重定向到：", chineseData.DOWNLOAD_REDIRECTED_TO);
+        assertEquals("下载失败，服务端返回 HTTP 状态码：", chineseData.DOWNLOAD_FAILED_HTTP_CODE);
+        assertEquals("下载重定向缺少 Location 响应头，HTTP 状态码：", chineseData.DOWNLOAD_REDIRECT_WITHOUT_LOCATION);
+        assertEquals("下载重定向次数过多，限制：", chineseData.TOO_MANY_DOWNLOAD_REDIRECTS);
+        assertEquals("不支持的下载协议：", chineseData.UNSUPPORTED_DOWNLOAD_PROTOCOL);
+        assertEquals("无效的下载地址：", chineseData.INVALID_DOWNLOAD_URL);
+        assertEquals("无效的下载目标：", chineseData.INVALID_DOWNLOAD_TARGET);
+        assertEquals("正在下载文件，大小未知...", chineseData.DOWNLOADING_FILE_SIZE_UNKNOWN);
         assertEquals("TCP 服务已禁用！", chineseData.WARNING_TCP_DISABLED);
         assertEquals("UDP 服务已禁用！", chineseData.WARNING_UDP_DISABLED);
     }

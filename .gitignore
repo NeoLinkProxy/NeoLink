@@ -31,7 +31,6 @@ bin/
 # NeoLink 运行产物
 logs/
 /config.cfg
-node.json
 eula.txt
 
 # 临时文件
