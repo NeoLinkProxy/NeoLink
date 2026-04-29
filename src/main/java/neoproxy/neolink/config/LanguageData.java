@@ -30,7 +30,7 @@ public class LanguageData implements Serializable {
     public String DOWNLOAD_SUCCESS = "The update is downloaded successfully !";
     public String PLEASE_RUN = "Please run ";
     public String IF_YOU_SEE_EULA = "If you use this software, you understand and agree with eula .";
-    public String VERSION = "Version : ";
+    public String VERSION = "API Version : ";
     public String PLEASE_ENTER_ACCESS_CODE = "Please enter the access code:";
     public String CONNECT_TO = "Connect to ";
     public String OMITTED = " ...";
@@ -98,7 +98,7 @@ public class LanguageData implements Serializable {
         languageData.IT_MUST_BE_INT = "这应该为整数。";
         languageData.PORT_OUT_OF_RANGE_MSG = "输入的端口范围应在1~65535之间。";
         languageData.IF_YOU_SEE_EULA = "如果你已经开始使用的本软件，说明你已经知晓并同意了本软件的eula协议";
-        languageData.VERSION = "版本 ： ";
+        languageData.VERSION = "API版本 ： ";
         languageData.PLEASE_ENTER_ACCESS_CODE = "请输入密钥：";
         languageData.CONNECT_TO = "连接 ";
         languageData.OMITTED = " ...";
