@@ -1,6 +1,5 @@
 package neoproxy.neolink.update;
 
-import fun.ceroxe.api.net.SecureSocket;
 import com.sun.net.httpserver.HttpServer;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
@@ -43,7 +42,6 @@ class UpdateManagerTest {
     private String originalKey;
     private int originalLocalPort;
     private String originalOutputFilePath;
-    private SecureSocket originalHookSocket;
     private String originalBasePackageDir;
 
     @TempDir
@@ -57,7 +55,6 @@ class UpdateManagerTest {
         originalKey = NeoLink.key;
         originalLocalPort = NeoLink.localPort;
         originalOutputFilePath = NeoLink.outputFilePath;
-        originalHookSocket = NeoLink.hookSocket;
         originalBasePackageDir = ConfigOperator.BASE_PACKAGE_DIR;
 
         NeoLink.isDebugMode = false;
@@ -77,7 +74,6 @@ class UpdateManagerTest {
         NeoLink.key = originalKey;
         NeoLink.localPort = originalLocalPort;
         NeoLink.outputFilePath = originalOutputFilePath;
-        NeoLink.hookSocket = originalHookSocket;
         ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
     }
 

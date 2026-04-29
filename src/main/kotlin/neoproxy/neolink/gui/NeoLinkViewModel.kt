@@ -20,7 +20,6 @@ import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.NodeConfig
 import neoproxy.neolink.core.NeoLink
 import neoproxy.neolink.core.NeoLinkCoreRunner
-import neoproxy.neolink.network.InternetOperator
 import java.io.File
 
 /**
@@ -172,14 +171,6 @@ class NeoLinkViewModel {
         NeoLink.say("正在停止 NeoLink 服务...")
         scope.launch(Dispatchers.IO) {
             NeoLinkCoreRunner.requestStop()
-            try {
-                if (NeoLink.connectingSocket != null) NeoLink.connectingSocket.close()
-            } catch (e: Exception) {
-            }
-            try {
-                if (NeoLink.hookSocket != null) InternetOperator.close(NeoLink.hookSocket)
-            } catch (e: Exception) {
-            }
         }
     }
 

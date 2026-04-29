@@ -1,6 +1,15 @@
 # NeoLink
 
-**Java 21 驱动的高性能内网穿透客户端**
+
+## Architecture
+
+NeoLink 6.3.0 is an application shell over `top.ceroxe.api:neolinkapi:6.3.0`.
+The shell keeps CLI, GUI, config files, node selection, logs and update installation.
+Protocol handshake, TCP/UDP forwarding, heartbeat, server command handling and update URL negotiation are owned by `NeoLinkAPI`.
+
+The application version is intentionally bound to the API version at build time.
+`build.gradle.kts` reads `../APIs/NeoLinkAPI/build.gradle.kts`; if the API version is `6.3.0`, this project also builds as `6.3.0` and depends on `neolinkapi:6.3.0`.
+The shell must not reimplement API protocol details such as the handshake string or TCP/UDP dispatch.**Java 21 驱动的高性能内网穿透客户端**
 
 支持 TCP / UDP 协议 • Proxy Protocol v2 • 多节点切换
 

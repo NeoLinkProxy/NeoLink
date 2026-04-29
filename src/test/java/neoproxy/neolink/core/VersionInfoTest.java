@@ -28,6 +28,7 @@ class VersionInfoTest {
     void testVersionIsNotEmpty() {
         assertNotNull(VersionInfo.VERSION);
         assertFalse(VersionInfo.VERSION.isEmpty());
+        assertEquals("6.3.0", VersionInfo.VERSION);
     }
 
     @Test

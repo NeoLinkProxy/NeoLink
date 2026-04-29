@@ -9,7 +9,22 @@ plugins {
 }
 
 group = "neoproxy"
-version = "6.0.1"
+
+val neoLinkApiBuildFile = rootDir.resolve("../APIs/NeoLinkAPI/build.gradle.kts").canonicalFile
+val neoLinkApiVersion = run {
+    val apiBuildText = neoLinkApiBuildFile.readText(Charsets.UTF_8)
+    Regex("""(?m)^\s*val\s+apiVersion\s*=\s*"([^"]+)"""")
+        .find(apiBuildText)
+        ?.groupValues
+        ?.get(1)
+        ?: Regex("""(?m)^\s*version\s*=\s*"([^"]+)"""")
+            .find(apiBuildText)
+            ?.groupValues
+            ?.get(1)
+        ?: throw GradleException("NeoLinkAPI version must be declared in ${neoLinkApiBuildFile.path}")
+}
+
+version = neoLinkApiVersion
 
 repositories {
     mavenCentral()
@@ -27,6 +42,7 @@ java {
 }
 
 dependencies {
+    implementation("top.ceroxe.api:neolinkapi:$neoLinkApiVersion")
     implementation("fun.ceroxe.api:ceroxe-core:1.0.0")
     implementation("fun.ceroxe.api:ceroxe-detector:1.0.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
@@ -49,7 +65,22 @@ dependencies {
     testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
 }
 
+val verifyNeoLinkApiVersionBinding by tasks.registering {
+    inputs.file(neoLinkApiBuildFile)
+    inputs.property("neoLinkApiVersion", neoLinkApiVersion)
+    doLast {
+        if (project.version.toString() != neoLinkApiVersion) {
+            throw GradleException(
+                "NeoLink version ${project.version} must match NeoLinkAPI version $neoLinkApiVersion"
+            )
+        }
+    }
+}
+
 tasks.withType<ProcessResources> {
+    dependsOn(verifyNeoLinkApiVersionBinding)
+    inputs.file(neoLinkApiBuildFile)
+    inputs.property("appVersion", project.version.toString())
     filteringCharset = "UTF-8"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     filesMatching("app.properties") {
@@ -127,6 +158,7 @@ tasks.jacocoTestCoverageVerification {
 }
 
 tasks.check {
+    dependsOn(verifyNeoLinkApiVersionBinding)
     dependsOn(tasks.jacocoTestCoverageVerification)
 }
 

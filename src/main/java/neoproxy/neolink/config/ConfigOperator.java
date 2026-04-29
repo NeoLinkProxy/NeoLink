@@ -2,8 +2,6 @@ package neoproxy.neolink.config;
 
 import fun.ceroxe.api.utils.config.LineConfigReader;
 import neoproxy.neolink.core.NeoLink;
-import neoproxy.neolink.network.ProxyOperator;
-import neoproxy.neolink.network.threads.CheckAliveThread;
 
 import java.io.File;
 import java.io.IOException;
@@ -105,9 +103,9 @@ public final class ConfigOperator {
             NeoLink.reconnectionIntervalSeconds = readPositiveInt(reader, "RECONNECTION_INTERVAL", 30);
             NeoLink.enableProxyProtocol = reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false);
             NeoLink.nkmNodeListUrl = reader.getOptional("NKM_NODELIST_URL").orElse("");
-            ProxyOperator.PROXY_IP_TO_NEO_SERVER = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
-            ProxyOperator.PROXY_IP_TO_LOCAL_SERVER = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
-            CheckAliveThread.HEARTBEAT_PACKET_DELAY = readPositiveInt(reader, "HEARTBEAT_PACKET_DELAY", 1000);
+            NeoLink.proxyIPToNeoServer = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
+            NeoLink.proxyIPToLocalServer = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
+            NeoLink.heartbeatPacketDelay = readPositiveInt(reader, "HEARTBEAT_PACKET_DELAY", 1000);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid config.cfg: " + e.getMessage(), e);
         }

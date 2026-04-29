@@ -178,51 +178,6 @@ class NeoLinkTest {
     }
 
     @Test
-    @DisplayName("formatClientInfoString 应包含语言标识")
-    void testFormatClientInfoStringContainsLanguage() {
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.startsWith("en;"));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString 应包含版本号")
-    void testFormatClientInfoStringContainsVersion() {
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.contains(VersionInfo.VERSION));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString 应包含密钥")
-    void testFormatClientInfoStringContainsKey() {
-        LanguageData langData = new LanguageData();
-        String key = "my-secret-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.contains(key));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString 在测试更新模式下应返回低版本号")
-    void testFormatClientInfoStringTestUpdateMode() {
-        NeoLink.isTestUpdate = true;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.contains("0.0.1"));
-    }
-
-    @Test
     @DisplayName("getClientVersionToReport 默认应返回真实版本号")
     void testGetClientVersionToReportDefaultVersion() {
         NeoLink.isTestUpdate = false;
@@ -236,67 +191,6 @@ class NeoLinkTest {
         NeoLink.isTestUpdate = true;
 
         assertEquals(NeoLink.TEST_UPDATE_VERSION, NeoLink.getClientVersionToReport());
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString TCP 启用时应包含 T 标识")
-    void testFormatClientInfoStringTcpEnabled() {
-        NeoLink.isDisableTCP = false;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.contains("T"));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString TCP 禁用时应不含 T 标识")
-    void testFormatClientInfoStringTcpDisabled() {
-        NeoLink.isDisableTCP = true;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertFalse(result.contains("T"));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString UDP 启用时应包含 U 标识")
-    void testFormatClientInfoStringUdpEnabled() {
-        NeoLink.isDisableUDP = false;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.contains("U"));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString UDP 禁用时应不含 U 标识")
-    void testFormatClientInfoStringUdpDisabled() {
-        NeoLink.isDisableUDP = true;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertFalse(result.contains("U"));
-    }
-
-    @Test
-    @DisplayName("formatClientInfoString 应包含协议标识后无分号")
-    void testFormatClientInfoStringEndsWithProtocolFlag() {
-        NeoLink.isDisableTCP = false;
-        NeoLink.isDisableUDP = false;
-        LanguageData langData = new LanguageData();
-        String key = "test-key";
-
-        String result = NeoLink.formatClientInfoString(langData, key);
-
-        assertTrue(result.endsWith("TU") || result.endsWith("T") || result.endsWith("U") || result.endsWith(";"));
     }
 
     @Test
@@ -497,11 +391,9 @@ class NeoLinkTest {
     }
 
     @Test
-    @DisplayName("lastReceivedTime 应为当前时间附近")
-    void testLastReceivedTime() {
-        long now = System.currentTimeMillis();
-        assertTrue(NeoLink.lastReceivedTime <= now);
-        assertTrue(NeoLink.lastReceivedTime > now - 10000);
+    @DisplayName("remotePort 默认应为 0")
+    void testRemotePortDefaultAfterShellMigration() {
+        assertEquals(0, NeoLink.remotePort);
     }
 
     @Test
@@ -836,76 +728,6 @@ class NeoLinkTest {
     @DisplayName("inputScanner 应为 Scanner 实例")
     void testInputScannerNotNull() {
         assertNotNull(NeoLink.inputScanner);
-    }
-
-    @Test
-    @DisplayName("handleServerCommand sendSocketTCP 应创建 TCP 连接")
-    void testHandleServerCommandSendSocketTCP() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("handleServerCommand", String.class);
-        method.setAccessible(true);
-
-        NeoLink.isDisableTCP = false;
-        NeoLink.isDisableUDP = true;
-
-        assertDoesNotThrow(() -> method.invoke(null, "sendSocketTCP;socket123;192.168.1.1:8080"));
-    }
-
-    @Test
-    @DisplayName("handleServerCommand sendSocketTCP 禁用 TCP 时不应创建连接")
-    void testHandleServerCommandSendSocketTCPDisabled() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("handleServerCommand", String.class);
-        method.setAccessible(true);
-
-        NeoLink.isDisableTCP = true;
-
-        assertDoesNotThrow(() -> method.invoke(null, "sendSocketTCP;socket123;192.168.1.1:8080"));
-    }
-
-    @Test
-    @DisplayName("handleServerCommand sendSocketUDP 应创建 UDP 连接")
-    void testHandleServerCommandSendSocketUDP() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("handleServerCommand", String.class);
-        method.setAccessible(true);
-
-        NeoLink.isDisableTCP = true;
-        NeoLink.isDisableUDP = false;
-
-        assertDoesNotThrow(() -> method.invoke(null, "sendSocketUDP;socket456;192.168.1.1:8080"));
-    }
-
-    @Test
-    @DisplayName("handleServerCommand sendSocketUDP 禁用 UDP 时不应创建连接")
-    void testHandleServerCommandSendSocketUDPDisabled() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("handleServerCommand", String.class);
-        method.setAccessible(true);
-
-        NeoLink.isDisableUDP = true;
-
-        assertDoesNotThrow(() -> method.invoke(null, "sendSocketUDP;socket456;192.168.1.1:8080"));
-    }
-
-    @Test
-    @DisplayName("handleServerCommand 端口号应设置 remotePort")
-    void testHandleServerCommandPortNumber() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("handleServerCommand", String.class);
-        method.setAccessible(true);
-
-        NeoLink.remotePort = 0;
-
-        method.invoke(null, "8080");
-
-        assertEquals(8080, NeoLink.remotePort);
-    }
-
-    @Test
-    @DisplayName("checkForInterruption 正常情况不应抛出异常")
-    void testCheckForInterruptionNormal() throws Exception {
-        Method method = NeoLink.class.getDeclaredMethod("checkForInterruption");
-        method.setAccessible(true);
-
-        Thread.interrupted();
-
-        assertDoesNotThrow(() -> method.invoke(null));
     }
 
     @Test

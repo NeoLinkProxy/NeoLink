@@ -21,8 +21,6 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
-import static neoproxy.neolink.network.InternetOperator.receiveStr;
-import static neoproxy.neolink.network.InternetOperator.sendStr;
 import static neoproxy.neolink.core.NeoLink.*;
 
 /**
@@ -53,17 +51,15 @@ public class UpdateManager {
     private static final int DOWNLOAD_CONNECT_TIMEOUT_MS = 15000;
     private static final int DOWNLOAD_READ_TIMEOUT_MS = 300000;
 
-    public static void checkUpdate(String fileName) {
+    public static void checkUpdate(String fileName, String responseUrl) {
         debugOperation("Checking for updates: " + fileName);
         try {
             boolean isWindows = OshiUtils.isWindows();
             debugOperation("OS is Windows: " + isWindows);
 
             // 1. 告诉服务端当前需要的格式
-            sendStr(isWindows ? "exe" : "jar");
 
             // 2. 接收服务端返回的下载地址 (URL)
-            String responseUrl = receiveStr();
             debugOperation("Server response (URL): " + responseUrl);
 
             // 3. 检查返回值，如果是 "false" 或者空，说明服务端无法提供更新
@@ -560,7 +556,6 @@ public class UpdateManager {
     private static void finishUpdateProcess(int exitCode) {
         if (isGUIMode) {
             NeoLinkCoreRunner.requestStop();
-            closeActiveConnectionForGuiUpdateExit();
         } else {
             exitAndFreeze(exitCode);
         }
@@ -568,21 +563,6 @@ public class UpdateManager {
 
     private static void exitAfterInstallerStarted() {
         System.exit(0);
-    }
-
-    private static void closeActiveConnectionForGuiUpdateExit() {
-        try {
-            if (connectingSocket != null) {
-                connectingSocket.close();
-                connectingSocket = null;
-            }
-            if (hookSocket != null) {
-                hookSocket.close();
-                hookSocket = null;
-            }
-        } catch (Exception e) {
-            Debugger.debugOperation(e);
-        }
     }
 
     /**
