@@ -103,8 +103,8 @@ cd NeoLink
 # 开发模式直接运行
 ./gradlew run
 
-# 打包 Jar
-./gradlew shadowJar
+# 打包全平台 Jar
+./gradlew shadowJarAll
 ```
 
 ---
