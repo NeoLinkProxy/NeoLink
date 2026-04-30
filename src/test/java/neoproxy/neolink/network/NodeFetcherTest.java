@@ -158,7 +158,7 @@ class NodeFetcherTest {
     void testFetchAndSaveNodesWritesNodesJsonOnly() throws Exception {
         NeoLink.languageData = new LanguageData();
         ConfigOperator.WORKING_DIR = tempDir.getAbsolutePath();
-        String nodeListJson = "[{\"name\":\"test-node\",\"address\":\"127.0.0.1\"}]";
+        String nodeListJson = "[{\"realId\":\"node-test\",\"name\":\"test-node\",\"address\":\"127.0.0.1\"}]";
 
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/nodes", exchange -> {
@@ -181,8 +181,42 @@ class NodeFetcherTest {
             assertFalse(new File(tempDir, "node.json").exists());
             String savedJson = Files.readString(nodesJson.toPath(), StandardCharsets.UTF_8);
             assertTrue(savedJson.contains(System.lineSeparator()) || savedJson.contains("\n"));
+            assertTrue(savedJson.contains("  \"realId\""));
             assertTrue(savedJson.contains("  \"name\""));
             assertEquals(1, NodeConfig.loadAll(nodesJson).size());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("fetchAndSaveNodes 遇到 NKM 空在线列表时应保留本地 nodes.json")
+    void testFetchAndSaveNodesKeepsLocalNodesJsonWhenRemoteListIsEmpty() throws Exception {
+        NeoLink.languageData = new LanguageData();
+        ConfigOperator.WORKING_DIR = tempDir.getAbsolutePath();
+        File nodesJson = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
+        String existingJson = "[{\"realId\":\"node-cached\",\"name\":\"cached-node\",\"address\":\"cached.example.com\"}]";
+        Files.writeString(nodesJson.toPath(), existingJson, StandardCharsets.UTF_8);
+
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/nodes", exchange -> {
+            byte[] response = "[]".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(200, response.length);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(response);
+            }
+        });
+        server.start();
+
+        try {
+            NeoLink.nkmNodeListUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/nodes";
+
+            NodeFetcher.fetchAndSaveNodes();
+
+            String savedJson = Files.readString(nodesJson.toPath(), StandardCharsets.UTF_8);
+            assertEquals(existingJson, savedJson);
+            assertTrue(outContent.toString(StandardCharsets.UTF_8).contains("Keeping the local node list"));
         } finally {
             server.stop(0);
         }

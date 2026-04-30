@@ -10,6 +10,7 @@ package neoproxy.neolink.gui
  *
  * 属性说明：
  * - name: 节点显示名称
+ * - realId: NeoKeyManager 中稳定的节点身份标识；显示名可变，realId 不应用于 UI 文案
  * - address: 节点服务器地址
  * - iconSvg: 节点图标 SVG 字符串（可选）
  * - hookPort: 服务器 Hook 端口（用于控制连接）
@@ -20,6 +21,7 @@ package neoproxy.neolink.gui
  */
 data class NeoNode(
     val name: String,
+    val realId: String?,
     val address: String,
     val iconSvg: String?,
     val hookPort: Int,

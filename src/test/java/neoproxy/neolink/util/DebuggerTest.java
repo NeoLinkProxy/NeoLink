@@ -1,7 +1,7 @@
 package neoproxy.neolink.util;
 
-import fun.ceroxe.api.print.log.LogType;
-import fun.ceroxe.api.print.log.State;
+import top.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.State;
 import neoproxy.neolink.core.NeoLink;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

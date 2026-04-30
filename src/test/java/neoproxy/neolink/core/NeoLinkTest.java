@@ -1,8 +1,11 @@
 package neoproxy.neolink.core;
 
-import fun.ceroxe.api.print.log.LogType;
-import fun.ceroxe.api.print.log.Loggist;
-import fun.ceroxe.api.print.log.State;
+import top.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.Loggist;
+import top.ceroxe.api.print.log.State;
+import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
+import top.ceroxe.api.neolink.exception.NoSuchKeyException;
+import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -381,6 +384,59 @@ class NeoLinkTest {
         NeoLink.sayInfoNoNewLine("Test message");
 
         verify(mockLoggist).sayNoNewLine(any(State.class));
+    }
+
+    @Test
+    @DisplayName("API 业务异常应转换为客户端展示文案")
+    void testClientFacingApiErrorMessageUsesBusinessTextOnly() {
+        NeoLink.languageData = LanguageData.getChineseLanguage();
+
+        assertEquals(
+                "密钥错误，强制退出。。。",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "NeoProxyServer rejected the access key: 密钥错误，强制退出。。。",
+                        new NoSuchKeyException("密钥错误，强制退出。。。")
+                )
+        );
+        assertEquals(
+                "没有多余的流量了。",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "NeoProxyServer terminated the tunnel because no network flow remains: exitNoFlow",
+                        new NoMoreNetworkFlowException()
+                )
+        );
+        assertEquals(
+                "Unsupported version:6.0.1",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "NeoProxyServer does not support this NeoLinkAPI version: Unsupported version:6.0.1",
+                        new UnsupportedVersionException("Unsupported version:6.0.1")
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("API 回调错误不应默认输出底层异常到 GUI")
+    void testClientFacingCallbackErrorMessageSuppressesInfrastructureMessages() {
+        NeoLink.languageData = LanguageData.getChineseLanguage();
+
+        assertNull(NeoLinkCoreRunner.clientFacingCallbackErrorMessage(
+                "NeoProxyServer rejected the access key: 密钥错误，强制退出。。。",
+                new NoSuchKeyException("密钥错误，强制退出。。。"),
+                false
+        ));
+        assertNull(NeoLinkCoreRunner.clientFacingCallbackErrorMessage(
+                "连接本地服务失败：localhost:7777",
+                new IOException("Connection refused: getsockopt"),
+                true
+        ));
+        assertEquals(
+                "没有多余的流量了。",
+                NeoLinkCoreRunner.clientFacingCallbackErrorMessage(
+                        "NeoProxyServer terminated the tunnel because no network flow remains: exitNoFlow",
+                        new NoMoreNetworkFlowException(),
+                        true
+                )
+        );
     }
 
     @Test
@@ -918,6 +974,32 @@ class NeoLinkTest {
         method.invoke(null);
 
         assertEquals("test.example.com", NeoLink.remoteDomainName);
+        assertEquals(44901, NeoLink.hostHookPort);
+        assertEquals(44902, NeoLink.hostConnectPort);
+    }
+
+    @Test
+    @DisplayName("loadNodeConfiguration 应支持使用 NeoKeyManager realId 选择节点")
+    void testLoadNodeConfigurationByRealId() throws Exception {
+        String jsonContent = "[{\"realId\":\"node-suqian\",\"name\":\"中国 - 宿迁官方\",\"address\":\"p.ceroxe.fun\",\"HOST_HOOK_PORT\":44901,\"HOST_CONNECT_PORT\":44902}]";
+        File nodeFile = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
+        Files.writeString(nodeFile.toPath(), jsonContent);
+
+        Method method = NeoLink.class.getDeclaredMethod("loadNodeConfiguration");
+        method.setAccessible(true);
+
+        NeoLink.specifiedNodeName = "node-suqian";
+        NeoLink.remoteDomainName = "localhost";
+        NeoLink.hostHookPort = 44801;
+        NeoLink.hostConnectPort = 44802;
+
+        var workingDirField = neoproxy.neolink.config.ConfigOperator.class.getDeclaredField("WORKING_DIR");
+        workingDirField.setAccessible(true);
+        workingDirField.set(null, tempDir.getAbsolutePath());
+
+        method.invoke(null);
+
+        assertEquals("p.ceroxe.fun", NeoLink.remoteDomainName);
         assertEquals(44901, NeoLink.hostHookPort);
         assertEquals(44902, NeoLink.hostConnectPort);
     }

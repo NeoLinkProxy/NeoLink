@@ -107,6 +107,7 @@ class NeoLinkViewModel {
                 nodeList.add(
                     NeoNode(
                         node.name,
+                        node.realId,
                         node.address,
                         node.icon,
                         node.hostHookPort,
@@ -183,12 +184,12 @@ class NeoLinkViewModel {
         // 关键：将 gui_internal.log 强制放入 logs 文件夹
         val internalLogFile = File(ConfigOperator.WORKING_DIR, "logs/gui_internal.log")
 
-        NeoLink.loggist = object : `fun`.ceroxe.api.print.log.Loggist(internalLogFile) {
-            override fun say(state: `fun`.ceroxe.api.print.log.State) {
+        NeoLink.loggist = object : top.ceroxe.api.print.log.Loggist(internalLogFile) {
+            override fun say(state: top.ceroxe.api.print.log.State) {
                 addLogSafe(getLogString(state)); originalLoggist?.say(state)
             }
 
-            override fun sayNoNewLine(state: `fun`.ceroxe.api.print.log.State) {
+            override fun sayNoNewLine(state: top.ceroxe.api.print.log.State) {
                 addLogSafe(getLogString(state)); originalLoggist?.sayNoNewLine(state)
             }
 

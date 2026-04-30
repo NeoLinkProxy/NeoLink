@@ -1,17 +1,20 @@
 package neoproxy.neolink.core;
 
-import fun.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.LogType;
 import top.ceroxe.api.neolink.NeoLinkAPI;
 import top.ceroxe.api.neolink.NeoLinkAPI.TransportProtocol;
 import top.ceroxe.api.neolink.NeoLinkCfg;
+import top.ceroxe.api.neolink.NeoLinkState;
 import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
 import top.ceroxe.api.neolink.exception.NoSuchKeyException;
 import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
+import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.update.UpdateManager;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
@@ -77,7 +80,8 @@ public final class NeoLinkCoreRunner {
             }
             firstRun = false;
 
-            NeoLinkAPI activeTunnel = buildTunnel(remoteDomain, localPort, accessKey);
+            AtomicBoolean tunnelReachedRunningState = new AtomicBoolean(false);
+            NeoLinkAPI activeTunnel = buildTunnel(remoteDomain, localPort, accessKey, tunnelReachedRunningState);
             synchronized (LOCK) {
                 if (shouldStop) {
                     activeTunnel.close();
@@ -90,7 +94,7 @@ public final class NeoLinkCoreRunner {
                 activeTunnel.start();
                 waitUntilStopped(activeTunnel);
             } catch (UnsupportedVersionException e) {
-                NeoLink.say(e.serverResponse(), LogType.ERROR);
+                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 if (NeoLink.enableAutoUpdate) {
                     UpdateManager.checkUpdate(
                             NeoLink.CLIENT_FILE_PREFIX + latestVersionFromServerResponse(e.serverResponse()),
@@ -101,10 +105,10 @@ public final class NeoLinkCoreRunner {
                 }
                 stopAfterTerminalFailure();
             } catch (NoSuchKeyException e) {
-                NeoLink.say(e.serverResponse(), LogType.ERROR);
+                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 stopAfterTerminalFailure();
             } catch (NoMoreNetworkFlowException e) {
-                NeoLink.say(e.serverResponse(), LogType.ERROR);
+                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 stopAfterTerminalFailure();
             } catch (IOException e) {
                 debugOperation(e);
@@ -128,7 +132,12 @@ public final class NeoLinkCoreRunner {
         debugOperation("NeoLinkAPI tunnel runner exited.");
     }
 
-    private static NeoLinkAPI buildTunnel(String remoteDomain, int localPort, String accessKey) {
+    private static NeoLinkAPI buildTunnel(
+            String remoteDomain,
+            int localPort,
+            String accessKey,
+            AtomicBoolean tunnelReachedRunningState
+    ) {
         NeoLinkCfg cfg = new NeoLinkCfg(remoteDomain, NeoLink.hostHookPort, NeoLink.hostConnectPort, accessKey, localPort)
                 .setLocalDomainName(NeoLink.localDomainName)
                 .setTCPEnabled(!NeoLink.isDisableTCP)
@@ -143,13 +152,23 @@ public final class NeoLinkCoreRunner {
             cfg.setLanguage(NeoLink.languageData.getCurrentLanguage());
         }
 
-        return new NeoLinkAPI(cfg)
-                .setUnsupportedVersionDecision(response -> NeoLink.enableAutoUpdate)
+        NeoLinkAPI api = new NeoLinkAPI(cfg);
+        return api.setUnsupportedVersionDecision(response -> NeoLink.enableAutoUpdate)
+                .setOnStateChanged(state -> {
+                    if (state == NeoLinkState.RUNNING) {
+                        tunnelReachedRunningState.set(true);
+                    }
+                })
                 .setOnRemotePortChanged(port -> NeoLink.remotePort = port)
                 .setOnServerMessage(NeoLink::say)
                 .setOnError((message, cause) -> {
-                    if (message != null && !message.isBlank()) {
-                        NeoLink.say(message, LogType.ERROR);
+                    String displayMessage = clientFacingCallbackErrorMessage(
+                            message,
+                            cause,
+                            tunnelReachedRunningState.get()
+                    );
+                    if (displayMessage != null && !displayMessage.isBlank()) {
+                        NeoLink.say(displayMessage, LogType.ERROR);
                     }
                     if (cause instanceof Exception exception) {
                         debugOperation(exception);
@@ -263,6 +282,70 @@ public final class NeoLinkCoreRunner {
             return "unknown";
         }
         return address.getHostString() + ":" + address.getPort();
+    }
+
+    static String clientFacingApiErrorMessage(String message, Throwable cause) {
+        LanguageData languageData = languageData();
+        if (cause instanceof UnsupportedVersionException unsupportedVersionException) {
+            return firstNonBlank(unsupportedVersionException.serverResponse(), languageData.PLEASE_UPDATE_MANUALLY);
+        }
+        if (cause instanceof NoSuchKeyException noSuchKeyException) {
+            return firstNonBlank(noSuchKeyException.serverResponse(), stripApiPrefix(message));
+        }
+        if (cause instanceof NoMoreNetworkFlowException noMoreNetworkFlowException) {
+            return firstNonBlank(normalizeNoFlowResponse(noMoreNetworkFlowException.serverResponse()), languageData.NO_FLOW_LEFT);
+        }
+        return stripApiPrefix(message);
+    }
+
+    static String clientFacingCallbackErrorMessage(String message, Throwable cause, boolean tunnelReachedRunningState) {
+        if (!tunnelReachedRunningState) {
+            return null;
+        }
+        if (isTerminalApiException(cause)) {
+            return clientFacingApiErrorMessage(message, cause);
+        }
+        return null;
+    }
+
+    private static boolean isTerminalApiException(Throwable cause) {
+        return cause instanceof UnsupportedVersionException
+                || cause instanceof NoSuchKeyException
+                || cause instanceof NoMoreNetworkFlowException;
+    }
+
+    private static String normalizeNoFlowResponse(String serverResponse) {
+        return serverResponse != null && serverResponse.startsWith("NeoProxyServer reported")
+                ? null
+                : serverResponse;
+    }
+
+    private static String stripApiPrefix(String message) {
+        if (message == null) {
+            return null;
+        }
+        return stripPrefix(
+                stripPrefix(
+                        stripPrefix(message, "NeoProxyServer rejected the access key:"),
+                        "NeoProxyServer does not support this NeoLinkAPI version:"
+                ),
+                "NeoProxyServer terminated the tunnel because no network flow remains:"
+        );
+    }
+
+    private static String stripPrefix(String value, String prefix) {
+        return value.startsWith(prefix) ? value.substring(prefix.length()).trim() : value;
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return preferred != null && !preferred.isBlank() ? preferred : fallback;
+    }
+
+    private static LanguageData languageData() {
+        if (NeoLink.languageData == null) {
+            NeoLink.detectLanguage();
+        }
+        return NeoLink.languageData != null ? NeoLink.languageData : new LanguageData();
     }
 
     public interface StopCallback {

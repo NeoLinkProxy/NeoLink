@@ -1,7 +1,6 @@
 package neoproxy.neolink.update;
 
-import fun.ceroxe.api.OshiUtils;
-import fun.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
@@ -28,24 +27,26 @@ import static neoproxy.neolink.core.NeoLink.*;
  *
  * 核心职责：
  * 1. 检查并下载 NeoLink 客户端更新
- * 2. Windows 直接启动上游提供的 installer exe
- * 3. 非 Windows 保持 JAR 更新与备份流程
+ * 2. 下载到 exe 时直接启动上游提供的 installer
+ * 3. 下载到 jar 时保持 JAR 更新与备份流程
  *
  * 设计特点：
- * - 支持 Windows 和 Linux 自动更新
+ * - 更新文件类型由 NeoLinkAPI 与 NPS 协商，壳层只按实际下载文件分流
  * - 文件大小校验，确保下载完整
- * - Windows installer 由安装器接管替换逻辑，避免在运行中覆盖自身
- * - 非 Windows 自动备份和替换机制
+ * - installer 由安装器接管替换逻辑，避免在运行中覆盖自身
+ * - JAR 更新使用自动备份和替换机制
  *
  * 更新流程：
  * 1. 从服务器下载对应平台的更新文件
- * 2. Windows 启动 installer exe
- * 3. 非 Windows 备份当前 JAR 并替换为新版本
+ * 2. exe 交给 installer 接管
+ * 3. jar 备份当前 JAR 并替换为新版本
  *
  * @author NeoProxy Team
  * @since 5.0.0
  */
 public class UpdateManager {
+    private static final String EXECUTABLE_EXTENSION = ".exe";
+    private static final String JAR_EXTENSION = ".jar";
     private static final int DOWNLOAD_BUFFER_SIZE = 8192;
     private static final int MAX_DOWNLOAD_REDIRECTS = 8;
     private static final int DOWNLOAD_CONNECT_TIMEOUT_MS = 15000;
@@ -54,15 +55,9 @@ public class UpdateManager {
     public static void checkUpdate(String fileName, String responseUrl) {
         debugOperation("Checking for updates: " + fileName);
         try {
-            boolean isWindows = OshiUtils.isWindows();
-            debugOperation("OS is Windows: " + isWindows);
-
-            // 1. 告诉服务端当前需要的格式
-
-            // 2. 接收服务端返回的下载地址 (URL)
+            // NeoLinkAPI 7.0.0 已经在握手阶段把客户端类型交给 NPS，壳层只消费返回的最终下载 URL。
             debugOperation("Server response (URL): " + responseUrl);
 
-            // 3. 检查返回值，如果是 "false" 或者空，说明服务端无法提供更新
             if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
                 if (isGUIMode) {
                     say(languageData.PLEASE_UPDATE_MANUALLY);
@@ -73,17 +68,14 @@ public class UpdateManager {
                 return;
             }
 
-            // 4. 准备本地文件路径
-            String fileExtension = isWindows ? ".exe" : ".jar";
             File updateDirectory = resolveUpdateDirectory();
-            File fallbackClientFile = new File(updateDirectory, fileName + fileExtension);
+            File fallbackClientFile = new File(updateDirectory, fileName + inferUpdateExtension(responseUrl));
             debugOperation("Target update directory: " + updateDirectory.getAbsolutePath());
 
             say(languageData.START_TO_DOWNLOAD_UPDATE);
             say("Download Source: " + responseUrl);
             say(languageData.UPDATE_DOWNLOAD_TARGET + updateDirectory.getAbsolutePath());
 
-            // 5. 下载文件
             File clientFile = downloadFileFromUrl(responseUrl, fallbackClientFile);
             debugOperation("Downloaded update file: " + (clientFile == null ? "null" : clientFile.getAbsolutePath()));
 
@@ -95,8 +87,7 @@ public class UpdateManager {
 
             say(languageData.DOWNLOAD_SUCCESS);
 
-            // 6. Windows 上游现在返回 installer exe，下载后直接交给安装器接管。
-            if (isWindows) {
+            if (isExecutableUpdate(clientFile)) {
                 if (!startInstaller(clientFile)) {
                     finishUpdateProcess(-1);
                     return;
@@ -105,40 +96,45 @@ public class UpdateManager {
                 // 安装器需要接管文件替换，成功拉起后必须立即释放当前进程。
                 exitAfterInstallerStarted();
                 return;
-            } else {
-                debugOperation("Updating JAR file...");
-                File finalJar = new File(resolveUpdateDirectory(), fileName + fileExtension);
-                if (finalJar.exists()) {
-                    File backupFile = new File(resolveUpdateDirectory(), fileName + " - copy" + fileExtension);
-                    if (!backupFile.exists()) {
-                        if (!finalJar.renameTo(backupFile)) {
-                            say(languageData.FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
-                            finishUpdateProcess(-1);
-                            return;
-                        }
-                    } else {
-                        if (!finalJar.delete()) {
-                            say(languageData.FAILED_TO_DELETE_EXISTING_JAR, LogType.ERROR);
-                            finishUpdateProcess(-1);
-                            return;
-                        }
-                    }
-                }
-
-                Files.copy(clientFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                deleteFileOrDirectory(clientFile);
-
-                say(languageData.PLEASE_RUN + finalJar.getAbsolutePath());
             }
 
+            if (!isJarUpdate(clientFile)) {
+                say(languageData.UNSUPPORTED_UPDATE_FILE_TYPE + extractExtension(clientFile.getName()), LogType.ERROR);
+                finishUpdateProcess(-1);
+                return;
+            }
+
+            debugOperation("Updating JAR file...");
+            File finalJar = new File(resolveUpdateDirectory(), fileName + JAR_EXTENSION);
+            if (finalJar.exists()) {
+                File backupFile = new File(resolveUpdateDirectory(), fileName + " - copy" + JAR_EXTENSION);
+                if (!backupFile.exists()) {
+                    if (!finalJar.renameTo(backupFile)) {
+                        say(languageData.FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
+                        finishUpdateProcess(-1);
+                        return;
+                    }
+                } else {
+                    if (!finalJar.delete()) {
+                        say(languageData.FAILED_TO_DELETE_EXISTING_JAR, LogType.ERROR);
+                        finishUpdateProcess(-1);
+                        return;
+                    }
+                }
+            }
+
+            Files.copy(clientFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            deleteFileOrDirectory(clientFile);
+
+            say(languageData.PLEASE_RUN + finalJar.getAbsolutePath());
             finishUpdateProcess(0);
         } catch (IOException e) {
             Debugger.debugOperation(e);
-            say(languageData.FAILED_TO_CHECK_UPDATES + e.getMessage(), LogType.ERROR);
+            say(userFacingFailure(languageData.FAILED_TO_CHECK_UPDATES), LogType.ERROR);
             finishUpdateProcess(0);
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.UNEXPECTED_ERROR_DURING_UPDATE + e.getMessage(), LogType.ERROR);
+            say(userFacingFailure(languageData.UNEXPECTED_ERROR_DURING_UPDATE), LogType.ERROR);
             finishUpdateProcess(0);
         }
     }
@@ -169,7 +165,7 @@ public class UpdateManager {
             return downloadFileFollowingRedirects(initialUrl, absoluteFallbackOutputFile);
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.ERROR_WHILE_DOWNLOADING_FILE + e.getMessage(), LogType.ERROR);
+            say(userFacingFailure(languageData.ERROR_WHILE_DOWNLOADING_FILE), LogType.ERROR);
             return null;
         }
     }
@@ -260,12 +256,6 @@ public class UpdateManager {
         }
 
         String safeFileName = sanitizeDownloadFileName(suggestedFileName, fallbackOutputFile.getName());
-        String expectedExtension = extractExtension(fallbackOutputFile.getName());
-        if (!expectedExtension.isEmpty()
-                && !safeFileName.toLowerCase(Locale.ROOT).endsWith(expectedExtension.toLowerCase(Locale.ROOT))) {
-            safeFileName = fallbackOutputFile.getName();
-        }
-
         File parent = fallbackOutputFile.getParentFile();
         return parent == null ? new File(safeFileName).getAbsoluteFile() : new File(parent, safeFileName).getAbsoluteFile();
     }
@@ -485,6 +475,31 @@ public class UpdateManager {
         return lastDotIndex < 0 ? "" : fileName.substring(lastDotIndex);
     }
 
+    private static String inferUpdateExtension(String responseUrl) {
+        try {
+            String extension = extractExtension(extractFileNameFromUrl(new URL(responseUrl)));
+            if (EXECUTABLE_EXTENSION.equalsIgnoreCase(extension) || JAR_EXTENSION.equalsIgnoreCase(extension)) {
+                return extension.toLowerCase(Locale.ROOT);
+            }
+        } catch (Exception e) {
+            Debugger.debugOperation(e);
+        }
+        return JAR_EXTENSION;
+    }
+
+    private static boolean isExecutableUpdate(File file) {
+        return hasExtension(file, EXECUTABLE_EXTENSION);
+    }
+
+    private static boolean isJarUpdate(File file) {
+        return hasExtension(file, JAR_EXTENSION);
+    }
+
+    private static boolean hasExtension(File file, String expectedExtension) {
+        return file != null
+                && file.getName().toLowerCase(Locale.ROOT).endsWith(expectedExtension.toLowerCase(Locale.ROOT));
+    }
+
     private static boolean isRedirectResponse(int responseCode) {
         return responseCode == HttpURLConnection.HTTP_MOVED_PERM
                 || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
@@ -548,7 +563,7 @@ public class UpdateManager {
             return true;
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.FAILED_TO_START_INSTALLER + e.getMessage(), LogType.ERROR);
+            say(userFacingFailure(languageData.FAILED_TO_START_INSTALLER), LogType.ERROR);
             return false;
         }
     }
@@ -605,7 +620,16 @@ public class UpdateManager {
             }
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(languageData.ERROR_DELETING_FILE + e.getMessage(), LogType.WARNING);
+            say(userFacingFailure(languageData.ERROR_DELETING_FILE), LogType.WARNING);
         }
+    }
+
+    private static String userFacingFailure(String messagePrefix) {
+        if (messagePrefix == null) {
+            return "";
+        }
+        return messagePrefix
+                .replaceFirst("[：:]\\s*$", "")
+                .stripTrailing();
     }
 }

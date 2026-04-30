@@ -1,10 +1,10 @@
 package neoproxy.neolink.core;
 
-import fun.ceroxe.api.print.log.LogType;
-import fun.ceroxe.api.print.log.Loggist;
-import fun.ceroxe.api.print.log.State;
-import fun.ceroxe.api.thread.ThreadManager;
-import fun.ceroxe.api.utils.TimeUtils;
+import top.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.Loggist;
+import top.ceroxe.api.print.log.State;
+import top.ceroxe.api.thread.ThreadManager;
+import top.ceroxe.api.utils.TimeUtils;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;

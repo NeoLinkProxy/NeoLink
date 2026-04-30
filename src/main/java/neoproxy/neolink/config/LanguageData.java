@@ -77,6 +77,7 @@ public class LanguageData implements Serializable {
     public String DOWNLOAD_REDIRECT_WITHOUT_LOCATION = "Download redirect missing Location header. HTTP code: ";
     public String TOO_MANY_DOWNLOAD_REDIRECTS = "Too many download redirects. Limit: ";
     public String UNSUPPORTED_DOWNLOAD_PROTOCOL = "Unsupported download protocol: ";
+    public String UNSUPPORTED_UPDATE_FILE_TYPE = "Unsupported update file type: ";
     public String INVALID_DOWNLOAD_URL = "Invalid download URL: ";
     public String INVALID_DOWNLOAD_TARGET = "Invalid download target: ";
     public String DOWNLOADING_FILE_SIZE_UNKNOWN = "Downloading file (size unknown)...";
@@ -88,6 +89,7 @@ public class LanguageData implements Serializable {
     public String NODE_LIST_FETCH_SUCCESS = "Node list successfully updated from NKM.";
     public String NODE_LIST_FETCH_FAIL = "Failed to fetch node list (skipped): ";
     public String NODE_LIST_INVALID_JSON = "Node list JSON is invalid. Skipping update.";
+    public String NODE_LIST_EMPTY = "NKM returned no online public nodes. Keeping the local node list.";
 
     private String currentLanguage = "en";
 
@@ -149,6 +151,7 @@ public class LanguageData implements Serializable {
         languageData.DOWNLOAD_REDIRECT_WITHOUT_LOCATION = "下载重定向缺少 Location 响应头，HTTP 状态码：";
         languageData.TOO_MANY_DOWNLOAD_REDIRECTS = "下载重定向次数过多，限制：";
         languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL = "不支持的下载协议：";
+        languageData.UNSUPPORTED_UPDATE_FILE_TYPE = "不支持的更新文件类型：";
         languageData.INVALID_DOWNLOAD_URL = "无效的下载地址：";
         languageData.INVALID_DOWNLOAD_TARGET = "无效的下载目标：";
         languageData.DOWNLOADING_FILE_SIZE_UNKNOWN = "正在下载文件，大小未知...";
@@ -160,6 +163,7 @@ public class LanguageData implements Serializable {
         languageData.NODE_LIST_FETCH_SUCCESS = "节点列表已成功更新。";
         languageData.NODE_LIST_FETCH_FAIL = "获取节点列表失败或超时 (已跳过): ";
         languageData.NODE_LIST_INVALID_JSON = "获取到的节点列表格式无效，跳过更新。";
+        languageData.NODE_LIST_EMPTY = "NKM 当前未返回在线公开节点，保留本地节点列表。";
 
         return languageData;
     }

@@ -1,7 +1,7 @@
 package neoproxy.neolink.network;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fun.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;
@@ -16,7 +16,10 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
  * 节点列表获取器
@@ -101,7 +104,13 @@ public class NodeFetcher {
             File tempFile = File.createTempFile("node-list-", ".json", new File(ConfigOperator.WORKING_DIR));
             try {
                 Files.writeString(tempFile.toPath(), formattedJson, StandardCharsets.UTF_8);
-                NodeConfig.loadAll(tempFile);
+                List<NodeConfig> fetchedNodes = NodeConfig.loadAll(tempFile, true);
+                if (fetchedNodes.isEmpty()) {
+                    // NKM publishes only currently online public nodes. An empty array is a
+                    // valid transient snapshot, so keep the last usable local cache.
+                    NeoLink.say(NeoLink.languageData.NODE_LIST_EMPTY, LogType.INFO);
+                    return;
+                }
                 try {
                     Files.move(tempFile.toPath(), nodeFile.toPath(),
                             StandardCopyOption.REPLACE_EXISTING,
@@ -116,9 +125,9 @@ public class NodeFetcher {
                 Files.deleteIfExists(tempFile.toPath());
             }
         } catch (Exception e) {
-            // 发生任何异常：直接跳过，不修改本地配置，仅打印警告
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_FAIL + msg, LogType.WARNING);
+            // 节点拉取失败不影响本地缓存。底层网络/JSON 诊断只进入 debug，避免把实现细节暴露到 GUI。
+            debugOperation(e);
+            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_FAIL, LogType.WARNING);
         }
     }
 

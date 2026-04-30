@@ -533,7 +533,7 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
             viewModel.nodeList.forEach { node ->
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        val latency = `fun`.ceroxe.api.net.TcpPingUtil.ping(node.address, node.hookPort, 1000)
+                        val latency = top.ceroxe.api.net.TcpPingUtil.ping(node.address, node.hookPort, 1000)
                         pingResults[node.name] = if (latency == -1 || latency >= 1000) "超时" else "${latency}ms"
                     } catch (e: Exception) {
                         pingResults[node.name] = "超时"

@@ -10,19 +10,7 @@ plugins {
 
 group = "neoproxy"
 
-val neoLinkApiBuildFile = rootDir.resolve("../APIs/NeoLinkAPI/build.gradle.kts").canonicalFile
-val neoLinkApiVersion = run {
-    val apiBuildText = neoLinkApiBuildFile.readText(Charsets.UTF_8)
-    Regex("""(?m)^\s*val\s+apiVersion\s*=\s*"([^"]+)"""")
-        .find(apiBuildText)
-        ?.groupValues
-        ?.get(1)
-        ?: Regex("""(?m)^\s*version\s*=\s*"([^"]+)"""")
-            .find(apiBuildText)
-            ?.groupValues
-            ?.get(1)
-        ?: throw GradleException("NeoLinkAPI version must be declared in ${neoLinkApiBuildFile.path}")
-}
+val neoLinkApiVersion = "7.0.0"
 
 version = neoLinkApiVersion
 
@@ -43,8 +31,7 @@ java {
 
 dependencies {
     implementation("top.ceroxe.api:neolinkapi:$neoLinkApiVersion")
-    implementation("fun.ceroxe.api:ceroxe-core:1.0.0")
-    implementation("fun.ceroxe.api:ceroxe-detector:1.0.0")
+    implementation("top.ceroxe.api:ceroxe-core:2.0.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
     implementation(compose.desktop.common)
     implementation(compose.desktop.windows_x64)
@@ -66,7 +53,6 @@ dependencies {
 }
 
 val verifyNeoLinkApiVersionBinding by tasks.registering {
-    inputs.file(neoLinkApiBuildFile)
     inputs.property("neoLinkApiVersion", neoLinkApiVersion)
     doLast {
         if (project.version.toString() != neoLinkApiVersion) {
@@ -79,7 +65,6 @@ val verifyNeoLinkApiVersionBinding by tasks.registering {
 
 tasks.withType<ProcessResources> {
     dependsOn(verifyNeoLinkApiVersionBinding)
-    inputs.file(neoLinkApiBuildFile)
     inputs.property("appVersion", project.version.toString())
     filteringCharset = "UTF-8"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

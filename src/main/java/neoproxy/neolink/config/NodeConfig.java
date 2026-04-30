@@ -14,6 +14,10 @@ import java.util.List;
  * The CLI and GUI used to parse the same file with separate regular-expression
  * implementations. Keeping the schema rules here prevents drift between the two
  * entry points while preserving the existing node-list schema field names.
+ *
+ * NeoKeyManager now publishes a stable realId beside the display name. NeoLink
+ * still treats name as the user-facing label, but matching by realId avoids
+ * breaking CLI automation when display names are renamed.
  */
 public final class NodeConfig {
     public static final String NODE_LIST_FILE_NAME = "nodes.json";
@@ -23,13 +27,15 @@ public final class NodeConfig {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String name;
+    private final String realId;
     private final String address;
     private final String icon;
     private final int hostHookPort;
     private final int hostConnectPort;
 
-    private NodeConfig(String name, String address, String icon, int hostHookPort, int hostConnectPort) {
+    private NodeConfig(String name, String realId, String address, String icon, int hostHookPort, int hostConnectPort) {
         this.name = name;
+        this.realId = realId;
         this.address = address;
         this.icon = icon;
         this.hostHookPort = hostHookPort;
@@ -37,6 +43,10 @@ public final class NodeConfig {
     }
 
     public static List<NodeConfig> loadAll(File nodeFile) throws IOException {
+        return loadAll(nodeFile, false);
+    }
+
+    public static List<NodeConfig> loadAll(File nodeFile, boolean allowEmpty) throws IOException {
         JsonNode root = OBJECT_MAPPER.readTree(nodeFile);
         if (root == null || !root.isArray()) {
             throw new IOException(NODE_LIST_FILE_NAME + " root must be a JSON array.");
@@ -50,16 +60,17 @@ public final class NodeConfig {
             }
             nodes.add(parsed);
         }
-        if (nodes.isEmpty()) {
+        if (nodes.isEmpty() && !allowEmpty) {
             throw new IOException(NODE_LIST_FILE_NAME + " must contain at least one valid node.");
         }
         return nodes;
     }
 
-    public static NodeConfig findByName(File nodeFile, String nodeName) throws IOException {
-        if (nodeName == null || nodeName.isBlank()) {
+    public static NodeConfig findByName(File nodeFile, String nodeNameOrRealId) throws IOException {
+        if (nodeNameOrRealId == null || nodeNameOrRealId.isBlank()) {
             return null;
         }
+        String requestedNode = nodeNameOrRealId.trim();
 
         JsonNode root = OBJECT_MAPPER.readTree(nodeFile);
         if (root == null || !root.isArray()) {
@@ -72,7 +83,8 @@ public final class NodeConfig {
             }
 
             String name = readText(item, "name");
-            if (nodeName.equals(name)) {
+            String realId = readText(item, "realId");
+            if (requestedNode.equals(name) || requestedNode.equals(realId)) {
                 return parseNode(item);
             }
         }
@@ -92,6 +104,7 @@ public final class NodeConfig {
 
         return new NodeConfig(
                 name,
+                readText(item, "realId"),
                 address,
                 readText(item, "icon"),
                 readPort(item, DEFAULT_HOST_HOOK_PORT, "HOST_HOOK_PORT", "hookPort"),
@@ -134,6 +147,10 @@ public final class NodeConfig {
 
     public String getName() {
         return name;
+    }
+
+    public String getRealId() {
+        return realId;
     }
 
     public String getAddress() {
