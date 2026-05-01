@@ -1,6 +1,11 @@
 package neoproxy.neolink.update;
 
+import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.app.ApplicationFiles;
+import neoproxy.neolink.app.LanguageManager;
+import neoproxy.neolink.cli.ClientConsole;
 import neoproxy.neolink.config.ConfigOperator;
+import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
 import neoproxy.neolink.util.Debugger;
@@ -19,30 +24,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-import static neoproxy.neolink.NeoLink.*;
 import static neoproxy.neolink.util.Debugger.debugOperation;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 
 /**
- * 更新管理器
- * <p>
- * 核心职责：
- * 1. 检查并下载 NeoLink 客户端更新
- * 2. 下载到可执行文件时直接启动上游提供的安装器
- * 3. 下载到 jar 时保持 JAR 更新与备份流程
- * <p>
- * 设计特点：
- * - 更新文件类型由 NeoLinkAPI 与 NPS 协商，壳层只按实际下载文件分流
- * - 文件大小校验，确保下载完整
- * - 安装器接管替换逻辑，避免在运行中覆盖自身
- * - JAR 更新使用自动备份和替换机制
- * <p>
- * 更新流程：
- * 1. 从服务器下载对应平台的更新文件
- * 2. 可执行文件交给安装器接管
- * 3. jar 备份当前 JAR 并替换为新版本
+ * 更新下载与交接流程（update download & handoff workflow）。
  *
- * @author NeoProxy Team
- * @since 5.0.0
+ * <p>本类保留更新链路的全部 I/O 细节：下载、重定向、安装器拉起、JAR 自替换。按用户要求，
+ * 这里继续信任上游返回的任意 HTTP / HTTPS 源，不回退这部分行为。</p>
  */
 public class UpdateManager {
     private static final String EXECUTABLE_EXTENSION = ".exe";
@@ -52,18 +42,32 @@ public class UpdateManager {
     private static final int DOWNLOAD_CONNECT_TIMEOUT_MS = 15000;
     private static final int DOWNLOAD_READ_TIMEOUT_MS = 300000;
 
+    private static LanguageData messages() {
+        if (RuntimeState.languageData() == null) {
+            LanguageManager.detectLanguage();
+        }
+        return RuntimeState.languageData();
+    }
+
+    private static boolean guiMode() {
+        return FeatureState.snapshot().guiMode();
+    }
+
+    private static boolean debugMode() {
+        return FeatureState.snapshot().debugMode();
+    }
+
     public static void checkUpdate(String fileName, String responseUrl) {
         debugOperation("Checking for updates: " + fileName);
-        try {
-            // NeoLinkAPI 7.0.0 已经在握手阶段把客户端类型交给 NPS，壳层只消费返回的最终下载 URL。
+        try {                // The installer owns replacement after launch, so this JVM exits immediately.
             debugOperation("Server response (URL): " + responseUrl);
 
             if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
-                if (isGUIMode) {
-                    say(languageData.PLEASE_UPDATE_MANUALLY);
+                if (guiMode()) {
+                    ClientConsole.say(messages().PLEASE_UPDATE_MANUALLY);
                     finishUpdateProcess(-1);
                 } else {
-                    exitAndFreeze(-1);
+                    ClientConsole.exitAndFreeze(-1);
                 }
                 return;
             }
@@ -72,20 +76,21 @@ public class UpdateManager {
             File fallbackClientFile = new File(updateDirectory, fileName + inferUpdateExtension(responseUrl));
             debugOperation("Target update directory: " + updateDirectory.getAbsolutePath());
 
-            say(languageData.START_TO_DOWNLOAD_UPDATE);
-            say("Download Source: " + responseUrl);
-            say(languageData.UPDATE_DOWNLOAD_TARGET + updateDirectory.getAbsolutePath());
+            ClientConsole.say(messages().START_TO_DOWNLOAD_UPDATE);
+            ClientConsole.say("Download Source: " + responseUrl);
+            ClientConsole.say(messages().UPDATE_DOWNLOAD_TARGET + updateDirectory.getAbsolutePath());
 
-            File clientFile = downloadFileFromUrl(responseUrl, fallbackClientFile);
+            DownloadedArtifact artifact = downloadUpdateArtifact(responseUrl, fallbackClientFile);
+            File clientFile = artifact == null ? null : artifact.file();
             debugOperation("Downloaded update file: " + (clientFile == null ? "null" : clientFile.getAbsolutePath()));
 
             if (clientFile == null) {
-                say(languageData.FAILED_TO_DOWNLOAD_UPDATE_FILE, LogType.ERROR);
+                ClientConsole.say(messages().FAILED_TO_DOWNLOAD_UPDATE_FILE, LogType.ERROR);
                 finishUpdateProcess(-1);
                 return;
             }
 
-            say(languageData.DOWNLOAD_SUCCESS);
+            ClientConsole.say(messages().DOWNLOAD_SUCCESS);
 
             if (isExecutableUpdate(clientFile)) {
                 if (!startInstaller(clientFile)) {
@@ -93,13 +98,12 @@ public class UpdateManager {
                     return;
                 }
 
-                // 安装器需要接管文件替换，成功拉起后必须立即释放当前进程。
                 exitAfterInstallerStarted();
                 return;
             }
 
             if (!isJarUpdate(clientFile)) {
-                say(languageData.UNSUPPORTED_UPDATE_FILE_TYPE + extractExtension(clientFile.getName()), LogType.ERROR);
+                ClientConsole.say(messages().UNSUPPORTED_UPDATE_FILE_TYPE + extractExtension(clientFile.getName()), LogType.ERROR);
                 finishUpdateProcess(-1);
                 return;
             }
@@ -110,13 +114,13 @@ public class UpdateManager {
                 File backupFile = new File(resolveUpdateDirectory(), fileName + " - copy" + JAR_EXTENSION);
                 if (!backupFile.exists()) {
                     if (!finalJar.renameTo(backupFile)) {
-                        say(languageData.FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
+                        ClientConsole.say(messages().FAILED_TO_BACKUP_EXISTING_JAR, LogType.ERROR);
                         finishUpdateProcess(-1);
                         return;
                     }
                 } else {
                     if (!finalJar.delete()) {
-                        say(languageData.FAILED_TO_DELETE_EXISTING_JAR, LogType.ERROR);
+                        ClientConsole.say(messages().FAILED_TO_DELETE_EXISTING_JAR, LogType.ERROR);
                         finishUpdateProcess(-1);
                         return;
                     }
@@ -126,33 +130,38 @@ public class UpdateManager {
             Files.copy(clientFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
             deleteFileOrDirectory(clientFile);
 
-            say(languageData.PLEASE_RUN + finalJar.getAbsolutePath());
+            ClientConsole.say(messages().PLEASE_RUN + finalJar.getAbsolutePath());
             finishUpdateProcess(0);
         } catch (IOException e) {
             Debugger.debugOperation(e);
-            say(userFacingFailure(languageData.FAILED_TO_CHECK_UPDATES), LogType.ERROR);
+            ClientConsole.say(userFacingFailure(messages().FAILED_TO_CHECK_UPDATES), LogType.ERROR);
             finishUpdateProcess(-1);
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(userFacingFailure(languageData.UNEXPECTED_ERROR_DURING_UPDATE), LogType.ERROR);
+            ClientConsole.say(userFacingFailure(messages().UNEXPECTED_ERROR_DURING_UPDATE), LogType.ERROR);
             finishUpdateProcess(-1);
         }
     }
 
     private static File downloadFileFromUrl(String urlString, File fallbackOutputFile) {
+        DownloadedArtifact artifact = downloadUpdateArtifact(urlString, fallbackOutputFile);
+        return artifact == null ? null : artifact.file();
+    }
+
+    private static DownloadedArtifact downloadUpdateArtifact(String urlString, File fallbackOutputFile) {
         try {
             if (urlString == null || urlString.isBlank()) {
-                say(languageData.INVALID_DOWNLOAD_URL + urlString, LogType.ERROR);
+                ClientConsole.say(messages().INVALID_DOWNLOAD_URL + urlString, LogType.ERROR);
                 return null;
             }
             if (fallbackOutputFile == null) {
-                say(languageData.INVALID_DOWNLOAD_TARGET + "null", LogType.ERROR);
+                ClientConsole.say(messages().INVALID_DOWNLOAD_TARGET + "null", LogType.ERROR);
                 return null;
             }
 
             URL initialUrl = new URL(urlString.trim());
             if (!isSupportedHttpUrl(initialUrl)) {
-                say(languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL + initialUrl.getProtocol(), LogType.ERROR);
+                ClientConsole.say(messages().UNSUPPORTED_DOWNLOAD_PROTOCOL + initialUrl.getProtocol(), LogType.ERROR);
                 return null;
             }
 
@@ -165,7 +174,7 @@ public class UpdateManager {
             return downloadFileFollowingRedirects(initialUrl, absoluteFallbackOutputFile);
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(userFacingFailure(languageData.ERROR_WHILE_DOWNLOADING_FILE), LogType.ERROR);
+            ClientConsole.say(userFacingFailure(messages().ERROR_WHILE_DOWNLOADING_FILE), LogType.ERROR);
             return null;
         }
     }
@@ -175,22 +184,22 @@ public class UpdateManager {
             return new File(ConfigOperator.BASE_PACKAGE_DIR);
         }
 
-        File currentFile = getCurrentFile();
+        File currentFile = ApplicationFiles.currentExecutableFile();
         File currentParent = currentFile != null ? currentFile.getParentFile() : null;
         if (currentParent != null) {
             return currentParent;
         }
 
-        return new File(CURRENT_DIR_PATH);
+        return new File(NeoLink.CURRENT_DIR_PATH);
     }
 
     private static File createTemporaryDownloadFile(File outputFile) throws IOException {
         File parent = outputFile.getParentFile();
-        Path parentPath = parent == null ? Path.of(CURRENT_DIR_PATH) : parent.toPath();
+        Path parentPath = parent == null ? Path.of(NeoLink.CURRENT_DIR_PATH) : parent.toPath();
         return Files.createTempFile(parentPath, outputFile.getName() + ".", ".download").toFile();
     }
 
-    private static File downloadFileFollowingRedirects(URL initialUrl, File fallbackOutputFile) throws IOException {
+    private static DownloadedArtifact downloadFileFollowingRedirects(URL initialUrl, File fallbackOutputFile) throws IOException {
         URL currentUrl = initialUrl;
         int redirects = 0;
 
@@ -202,34 +211,40 @@ public class UpdateManager {
                 if (isRedirectResponse(responseCode)) {
                     redirects++;
                     if (redirects > MAX_DOWNLOAD_REDIRECTS) {
-                        say(languageData.TOO_MANY_DOWNLOAD_REDIRECTS + MAX_DOWNLOAD_REDIRECTS, LogType.ERROR);
+                        ClientConsole.say(messages().TOO_MANY_DOWNLOAD_REDIRECTS + MAX_DOWNLOAD_REDIRECTS, LogType.ERROR);
                         return null;
                     }
 
                     String location = httpConn.getHeaderField("Location");
                     if (location == null || location.isBlank()) {
-                        say(languageData.DOWNLOAD_REDIRECT_WITHOUT_LOCATION + responseCode, LogType.ERROR);
+                        ClientConsole.say(messages().DOWNLOAD_REDIRECT_WITHOUT_LOCATION + responseCode, LogType.ERROR);
                         return null;
                     }
 
                     URL redirectedUrl = new URL(currentUrl, location.trim());
                     if (!isSupportedHttpUrl(redirectedUrl)) {
-                        say(languageData.UNSUPPORTED_DOWNLOAD_PROTOCOL + redirectedUrl.getProtocol(), LogType.ERROR);
+                        ClientConsole.say(messages().UNSUPPORTED_DOWNLOAD_PROTOCOL + redirectedUrl.getProtocol(), LogType.ERROR);
                         return null;
                     }
 
                     currentUrl = redirectedUrl;
-                    say(languageData.DOWNLOAD_REDIRECTED_TO + currentUrl);
+                    ClientConsole.say(messages().DOWNLOAD_REDIRECTED_TO + currentUrl);
                     continue;
                 }
 
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    say(languageData.DOWNLOAD_FAILED_HTTP_CODE + responseCode + " " + safeResponseMessage(httpConn), LogType.ERROR);
+                    ClientConsole.say(messages().DOWNLOAD_FAILED_HTTP_CODE + responseCode + " " + safeResponseMessage(httpConn), LogType.ERROR);
                     return null;
                 }
 
                 File outputFile = resolveDownloadOutputFile(fallbackOutputFile, currentUrl, httpConn);
-                return downloadResponseBodyToFile(httpConn, outputFile);
+                File downloadedFile = downloadResponseBodyToFile(httpConn, outputFile);
+                if (downloadedFile == null) {
+                    return null;
+                }
+                return new DownloadedArtifact(
+                        downloadedFile
+                );
             } finally {
                 httpConn.disconnect();
             }
@@ -237,8 +252,7 @@ public class UpdateManager {
     }
 
     private static HttpURLConnection openDownloadConnection(URL url) throws IOException {
-        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
-        // 显式处理重定向，才能记录 Location，并覆盖 HTTP->HTTPS 等 JDK 自动跟随不稳定的场景。
+        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();        // Redirects are handled manually so arbitrary HTTP and HTTPS sources stay accepted.
         httpConn.setInstanceFollowRedirects(false);
         httpConn.setConnectTimeout(DOWNLOAD_CONNECT_TIMEOUT_MS);
         httpConn.setReadTimeout(DOWNLOAD_READ_TIMEOUT_MS);
@@ -262,7 +276,7 @@ public class UpdateManager {
 
     private static File downloadResponseBodyToFile(HttpURLConnection httpConn, File outputFile) throws IOException {
         if (outputFile.exists() && outputFile.isDirectory()) {
-            say(languageData.INVALID_DOWNLOAD_TARGET + outputFile.getAbsolutePath(), LogType.ERROR);
+            ClientConsole.say(messages().INVALID_DOWNLOAD_TARGET + outputFile.getAbsolutePath(), LogType.ERROR);
             return null;
         }
 
@@ -274,7 +288,6 @@ public class UpdateManager {
         File temporaryFile = null;
         boolean movedToDestination = false;
         try {
-            // 先下载到同目录临时文件，成功后再替换目标，避免失败时留下半截安装器。
             temporaryFile = createTemporaryDownloadFile(outputFile);
             if (!writeResponseBody(httpConn, temporaryFile)) {
                 return null;
@@ -282,7 +295,7 @@ public class UpdateManager {
 
             Files.move(temporaryFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             movedToDestination = true;
-            say(languageData.UPDATE_SAVED_TO + outputFile.getAbsolutePath());
+            ClientConsole.say(messages().UPDATE_SAVED_TO + outputFile.getAbsolutePath());
             return outputFile;
         } finally {
             if (!movedToDestination && temporaryFile != null) {
@@ -295,9 +308,9 @@ public class UpdateManager {
         long fileSize = httpConn.getContentLengthLong();
 
         if (fileSize > 0) {
-            say(languageData.DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
+            ClientConsole.say(messages().DOWNLOADING_FILE_OF_SIZE + formatFileSize(fileSize));
         } else {
-            say(languageData.DOWNLOADING_FILE_SIZE_UNKNOWN);
+            ClientConsole.say(messages().DOWNLOADING_FILE_SIZE_UNKNOWN);
         }
 
         try (InputStream inputStream = new BufferedInputStream(httpConn.getInputStream());
@@ -316,23 +329,23 @@ public class UpdateManager {
                     int newProgress = (int) (totalBytesRead * 100 / fileSize);
                     if (newProgress > progress) {
                         progress = newProgress;
-                        say(languageData.DOWNLOAD_PROGRESS + progress + "%");
+                        ClientConsole.say(messages().DOWNLOAD_PROGRESS + progress + "%");
                     }
                 }
             }
             outputStream.flush();
 
             if (totalBytesRead <= 0) {
-                say(languageData.INVALID_FILE_SIZE_RECEIVED + totalBytesRead, LogType.ERROR);
+                ClientConsole.say(messages().INVALID_FILE_SIZE_RECEIVED + totalBytesRead, LogType.ERROR);
                 return false;
             }
             if (fileSize >= 0 && totalBytesRead != fileSize) {
-                say(languageData.FILE_SIZE_MISMATCH + fileSize + ", actual: " + totalBytesRead, LogType.ERROR);
+                ClientConsole.say(messages().FILE_SIZE_MISMATCH + fileSize + ", actual: " + totalBytesRead, LogType.ERROR);
                 return false;
             }
         }
 
-        say(languageData.FILE_DOWNLOAD_COMPLETED);
+        ClientConsole.say(messages().FILE_DOWNLOAD_COMPLETED);
         return true;
     }
 
@@ -536,22 +549,22 @@ public class UpdateManager {
 
     private static boolean startInstaller(File installerFile) {
         if (installerFile == null) {
-            say(languageData.EXECUTABLE_NOT_FOUND + "null", LogType.ERROR);
+            ClientConsole.say(messages().EXECUTABLE_NOT_FOUND + "null", LogType.ERROR);
             return false;
         }
 
         debugOperation("Preparing to start update installer: " + installerFile.getName());
         try {
             if (!installerFile.exists() || !installerFile.isFile()) {
-                say(languageData.EXECUTABLE_NOT_FOUND + installerFile.getAbsolutePath(), LogType.ERROR);
+                ClientConsole.say(messages().EXECUTABLE_NOT_FOUND + installerFile.getAbsolutePath(), LogType.ERROR);
                 return false;
             }
 
             List<String> command = List.of(installerFile.getAbsolutePath());
-            say(languageData.STARTING_INSTALLER + installerFile.getAbsolutePath());
+            ClientConsole.say(messages().STARTING_INSTALLER + installerFile.getAbsolutePath());
             debugOperation("Executing installer command: " + command);
             new ProcessBuilder(command).start();
-            say(languageData.INSTALLER_STARTED);
+            ClientConsole.say(messages().INSTALLER_STARTED);
 
             if (!isRunningInUnitTest()) {
                 try {
@@ -563,26 +576,25 @@ public class UpdateManager {
             return true;
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(userFacingFailure(languageData.FAILED_TO_START_INSTALLER), LogType.ERROR);
+            ClientConsole.say(userFacingFailure(messages().FAILED_TO_START_INSTALLER), LogType.ERROR);
             return false;
         }
     }
 
     private static void finishUpdateProcess(int exitCode) {
-        if (isGUIMode) {
+        if (guiMode()) {
             NeoLinkCoreRunner.requestStop();
         } else {
-            exitAndFreeze(exitCode);
+            ClientConsole.exitAndFreeze(exitCode);
         }
     }
 
     private static void exitAfterInstallerStarted() {
-        System.exit(0);
+        NeoLink.requestExit(0);
     }
 
     /**
-     * 检查当前是否在单元测试环境中运行
-     * 通过检查调用栈中是否包含 JUnit 相关的类
+     * Detects unit-test execution so update handoff never terminates the test JVM.
      */
     private static boolean isRunningInUnitTest() {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
@@ -614,13 +626,13 @@ public class UpdateManager {
             }
 
             if (!fileOrDirectory.delete()) {
-                say(languageData.FAILED_TO_DELETE + fileOrDirectory.getAbsolutePath(), LogType.WARNING);
-            } else if (isDebugMode) {
-                say(languageData.SUCCESSFULLY_DELETED + fileOrDirectory.getAbsolutePath());
+                ClientConsole.say(messages().FAILED_TO_DELETE + fileOrDirectory.getAbsolutePath(), LogType.WARNING);
+            } else if (debugMode()) {
+                ClientConsole.say(messages().SUCCESSFULLY_DELETED + fileOrDirectory.getAbsolutePath());
             }
         } catch (Exception e) {
             Debugger.debugOperation(e);
-            say(userFacingFailure(languageData.ERROR_DELETING_FILE), LogType.WARNING);
+            ClientConsole.say(userFacingFailure(messages().ERROR_DELETING_FILE), LogType.WARNING);
         }
     }
 
@@ -628,8 +640,9 @@ public class UpdateManager {
         if (messagePrefix == null) {
             return "";
         }
-        return messagePrefix
-                .replaceFirst("[：:]\\s*$", "")
-                .stripTrailing();
+        return messagePrefix.stripTrailing();
+    }
+
+    private record DownloadedArtifact(File file) {
     }
 }

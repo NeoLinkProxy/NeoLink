@@ -1,6 +1,8 @@
 package neoproxy.neolink.core;
 
 import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.app.LanguageManager;
+import neoproxy.neolink.cli.ClientConsole;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.update.UpdateManager;
 import top.ceroxe.api.neolink.NeoLinkAPI;
@@ -21,21 +23,28 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
+import neoproxy.neolink.state.ConnectionSettings;
+import neoproxy.neolink.state.ConnectionState;
+import neoproxy.neolink.state.FeatureSettings;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 
 /**
- * 单个 NeoLinkAPI 隧道实例的应用层所有者。
+ * NeoLink 隧道运行器（tunnel runtime coordinator）。
  *
- * <p>桌面客户端有意保持为壳层：配置、UI、日志、节点加载和更新编排留在这里；
- * 协议生命周期与 TCP/UDP 转发全部交给 NeoLinkAPI。把唯一 API 实例收敛到本类，
- * 可以避免 GUI 和 CLI 代码分散持有隧道所有权。</p>
+ * <p>本类拥有单一 `NeoLinkAPI` 实例的生命周期控制权：启动、重连、停止、运行时协议切换都在
+ * 这里串行化处理。UI / CLI 只负责触发，不直接持有 tunnel 所有权。</p>
  */
 public final class NeoLinkCoreRunner {
     private static final Object LOCK = new Object();
     private static volatile boolean shouldStop = false;
     private static volatile NeoLinkAPI tunnel;
-    private static StopCallback stopCallback;
+    private static volatile StopCallback stopCallback;
+    private static final AtomicReference<TransportSelection> transportSelection =
+            new AtomicReference<>(new TransportSelection(true, true));
 
     private NeoLinkCoreRunner() {
     }
@@ -54,17 +63,20 @@ public final class NeoLinkCoreRunner {
     }
 
     public static void updateRuntimeProtocolFlags(boolean tcpEnabled, boolean udpEnabled) throws IOException {
-        NeoLink.isDisableTCP = !tcpEnabled;
-        NeoLink.isDisableUDP = !udpEnabled;
+        TransportSelection selection = new TransportSelection(tcpEnabled, udpEnabled);
+        transportSelection.set(selection);
+        FeatureState.applyRuntimeTransportSelection(tcpEnabled, udpEnabled);
 
-        NeoLinkAPI activeTunnel = currentTunnel();
-        if (activeTunnel == null || !activeTunnel.isActive()) {
-            debugOperation("Skipping runtime protocol switch because no active tunnel is running.");
-            return;
+        synchronized (LOCK) {
+            NeoLinkAPI activeTunnel = tunnel;
+            if (activeTunnel == null || !activeTunnel.isActive()) {
+                debugOperation("Skipping runtime protocol switch because no active tunnel is running.");
+                return;
+            }
+
+            debugOperation("Applying runtime protocol switch. tcpEnabled=" + tcpEnabled + ", udpEnabled=" + udpEnabled);
+            activeTunnel.updateRuntimeProtocolFlags(tcpEnabled, udpEnabled);
         }
-
-        debugOperation("Applying runtime protocol switch. tcpEnabled=" + tcpEnabled + ", udpEnabled=" + udpEnabled);
-        activeTunnel.updateRuntimeProtocolFlags(tcpEnabled, udpEnabled);
     }
 
     public static void requestStop() {
@@ -81,7 +93,14 @@ public final class NeoLinkCoreRunner {
     }
 
     public static void runCore(String remoteDomain, int localPort, String accessKey) {
-        runCore(new NeoLinkCfg(remoteDomain, NeoLink.hostHookPort, NeoLink.hostConnectPort, accessKey, localPort));
+        ConnectionSettings settings = ConnectionState.snapshot();
+        runCore(new NeoLinkCfg(
+                remoteDomain,
+                settings.hostHookPort(),
+                settings.hostConnectPort(),
+                accessKey,
+                localPort
+        ));
     }
 
     public static void runCore(NeoLinkCfg cfg) {
@@ -93,11 +112,18 @@ public final class NeoLinkCoreRunner {
         Objects.requireNonNull(accessKey, "accessKey");
         debugOperation("Starting NeoLinkAPI tunnel. Remote: " + remoteDomain + ", Local: " + localPort);
         shouldStop = false;
-        NeoLink.remoteDomainName = remoteDomain;
-        NeoLink.localPort = localPort;
-        NeoLink.key = accessKey;
-        NeoLink.hostHookPort = cfg.getHookPort();
-        NeoLink.hostConnectPort = cfg.getHostConnectPort();
+        ConnectionSettings currentConnection = ConnectionState.snapshot();
+        ConnectionState.apply(new ConnectionSettings(
+                remoteDomain,
+                currentConnection.localDomainName(),
+                cfg.getHookPort(),
+                cfg.getHostConnectPort(),
+                accessKey,
+                localPort,
+                currentConnection.specifiedNodeName()
+        ));
+        FeatureSettings currentFeatures = FeatureState.snapshot();
+        transportSelection.set(new TransportSelection(!currentFeatures.disableTcp(), !currentFeatures.disableUdp()));
 
         boolean firstRun = true;
         while (!shouldStop) {
@@ -111,7 +137,7 @@ public final class NeoLinkCoreRunner {
 
             AtomicBoolean tunnelReachedRunningState = new AtomicBoolean(false);
             NeoLinkAPI activeTunnel = buildTunnel(cfg, tunnelReachedRunningState);
-            NeoLink.tunnelAddress = null;
+            RuntimeState.setTunnelAddress(null);
             synchronized (LOCK) {
                 if (shouldStop) {
                     activeTunnel.close();
@@ -123,29 +149,29 @@ public final class NeoLinkCoreRunner {
             try {
                 activeTunnel.start();
             } catch (UnsupportedVersionException e) {
-                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
-                if (NeoLink.enableAutoUpdate) {
+                ClientConsole.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
+                if (FeatureState.snapshot().enableAutoUpdate()) {
                     UpdateManager.checkUpdate(
                             NeoLink.CLIENT_FILE_PREFIX + latestVersionFromServerResponse(e.serverResponse()),
                             activeTunnel.getUpdateURL()
                     );
                 } else {
-                    NeoLink.say(NeoLink.languageData.PLEASE_UPDATE_MANUALLY, LogType.ERROR);
+                    ClientConsole.say(languageData().PLEASE_UPDATE_MANUALLY, LogType.ERROR);
                 }
                 stopAfterTerminalFailure();
             } catch (NoSuchKeyException e) {
-                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
+                ClientConsole.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 stopAfterTerminalFailure();
             } catch (NoMoreNetworkFlowException e) {
-                NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
+                ClientConsole.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 stopAfterTerminalFailure();
             } catch (PortOccupiedException | NoMorePortException e) {
-                NeoLink.say(clientFacingApiErrorMessage(null, e), LogType.ERROR);
+                ClientConsole.say(clientFacingApiErrorMessage(null, e), LogType.ERROR);
                 stopAfterTerminalFailure();
             } catch (IOException e) {
                 debugOperation(e);
-                if (!NeoLink.enableAutoReconnect && !shouldStop) {
-                    NeoLink.say(NeoLink.languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + remoteDomain, LogType.ERROR);
+                if (!FeatureState.snapshot().enableAutoReconnect() && !shouldStop) {
+                    ClientConsole.say(languageData().FAIL_TO_BUILD_A_CHANNEL_FROM + remoteDomain, LogType.ERROR);
                     stopAfterTerminalFailure();
                 }
             } catch (RuntimeException e) {
@@ -158,28 +184,31 @@ public final class NeoLinkCoreRunner {
                         tunnel = null;
                     }
                 }
-                NeoLink.tunnelAddress = null;
+                RuntimeState.setTunnelAddress(null);
             }
         }
         debugOperation("NeoLinkAPI tunnel runner exited.");
     }
 
     private static NeoLinkAPI buildTunnel(NeoLinkCfg cfg, AtomicBoolean tunnelReachedRunningState) {
-        cfg.setLocalDomainName(NeoLink.localDomainName)
-                .setTCPEnabled(!NeoLink.isDisableTCP)
-                .setUDPEnabled(!NeoLink.isDisableUDP)
-                .setPPV2Enabled(NeoLink.enableProxyProtocol)
-                .setDebugMsg(NeoLink.isDebugMode)
-                .setHeartBeatPacketDelay(NeoLink.heartbeatPacketDelay)
-                .setProxyIPToNeoServer(NeoLink.proxyIPToNeoServer)
-                .setProxyIPToLocalServer(NeoLink.proxyIPToLocalServer)
-                .setClientVersion(NeoLink.getClientVersionToReport());
-        if (NeoLink.languageData != null) {
-            cfg.setLanguage(NeoLink.languageData.getCurrentLanguage());
+        TransportSelection selection = transportSelection.get();
+        ConnectionSettings connectionSettings = ConnectionState.snapshot();
+        FeatureSettings featureSettings = FeatureState.snapshot();
+        cfg.setLocalDomainName(connectionSettings.localDomainName())
+                .setTCPEnabled(selection.tcpEnabled())
+                .setUDPEnabled(selection.udpEnabled())
+                .setPPV2Enabled(featureSettings.enableProxyProtocol())
+                .setDebugMsg(featureSettings.debugMode())
+                .setHeartBeatPacketDelay(featureSettings.heartbeatPacketDelay())
+                .setProxyIPToNeoServer(featureSettings.proxyIPToNeoServer())
+                .setProxyIPToLocalServer(featureSettings.proxyIPToLocalServer())
+                .setClientVersion(ClientConsole.getClientVersionToReport());
+        if (RuntimeState.languageData() != null) {
+            cfg.setLanguage(RuntimeState.languageData().getCurrentLanguage());
         }
 
         NeoLinkAPI api = new NeoLinkAPI(cfg);
-        return api.setUnsupportedVersionDecision(response -> NeoLink.enableAutoUpdate)
+        return api.setUnsupportedVersionDecision(response -> FeatureState.snapshot().enableAutoUpdate())
                 .setOnStateChanged(state -> {
                     if (state == NeoLinkState.RUNNING) {
                         tunnelReachedRunningState.set(true);
@@ -188,7 +217,7 @@ public final class NeoLinkCoreRunner {
                         );
                     }
                 })
-                .setOnServerMessage(NeoLink::say)
+                .setOnServerMessage(ClientConsole::say)
                 .setOnError((message, cause) -> {
                     String displayMessage = clientFacingCallbackErrorMessage(
                             message,
@@ -196,7 +225,7 @@ public final class NeoLinkCoreRunner {
                             tunnelReachedRunningState.get()
                     );
                     if (displayMessage != null && !displayMessage.isBlank()) {
-                        NeoLink.say(displayMessage, LogType.ERROR);
+                        ClientConsole.say(displayMessage, LogType.ERROR);
                     }
                     if (cause instanceof Exception exception) {
                         debugOperation(exception);
@@ -204,12 +233,12 @@ public final class NeoLinkCoreRunner {
                 })
                 .setOnConnect(NeoLinkCoreRunner::logConnect)
                 .setOnDisconnect(NeoLinkCoreRunner::logDisconnect)
-                .setOnConnectNeoFailure(() -> NeoLink.say(
-                        NeoLink.languageData.FAIL_TO_BUILD_A_CHANNEL_FROM + NeoLink.remoteDomainName,
+                .setOnConnectNeoFailure(() -> ClientConsole.say(
+                        languageData().FAIL_TO_BUILD_A_CHANNEL_FROM + ConnectionState.snapshot().remoteDomainName(),
                         LogType.ERROR
                 ))
-                .setOnConnectLocalFailure(() -> NeoLink.say(
-                        NeoLink.languageData.FAIL_TO_CONNECT_LOCALHOST + NeoLink.localPort,
+                .setOnConnectLocalFailure(() -> ClientConsole.say(
+                        languageData().FAIL_TO_CONNECT_LOCALHOST + ConnectionState.snapshot().localPort(),
                         LogType.ERROR
                 ))
                 .setDebugSink((message, cause) -> {
@@ -224,21 +253,22 @@ public final class NeoLinkCoreRunner {
 
     private static void publishTunnelAddress(NeoLinkAPI activeTunnel) {
         try {
-            NeoLink.tunnelAddress = activeTunnel.getTunAddr();
-            debugOperation("NeoLink tunnel address received from NeoLinkAPI: " + NeoLink.tunnelAddress);
+            RuntimeState.setTunnelAddress(activeTunnel.getTunAddr());
+            debugOperation("NeoLink tunnel address received from NeoLinkAPI: " + RuntimeState.tunnelAddress());
         } catch (RuntimeException e) {
             debugOperation(e);
         }
     }
 
     private static void waitBeforeReconnect() {
-        if (!NeoLink.enableAutoReconnect) {
+        FeatureSettings features = FeatureState.snapshot();
+        if (!features.enableAutoReconnect()) {
             shouldStop = true;
             return;
         }
-        for (int i = 0; i < NeoLink.reconnectionIntervalSeconds && !shouldStop; i++) {
-            if (NeoLink.languageData != null) {
-                NeoLink.languageData.sayReconnectMsg(NeoLink.reconnectionIntervalSeconds - i);
+        for (int i = 0; i < features.reconnectionIntervalSeconds() && !shouldStop; i++) {
+            if (RuntimeState.languageData() != null) {
+                RuntimeState.languageData().sayReconnectMsg(features.reconnectionIntervalSeconds() - i);
             }
             try {
                 Thread.sleep(1000);
@@ -278,11 +308,11 @@ public final class NeoLinkCoreRunner {
     }
 
     private static void logConnect(TransportProtocol protocol, InetSocketAddress source, InetSocketAddress target) {
-        logConnection(protocol, source, target, NeoLink.languageData.BUILD_UP);
+        logConnection(protocol, source, target, languageData().BUILD_UP);
     }
 
     private static void logDisconnect(TransportProtocol protocol, InetSocketAddress source, InetSocketAddress target) {
-        logConnection(protocol, source, target, NeoLink.languageData.DESTROY);
+        logConnection(protocol, source, target, languageData().DESTROY);
     }
 
     private static void logConnection(
@@ -291,15 +321,15 @@ public final class NeoLinkCoreRunner {
             InetSocketAddress target,
             String suffix
     ) {
-        if (NeoLink.showConnection) {
-            NeoLink.say(connectionLabel(protocol) + formatAddress(source) + " -> " + formatAddress(target) + suffix);
+        if (FeatureState.snapshot().showConnection()) {
+            ClientConsole.say(connectionLabel(protocol) + formatAddress(source) + " -> " + formatAddress(target) + suffix);
         }
     }
 
     private static String connectionLabel(TransportProtocol protocol) {
         return protocol == TransportProtocol.UDP
-                ? NeoLink.languageData.A_UDP_CONNECTION
-                : NeoLink.languageData.A_TCP_CONNECTION;
+                ? languageData().A_UDP_CONNECTION
+                : languageData().A_TCP_CONNECTION;
     }
 
     private static String formatAddress(InetSocketAddress address) {
@@ -367,13 +397,16 @@ public final class NeoLinkCoreRunner {
     }
 
     private static LanguageData languageData() {
-        if (NeoLink.languageData == null) {
-            NeoLink.detectLanguage();
+        if (RuntimeState.languageData() == null) {
+            LanguageManager.detectLanguage();
         }
-        return NeoLink.languageData != null ? NeoLink.languageData : new LanguageData();
+        return RuntimeState.languageData() != null ? RuntimeState.languageData() : new LanguageData();
     }
 
     public interface StopCallback {
         void onStop();
+    }
+
+    private record TransportSelection(boolean tcpEnabled, boolean udpEnabled) {
     }
 }

@@ -1,6 +1,10 @@
 package neoproxy.neolink.config;
 
-import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.app.ApplicationFiles;
+import neoproxy.neolink.state.ConnectionSettings;
+import neoproxy.neolink.state.ConnectionState;
+import neoproxy.neolink.state.FeatureSettings;
+import neoproxy.neolink.state.FeatureState;
 import top.ceroxe.api.utils.config.LineConfigReader;
 
 import java.io.File;
@@ -11,31 +15,22 @@ import java.nio.file.StandardCopyOption;
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * 配置管理器
- * <p>
- * 核心职责：
- * 1. 检测并初始化应用程序运行环境
- * 2. 确定工作目录（可写目录优先，否则重定向到系统数据目录）
- * 3. 读取并解析配置文件 config.cfg
- * 4. 同步安装包中的配置文件到用户数据目录
- * <p>
- * 设计特点：
- * - 智能目录检测：支持 IDEA 开发环境、Windows 安装版、macOS 安装版
- * - 自动权限处理：检测到只读环境时自动重定向到用户数据目录
- * - 配置同步：确保用户数据目录有最新的配置文件
+ * 配置环境初始化器与 `config.cfg` 读取器（configuration bootstrap & config loader）。
  *
- * @author NeoProxy Team
- * @since 5.0.0
+ * <p>本类只负责定位资源目录 / 可写目录，并把解析后的配置写入 `state` 包。这样 CLI、GUI、
+ * 测试代码都不需要再依赖入口类上的隐式静态变量。</p>
  */
 public final class ConfigOperator {
     public static String WORKING_DIR;
     public static String BASE_PACKAGE_DIR;
 
-    public static void initEnvironment() {
-        File currentFile = NeoLink.getCurrentFile();
-        String programDir = (currentFile != null) ? currentFile.getParent() : System.getProperty("user.dir");
+    private ConfigOperator() {
+    }
 
-        // 探测基准资源位置
+    public static void initEnvironment() {
+        File currentFile = ApplicationFiles.currentExecutableFile();
+        String programDir = currentFile != null ? currentFile.getParent() : System.getProperty("user.dir");
+
         BASE_PACKAGE_DIR = findBasePackageDir(programDir);
         debugOperation("Base resources path: " + BASE_PACKAGE_DIR);
 
@@ -43,16 +38,15 @@ public final class ConfigOperator {
         try {
             if (testFile.createNewFile()) {
                 testFile.delete();
-                WORKING_DIR = BASE_PACKAGE_DIR; // 可写（IDEA/绿色版）
+                WORKING_DIR = BASE_PACKAGE_DIR;
             } else {
-                throw new IOException();
+                throw new IOException("Base package directory is not writable.");
             }
         } catch (IOException e) {
-            // 只读（安装版），重定向到 AppData
+            // 安装目录不可写（read-only install）时，改走用户数据目录。
             WORKING_DIR = getPlatformSpecificDataPath();
             new File(WORKING_DIR, "logs").mkdirs();
-
-            // 强制同步安装包里的文件到 AppData
+            // 同步 baseline 文件，保证首次启动即可拿到默认配置与节点列表。
             forceSyncBaseline("config.cfg");
             forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
             debugOperation("Redirected to AppData: " + WORKING_DIR);
@@ -60,52 +54,83 @@ public final class ConfigOperator {
     }
 
     private static String findBasePackageDir(String programDir) {
-        // 1. IDEA 项目根目录
-        if (new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME).exists())
+        // 1. IDEA / development root。
+        if (new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME).exists()) {
             return System.getProperty("user.dir");
+        }
 
-        // 2. Windows 安装目录或其应用子目录
-        if (new File(programDir, NodeConfig.NODE_LIST_FILE_NAME).exists()) return programDir;
-        File s2 = new File(programDir + File.separator + "app", NodeConfig.NODE_LIST_FILE_NAME);
-        if (s2.exists()) return s2.getParent();
+        // 2. Windows 安装目录或打包后的 `app` 子目录。
+        if (new File(programDir, NodeConfig.NODE_LIST_FILE_NAME).exists()) {
+            return programDir;
+        }
+        File packagedAppDir = new File(programDir + File.separator + "app", NodeConfig.NODE_LIST_FILE_NAME);
+        if (packagedAppDir.exists()) {
+            return packagedAppDir.getParent();
+        }
 
-        // 3. macOS 资源目录
+        // 3. macOS Resources 目录。
         if (System.getProperty("os.name").toLowerCase().contains("mac")) {
-            File s3 = new File(programDir + "/../Resources/" + NodeConfig.NODE_LIST_FILE_NAME);
-            if (s3.exists()) return s3.getParent();
+            File macResourcesDir = new File(programDir + "/../Resources/" + NodeConfig.NODE_LIST_FILE_NAME);
+            if (macResourcesDir.exists()) {
+                return macResourcesDir.getParent();
+            }
         }
         return programDir;
     }
 
     private static void forceSyncBaseline(String fileName) {
         File source = new File(BASE_PACKAGE_DIR, fileName);
-        if (source.exists()) {
-            try {
-                Files.copy(source.toPath(), new File(WORKING_DIR, fileName).toPath(), StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException ignored) {
-            }
+        if (!source.exists()) {
+            return;
+        }
+        try {
+            Files.copy(
+                    source.toPath(),
+                    new File(WORKING_DIR, fileName).toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+        } catch (IOException ignored) {
         }
     }
 
     public static void readAndSetValue() {
         File configFile = new File(WORKING_DIR, "config.cfg");
-        if (!configFile.exists()) return;
+        if (!configFile.exists()) {
+            return;
+        }
 
         LineConfigReader reader = new LineConfigReader(configFile);
         try {
             reader.load();
-            NeoLink.remoteDomainName = reader.getOptional("REMOTE_DOMAIN_NAME").orElse("localhost");
-            NeoLink.localDomainName = reader.getOptional("LOCAL_DOMAIN_NAME").orElse("localhost");
-            NeoLink.hostHookPort = readPort(reader, "HOST_HOOK_PORT", NodeConfig.DEFAULT_HOST_HOOK_PORT);
-            NeoLink.hostConnectPort = readPort(reader, "HOST_CONNECT_PORT", NodeConfig.DEFAULT_HOST_CONNECT_PORT);
-            NeoLink.enableAutoReconnect = reader.getOptional("ENABLE_AUTO_RECONNECT").map(Boolean::parseBoolean).orElse(true);
-            NeoLink.enableAutoUpdate = reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true);
-            NeoLink.reconnectionIntervalSeconds = readPositiveInt(reader, "RECONNECTION_INTERVAL", 30);
-            NeoLink.enableProxyProtocol = reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false);
-            NeoLink.nkmNodeListUrl = reader.getOptional("NKM_NODELIST_URL").orElse("");
-            NeoLink.proxyIPToNeoServer = reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse("");
-            NeoLink.proxyIPToLocalServer = reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse("");
-            NeoLink.heartbeatPacketDelay = readPositiveInt(reader, "HEARTBEAT_PACKET_DELAY", 1000);
+            ConnectionSettings currentConnection = ConnectionState.snapshot();
+            FeatureSettings currentFeatures = FeatureState.snapshot();
+            ConnectionState.apply(new ConnectionSettings(
+                    reader.getOptional("REMOTE_DOMAIN_NAME").orElse("localhost"),
+                    reader.getOptional("LOCAL_DOMAIN_NAME").orElse("localhost"),
+                    readPort(reader, "HOST_HOOK_PORT", NodeConfig.DEFAULT_HOST_HOOK_PORT),
+                    readPort(reader, "HOST_CONNECT_PORT", NodeConfig.DEFAULT_HOST_CONNECT_PORT),
+                    currentConnection.key(),
+                    currentConnection.localPort(),
+                    currentConnection.specifiedNodeName()
+            ));
+            FeatureState.apply(new FeatureSettings(
+                    currentFeatures.debugMode(),
+                    currentFeatures.showConnection(),
+                    currentFeatures.guiMode(),
+                    currentFeatures.disableTcp(),
+                    currentFeatures.disableUdp(),
+                    reader.getOptional("ENABLE_PROXY_PROTOCOL").map(Boolean::parseBoolean).orElse(false),
+                    reader.getOptional("ENABLE_AUTO_RECONNECT").map(Boolean::parseBoolean).orElse(true),
+                    reader.getOptional("ENABLE_AUTO_UPDATE").map(Boolean::parseBoolean).orElse(true),
+                    currentFeatures.testUpdate(),
+                    currentFeatures.noEffectMode(),
+                    readPositiveInt(reader, "HEARTBEAT_PACKET_DELAY", 1000),
+                    readPositiveInt(reader, "RECONNECTION_INTERVAL", 30),
+                    reader.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse(""),
+                    reader.getOptional("PROXY_IP_TO_NEO_SERVER").orElse(""),
+                    currentFeatures.outputFilePath(),
+                    reader.getOptional("NKM_NODELIST_URL").orElse("")
+            ));
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid config.cfg: " + e.getMessage(), e);
         }
@@ -147,7 +172,9 @@ public final class ConfigOperator {
             }
             return home + File.separator + "AppData" + File.separator + "Local" + File.separator + "NeoLink";
         }
-        if (os.contains("mac")) return home + "/Library/Application Support/NeoLink";
+        if (os.contains("mac")) {
+            return home + "/Library/Application Support/NeoLink";
+        }
         return home + File.separator + ".neolink";
     }
 }

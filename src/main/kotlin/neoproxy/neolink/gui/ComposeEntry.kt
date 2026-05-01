@@ -11,7 +11,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
-import neoproxy.neolink.NeoLink
+import neoproxy.neolink.app.LanguageManager
+import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
 import java.awt.Dimension
 import java.io.PrintStream
@@ -55,10 +56,10 @@ fun main(args: Array<String>) {
         }
     }
 
-    // 确保在任何组件（包括异步任务）调用 NeoLink.say() 之前，loggist 已经实例化
+    // 确保任何组件在输出日志前，日志桥（logger bridge）已经可用。
     ConfigOperator.initEnvironment()
-    NeoLink.initializeLogger()
-    NeoLink.detectLanguage()
+    ClientConsole.initializeLogger(false)
+    LanguageManager.detectLanguage()
 
     val originalErr = System.err
     System.setErr(object : PrintStream(originalErr) {

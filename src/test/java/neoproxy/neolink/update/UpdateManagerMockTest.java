@@ -15,29 +15,29 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 
 /**
- * UpdateManager 静态方法 Mock 测试
- * <p>
- * 使用 mockito-inline 来 mock 静态方法
+ * UpdateManagerMockTest regression tests.
  */
-@DisplayName("UpdateManager 静态方法 Mock 测试")
+@DisplayName("UpdateManagerMockTest")
 class UpdateManagerMockTest {
 
     @BeforeEach
     void setUp() {
-        NeoLink.languageData = new LanguageData();
-        NeoLink.isDebugMode = false;
-        NeoLink.isGUIMode = true;
+        RuntimeState.setLanguageData(new LanguageData());
+        FeatureState.setDebugMode(false);
+        FeatureState.setGuiMode(true);
     }
 
     @AfterEach
     void tearDown() {
-        NeoLink.languageData = null;
+        RuntimeState.setLanguageData(null);
     }
 
     @Test
-    @DisplayName("formatFileSize 应正确格式化各种大小")
+    @DisplayName("testFormatFileSize")
     void testFormatFileSize() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -50,7 +50,7 @@ class UpdateManagerMockTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应处理 null 输入")
+    @DisplayName("testDeleteFileOrDirectoryNull")
     void testDeleteFileOrDirectoryNull() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -59,7 +59,7 @@ class UpdateManagerMockTest {
     }
 
     @Test
-    @DisplayName("startInstaller 应安全处理不存在的文件")
+    @DisplayName("testStartInstallerNonExistentFile")
     void testStartInstallerNonExistentFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
@@ -72,7 +72,7 @@ class UpdateManagerMockTest {
     }
 
     @Test
-    @DisplayName("startInstaller 应只启动 installer 本身")
+    @DisplayName("testStartInstallerUsesInstallerOnly")
     void testStartInstallerUsesInstallerOnly() throws Exception {
         AtomicReference<List<?>> constructorArguments = new AtomicReference<>();
 

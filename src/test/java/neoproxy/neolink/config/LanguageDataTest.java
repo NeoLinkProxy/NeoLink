@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 4. sayReconnectMsg 中英文输出
  * 5. getCurrentLanguage 语言标识
  */
-@DisplayName("LanguageData 语言数据测试")
+@DisplayName("LanguageDataTest")
 class LanguageDataTest {
 
     private LanguageData englishData;
@@ -32,7 +32,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("默认构造函数应创建英文语言实例")
+    @DisplayName("testDefaultConstructorCreatesEnglishInstance")
     void testDefaultConstructorCreatesEnglishInstance() {
         LanguageData data = new LanguageData();
 
@@ -43,7 +43,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("getChineseLanguage 应创建中文语言实例")
+    @DisplayName("testGetChineseLanguageCreatesChineseInstance")
     void testGetChineseLanguageCreatesChineseInstance() {
         LanguageData data = LanguageData.getChineseLanguage();
 
@@ -54,7 +54,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("中文实例应正确翻译所有字段")
+    @DisplayName("testChineseInstanceTranslatesAllFields")
     void testChineseInstanceTranslatesAllFields() {
         assertEquals("服务端离线。", chineseData.SERVER_IS_OFFLINE);
         assertEquals("请输入密钥：", chineseData.PLEASE_ENTER_ACCESS_CODE);
@@ -75,7 +75,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("flush 方法在英文模式下应返回新的英文实例")
+    @DisplayName("testFlushReturnsEnglishInstanceWhenCurrentIsEnglish")
     void testFlushReturnsEnglishInstanceWhenCurrentIsEnglish() {
         LanguageData data = new LanguageData();
         LanguageData flushed = data.flush();
@@ -85,7 +85,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("flush 方法在中文模式下应返回新的中文实例")
+    @DisplayName("testFlushReturnsChineseInstanceWhenCurrentIsChinese")
     void testFlushReturnsChineseInstanceWhenCurrentIsChinese() {
         LanguageData data = LanguageData.getChineseLanguage();
         LanguageData flushed = data.flush();
@@ -95,7 +95,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("sayReconnectMsg 英文模式应输出英文消息")
+    @DisplayName("testSayReconnectMsgEnglishOutput")
     void testSayReconnectMsgEnglishOutput() {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
@@ -113,7 +113,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("sayReconnectMsg 中文模式应输出中文消息")
+    @DisplayName("testSayReconnectMsgChineseOutput")
     void testSayReconnectMsgChineseOutput() {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
@@ -124,21 +124,21 @@ class LanguageDataTest {
             data.sayReconnectMsg(15);
 
             String output = outContent.toString().trim();
-            assertTrue(output.contains("15 秒将会后开始重新连接"));
+            assertTrue(output.contains("15 秒后将开始重新连接。"));
         } finally {
             System.setOut(originalOut);
         }
     }
 
     @Test
-    @DisplayName("getCurrentLanguage 应返回正确的语言标识")
+    @DisplayName("testGetCurrentLanguage")
     void testGetCurrentLanguage() {
         assertEquals("en", englishData.getCurrentLanguage());
         assertEquals("zh", chineseData.getCurrentLanguage());
     }
 
     @Test
-    @DisplayName("英文实例应包含所有默认消息字段")
+    @DisplayName("testEnglishInstanceContainsAllDefaultMessages")
     void testEnglishInstanceContainsAllDefaultMessages() {
         assertNotNull(englishData.PLEASE_UPDATE_MANUALLY);
         assertNotNull(englishData.A_UDP_CONNECTION);
@@ -170,7 +170,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("中文实例应包含所有翻译后的更新管理器消息")
+    @DisplayName("testChineseInstanceContainsUpdateManagerMessages")
     void testChineseInstanceContainsUpdateManagerMessages() {
         assertEquals("下载更新文件失败。", chineseData.FAILED_TO_DOWNLOAD_UPDATE_FILE);
         assertEquals("备份现有jar文件失败。", chineseData.FAILED_TO_BACKUP_EXISTING_JAR);
@@ -207,7 +207,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("中文实例应包含 NKM 节点拉取相关翻译")
+    @DisplayName("testChineseInstanceContainsNkmMessages")
     void testChineseInstanceContainsNkmMessages() {
         assertEquals("正在向 NKM 获取最新可用节点列表: ", chineseData.FETCHING_NODE_LIST);
         assertEquals("节点列表已成功更新。", chineseData.NODE_LIST_FETCH_SUCCESS);
@@ -216,7 +216,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("英文实例应包含 NKM 节点拉取相关英文消息")
+    @DisplayName("testEnglishInstanceContainsNkmMessages")
     void testEnglishInstanceContainsNkmMessages() {
         assertEquals("Fetching latest public node list from NKM: ", englishData.FETCHING_NODE_LIST);
         assertEquals("Node list successfully updated from NKM.", englishData.NODE_LIST_FETCH_SUCCESS);
@@ -225,7 +225,7 @@ class LanguageDataTest {
     }
 
     @Test
-    @DisplayName("sayReconnectMsg 不同秒数应正确输出")
+    @DisplayName("testSayReconnectMsgDifferentSeconds")
     void testSayReconnectMsgDifferentSeconds() {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;

@@ -1,67 +1,57 @@
 package neoproxy.neolink.util;
 
-import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 import top.ceroxe.api.print.log.LogType;
 import top.ceroxe.api.print.log.State;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static neoproxy.neolink.NeoLink.isGUIMode;
-import static neoproxy.neolink.NeoLink.loggist;
-
 /**
- * 调试器
- * <p>
- * 核心职责：
- * 1. 在调试模式下输出详细的异常堆栈和调试信息
- * 2. 统一处理调试信息的输出方式（CLI/GUI 兼容）
- * 3. 提供安全的调试输出，避免空指针异常
- * <p>
- * 设计特点：
- * - 仅在 isDebugMode 为 true 时输出信息
- * - 自动适配 CLI 和 GUI 模式的输出方式
- * - Loggist 未初始化时回退到控制台输出
+ * 调试输出桥（debug output bridge）。
  *
- * @author NeoProxy Team
- * @since 5.0.0
+ * <p>调试信息只在 `debug mode` 打开时输出。若 `Loggist` 已初始化，则统一交给日志系统做
+ * 格式化与持久化；否则在 CLI 模式下直接回退到标准输出 / 标准错误。</p>
  */
-public class Debugger {
+public final class Debugger {
 
-    public static void debugOperation(Exception e) {
-        if (NeoLink.isDebugMode && e != null) {
-            StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            e.printStackTrace(pw);
-            String fullStackTrace = sw.toString();
+    private Debugger() {
+    }
 
-            if (loggist != null) {
-                // Loggist 已初始化：委托给它处理
-                // CLI: 输出到控制台 + 文件
-                // GUI: 输出到 WebView + 文件
-                loggist.say(new State(LogType.ERROR, "DEBUG", fullStackTrace));
-            } else {
-                // Loggist 未初始化（如启动参数解析阶段）：手动输出到控制台
-                if (!isGUIMode) {
-                    System.err.println("[DEBUG-EXCEPTION] " + fullStackTrace);
-                }
-            }
+    public static void debugOperation(Exception exception) {
+        if (!FeatureState.snapshot().debugMode() || exception == null) {
+            return;
+        }
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        exception.printStackTrace(printWriter);
+        String fullStackTrace = stringWriter.toString();
+
+        if (RuntimeState.loggist() != null) {
+            // 已有日志系统（logger ready）时，统一走日志桥，CLI / GUI 都能复用同一份输出。
+            RuntimeState.loggist().say(new State(LogType.ERROR, "DEBUG", fullStackTrace));
+            return;
+        }
+
+        if (!FeatureState.snapshot().guiMode()) {
+            System.err.println("[DEBUG-EXCEPTION] " + fullStackTrace);
         }
     }
 
-    public static void debugOperation(String infoMsg) {
-        if (NeoLink.isDebugMode) {
-            if (loggist != null) {
-                // Loggist 已初始化：委托给它处理
-                // 命令行：原生 Loggist 会自动 System.out.println，所以这里不需要手动输出，否则会重复！
-                // GUI: QueueBasedLoggist 会处理上屏和写文件
-                loggist.say(new State(LogType.INFO, "DEBUG", infoMsg));
-            } else {
-                // Loggist 未初始化：手动输出
-                if (!isGUIMode) {
-                    System.out.println("[DEBUG] " + infoMsg);
-                }
-            }
+    public static void debugOperation(String infoMessage) {
+        if (!FeatureState.snapshot().debugMode()) {
+            return;
+        }
+
+        if (RuntimeState.loggist() != null) {
+            RuntimeState.loggist().say(new State(LogType.INFO, "DEBUG", infoMessage));
+            return;
+        }
+
+        if (!FeatureState.snapshot().guiMode()) {
+            System.out.println("[DEBUG] " + infoMessage);
         }
     }
 }

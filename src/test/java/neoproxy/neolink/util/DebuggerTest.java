@@ -11,17 +11,13 @@ import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 
 /**
- * Debugger 测试类
- * <p>
- * 测试范围：
- * 1. 调试模式开启时的输出行为
- * 2. 调试模式关闭时的静默行为
- * 3. 异常堆栈输出
- * 4. GUI/CLI 模式下的不同输出行为
+ * DebuggerTest regression tests.
  */
-@DisplayName("Debugger 调试器测试")
+@DisplayName("DebuggerTest")
 class DebuggerTest {
 
     private boolean originalDebugMode;
@@ -33,8 +29,8 @@ class DebuggerTest {
 
     @BeforeEach
     void setUp() {
-        originalDebugMode = NeoLink.isDebugMode;
-        originalGuiMode = NeoLink.isGUIMode;
+        originalDebugMode = FeatureState.snapshot().debugMode();
+        originalGuiMode = FeatureState.snapshot().guiMode();
 
         outContent = new ByteArrayOutputStream();
         errContent = new ByteArrayOutputStream();
@@ -46,18 +42,18 @@ class DebuggerTest {
 
     @AfterEach
     void tearDown() {
-        NeoLink.isDebugMode = originalDebugMode;
-        NeoLink.isGUIMode = originalGuiMode;
+        FeatureState.setDebugMode(originalDebugMode);
+        FeatureState.setGuiMode(originalGuiMode);
         System.setOut(originalOut);
         System.setErr(originalErr);
     }
 
     @Test
-    @DisplayName("调试模式关闭时 debugOperation(String) 不应输出")
+    @DisplayName("testDebugOperationStringWhenDebugModeOff")
     void testDebugOperationStringWhenDebugModeOff() {
-        NeoLink.isDebugMode = false;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(false);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         Debugger.debugOperation("Test message");
 
@@ -65,11 +61,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("调试模式开启且 CLI 模式时 debugOperation(String) 应输出到控制台")
+    @DisplayName("testDebugOperationStringWhenDebugModeOnAndCliMode")
     void testDebugOperationStringWhenDebugModeOnAndCliMode() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         Debugger.debugOperation("Test debug message");
 
@@ -79,11 +75,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("调试模式开启且 GUI 模式时 debugOperation(String) 不应输出到控制台")
+    @DisplayName("testDebugOperationStringWhenDebugModeOnAndGuiMode")
     void testDebugOperationStringWhenDebugModeOnAndGuiMode() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = true;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(true);
 
         Debugger.debugOperation("Test debug message");
 
@@ -91,11 +87,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("调试模式关闭时 debugOperation(Exception) 不应输出")
+    @DisplayName("testDebugOperationExceptionWhenDebugModeOff")
     void testDebugOperationExceptionWhenDebugModeOff() {
-        NeoLink.isDebugMode = false;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(false);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         Exception testException = new RuntimeException("Test exception");
         Debugger.debugOperation(testException);
@@ -104,11 +100,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("调试模式开启且 CLI 模式时 debugOperation(Exception) 应输出堆栈")
+    @DisplayName("testDebugOperationExceptionWhenDebugModeOnAndCliMode")
     void testDebugOperationExceptionWhenDebugModeOnAndCliMode() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         Exception testException = new RuntimeException("Test exception message");
         Debugger.debugOperation(testException);
@@ -120,11 +116,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("调试模式开启且 GUI 模式时 debugOperation(Exception) 不应输出到控制台")
+    @DisplayName("testDebugOperationExceptionWhenDebugModeOnAndGuiMode")
     void testDebugOperationExceptionWhenDebugModeOnAndGuiMode() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = true;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(true);
 
         Exception testException = new RuntimeException("Test exception");
         Debugger.debugOperation(testException);
@@ -133,11 +129,11 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("传入 null 异常时不应崩溃")
+    @DisplayName("testDebugOperationExceptionWithNull")
     void testDebugOperationExceptionWithNull() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         assertDoesNotThrow(() -> Debugger.debugOperation((Exception) null));
 
@@ -145,21 +141,21 @@ class DebuggerTest {
     }
 
     @Test
-    @DisplayName("传入 null 字符串时不应崩溃")
+    @DisplayName("testDebugOperationStringWithNull")
     void testDebugOperationStringWithNull() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         assertDoesNotThrow(() -> Debugger.debugOperation((String) null));
     }
 
     @Test
-    @DisplayName("异常堆栈应包含完整信息")
+    @DisplayName("testExceptionStackTraceContainsFullInfo")
     void testExceptionStackTraceContainsFullInfo() {
-        NeoLink.isDebugMode = true;
-        NeoLink.loggist = null;
-        NeoLink.isGUIMode = false;
+        FeatureState.setDebugMode(true);
+        RuntimeState.setLoggist(null);
+        FeatureState.setGuiMode(false);
 
         Exception nestedException = new RuntimeException("Outer", new IllegalArgumentException("Inner"));
         Debugger.debugOperation(nestedException);

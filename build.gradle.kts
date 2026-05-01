@@ -10,7 +10,7 @@ plugins {
 
 group = "neoproxy"
 
-val neoLinkApiVersion = "7.1.2"
+val neoLinkApiVersion = "7.1.3"
 
 version = neoLinkApiVersion
 
@@ -49,7 +49,7 @@ dependencies {
     implementation("net.java.dev.jna:jna-platform:5.14.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-inline:5.2.0")
+    testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
 }
 
@@ -78,7 +78,7 @@ tasks.withType<ProcessResources> {
 
 tasks.named<ShadowJar>("shadowJar") {
     manifest {
-        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
     mergeServiceFiles()
     archiveBaseName.set("NeoLink-universal")
@@ -153,7 +153,7 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     description = "Creates a Shadow JAR for Windows platform only"
     
     manifest {
-        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
     mergeServiceFiles()
     archiveBaseName.set("NeoLink-windows")
@@ -176,7 +176,7 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     description = "Creates a Shadow JAR for macOS platform only"
     
     manifest {
-        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
     mergeServiceFiles()
     archiveBaseName.set("NeoLink-macos")
@@ -198,7 +198,7 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     description = "Creates a Shadow JAR for Linux platform only"
     
     manifest {
-        attributes["Main-Class"] = "neoproxy.neolink.core.NeoLink"
+        attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
     mergeServiceFiles()
     archiveBaseName.set("NeoLink-linux")

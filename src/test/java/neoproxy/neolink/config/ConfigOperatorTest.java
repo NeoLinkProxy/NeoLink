@@ -14,14 +14,9 @@ import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ConfigOperator 测试类
- * <p>
- * 测试范围：
- * 1. 平台特定路径获取
- * 2. 基准包目录查找
- * 3. 配置同步
+ * ConfigOperatorTest regression tests.
  */
-@DisplayName("ConfigOperator 配置管理器测试")
+@DisplayName("ConfigOperatorTest")
 class ConfigOperatorTest {
 
     @TempDir
@@ -43,7 +38,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("getPlatformSpecificDataPath Windows 应返回 LOCALAPPDATA 路径")
+    @DisplayName("testGetPlatformSpecificDataPathWindows")
     void testGetPlatformSpecificDataPathWindows() throws Exception {
         String localAppData = System.getenv("LOCALAPPDATA");
         if (localAppData != null) {
@@ -63,7 +58,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("getPlatformSpecificDataPath macOS 应返回 Library/Application Support 路径")
+    @DisplayName("testGetPlatformSpecificDataPathMacOS")
     void testGetPlatformSpecificDataPathMacOS() throws Exception {
         Method method = ConfigOperator.class.getDeclaredMethod("getPlatformSpecificDataPath");
         method.setAccessible(true);
@@ -80,7 +75,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("getPlatformSpecificDataPath Linux 应返回 .neolink 路径")
+    @DisplayName("testGetPlatformSpecificDataPathLinux")
     void testGetPlatformSpecificDataPathLinux() throws Exception {
         Method method = ConfigOperator.class.getDeclaredMethod("getPlatformSpecificDataPath");
         method.setAccessible(true);
@@ -97,7 +92,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("forceSyncBaseline 应同步存在的文件")
+    @DisplayName("testForceSyncBaseline")
     void testForceSyncBaseline() throws Exception {
         File sourceFile = new File(tempDir, "test.txt");
         Files.writeString(sourceFile.toPath(), "test content");
@@ -116,7 +111,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("forceSyncBaseline 不存在的文件应静默处理")
+    @DisplayName("testForceSyncBaselineNonExistent")
     void testForceSyncBaselineNonExistent() throws Exception {
         ConfigOperator.BASE_PACKAGE_DIR = tempDir.getAbsolutePath();
         ConfigOperator.WORKING_DIR = tempDir.getAbsolutePath();
@@ -128,7 +123,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("findBasePackageDir 在 IDEA 环境应返回 user.dir")
+    @DisplayName("testFindBasePackageDirIdeaEnvironment")
     void testFindBasePackageDirIdeaEnvironment() throws Exception {
         File nodeJson = new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME);
         boolean created = false;
@@ -152,7 +147,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("findBasePackageDir 不应再识别废弃的 node.json")
+    @DisplayName("testFindBasePackageDirIgnoresDeprecatedNodeJson")
     void testFindBasePackageDirIgnoresDeprecatedNodeJson() throws Exception {
         File legacyUserDir = new File(tempDir, "legacy-user-dir");
         File programDir = new File(tempDir, "program-dir");
@@ -174,7 +169,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("readAndSetValue 不存在的配置文件应安全返回")
+    @DisplayName("testReadAndSetValueNonExistentConfig")
     void testReadAndSetValueNonExistentConfig() {
         ConfigOperator.WORKING_DIR = tempDir.getAbsolutePath();
 
@@ -182,7 +177,7 @@ class ConfigOperatorTest {
     }
 
     @Test
-    @DisplayName("WORKING_DIR 和 BASE_PACKAGE_DIR 应为 String 类型")
+    @DisplayName("testDirectoryFieldTypes")
     void testDirectoryFieldTypes() throws Exception {
         Field workingDirField = ConfigOperator.class.getDeclaredField("WORKING_DIR");
         workingDirField.setAccessible(true);

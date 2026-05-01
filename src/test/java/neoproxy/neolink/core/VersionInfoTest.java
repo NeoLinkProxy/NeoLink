@@ -13,14 +13,9 @@ import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * VersionInfo 测试类
- * <p>
- * 测试范围：
- * 1. 版本号获取
- * 2. 作者信息
- * 3. EULA 文件生成
+ * VersionInfoTest regression tests.
  */
-@DisplayName("VersionInfo 版本信息测试")
+@DisplayName("VersionInfoTest")
 class VersionInfoTest {
 
     @TempDir
@@ -47,7 +42,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("VERSION 应为非空字符串")
+    @DisplayName("testVersionIsNotEmpty")
     void testVersionIsNotEmpty() {
         assertNotNull(VersionInfo.VERSION);
         assertFalse(VersionInfo.VERSION.isEmpty());
@@ -55,19 +50,35 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("VERSION 不应是原始占位符")
+    @DisplayName("testVersionNotPlaceholder")
     void testVersionNotPlaceholder() {
         assertNotEquals("${version}", VersionInfo.VERSION);
     }
 
     @Test
-    @DisplayName("AUTHOR 应为 Ceroxe")
+    @DisplayName("testAuthorConstant")
     void testAuthorConstant() {
         assertEquals("Ceroxe", VersionInfo.AUTHOR);
     }
 
     @Test
-    @DisplayName("outPutEula 应创建 EULA 文件")
+    @DisplayName("testOutPutEulaUsesOfficialProductMetadata")
+    void testOutPutEulaUsesOfficialProductMetadata() throws Exception {
+        useEulaDirectory(tempDir);
+
+        VersionInfo.outPutEula();
+
+        String content = Files.readString(new File(tempDir, "eula.txt").toPath());
+        assertTrue(content.contains("NeoLink"));
+        assertTrue(content.contains("Ceroxe"));
+        assertFalse(content.contains("【软件名称】"));
+        assertFalse(content.contains("[Software Name]"));
+        assertFalse(content.contains("【请填写您的开发者/公司名称】"));
+        assertFalse(content.contains("[Your Developer/Company Name Here]"));
+    }
+
+    @Test
+    @DisplayName("testOutPutEulaCreatesFile")
     void testOutPutEulaCreatesFile() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -80,7 +91,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("outPutEula 应写入工作目录而不是启动目录")
+    @DisplayName("testOutPutEulaUsesWorkingDir")
     void testOutPutEulaUsesWorkingDir() throws Exception {
         File userDir = new File(tempDir, "user-dir");
         File workingDir = new File(tempDir, "working-dir");
@@ -96,7 +107,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("outPutEula 文件应包含中文 EULA")
+    @DisplayName("testOutPutEulaContainsChineseContent")
     void testOutPutEulaContainsChineseContent() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -110,7 +121,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("outPutEula 文件应包含英文 EULA")
+    @DisplayName("testOutPutEulaContainsEnglishContent")
     void testOutPutEulaContainsEnglishContent() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -123,7 +134,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("outPutEula 应覆盖已存在的文件")
+    @DisplayName("testOutPutEulaOverwritesExisting")
     void testOutPutEulaOverwritesExisting() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -138,7 +149,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("EULA 文件应包含版本信息")
+    @DisplayName("testEulaContainsVersion")
     void testEulaContainsVersion() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -147,11 +158,11 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("版本：1.0") || content.contains("Version: 1.0"));
+        assertTrue(content.contains("鐗堟湰锛?.0") || content.contains("Version: 1.0"));
     }
 
     @Test
-    @DisplayName("EULA 文件应包含生效日期")
+    @DisplayName("testEulaContainsEffectiveDate")
     void testEulaContainsEffectiveDate() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -164,7 +175,7 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("EULA 文件应包含知识产权条款")
+    @DisplayName("testEulaContainsIntellectualProperty")
     void testEulaContainsIntellectualProperty() throws Exception {
         useEulaDirectory(tempDir);
 
@@ -173,6 +184,6 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("知识产权") || content.contains("Intellectual Property"));
+        assertTrue(content.contains("鐭ヨ瘑浜ф潈") || content.contains("Intellectual Property"));
     }
 }

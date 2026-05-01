@@ -21,19 +21,14 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import neoproxy.neolink.state.ConnectionState;
+import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.state.RuntimeState;
 
 /**
- * UpdateManager 测试类
- * <p>
- * 测试范围：
- * 1. 文件大小格式化
- * 2. 文件/目录删除
- * 3. 可执行文件查找
- * 4. 常量验证
- * 5. downloadFileFromUrl 方法
- * 6. startInstaller 方法
+ * UpdateManagerTest regression tests.
  */
-@DisplayName("UpdateManager 更新管理器测试")
+@DisplayName("UpdateManagerTest")
 class UpdateManagerTest {
 
     @TempDir
@@ -48,36 +43,36 @@ class UpdateManagerTest {
 
     @BeforeEach
     void setUp() {
-        originalIsDebugMode = NeoLink.isDebugMode;
-        originalLanguageData = NeoLink.languageData;
-        originalIsGUIMode = NeoLink.isGUIMode;
-        originalKey = NeoLink.key;
-        originalLocalPort = NeoLink.localPort;
-        originalOutputFilePath = NeoLink.outputFilePath;
+        originalIsDebugMode = FeatureState.snapshot().debugMode();
+        originalLanguageData = RuntimeState.languageData();
+        originalIsGUIMode = FeatureState.snapshot().guiMode();
+        originalKey = ConnectionState.snapshot().key();
+        originalLocalPort = ConnectionState.snapshot().localPort();
+        originalOutputFilePath = FeatureState.snapshot().outputFilePath();
         originalBasePackageDir = ConfigOperator.BASE_PACKAGE_DIR;
 
-        NeoLink.isDebugMode = false;
-        NeoLink.languageData = new LanguageData();
-        NeoLink.isGUIMode = false;
-        NeoLink.key = "test-key";
-        NeoLink.localPort = 8080;
-        NeoLink.outputFilePath = null;
+        FeatureState.setDebugMode(false);
+        RuntimeState.setLanguageData(new LanguageData());
+        FeatureState.setGuiMode(false);
+        ConnectionState.setKey("test-key");
+        ConnectionState.setLocalPort(8080);
+        FeatureState.setOutputFilePath(null);
         ConfigOperator.BASE_PACKAGE_DIR = tempDir.toString();
     }
 
     @AfterEach
     void tearDown() {
-        NeoLink.isDebugMode = originalIsDebugMode;
-        NeoLink.languageData = originalLanguageData;
-        NeoLink.isGUIMode = originalIsGUIMode;
-        NeoLink.key = originalKey;
-        NeoLink.localPort = originalLocalPort;
-        NeoLink.outputFilePath = originalOutputFilePath;
+        FeatureState.setDebugMode(originalIsDebugMode);
+        RuntimeState.setLanguageData(originalLanguageData);
+        FeatureState.setGuiMode(originalIsGUIMode);
+        ConnectionState.setKey(originalKey);
+        ConnectionState.setLocalPort(originalLocalPort);
+        FeatureState.setOutputFilePath(originalOutputFilePath);
         ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
     }
 
     @Test
-    @DisplayName("formatFileSize 应正确格式化字节")
+    @DisplayName("testFormatFileSizeBytes")
     void testFormatFileSizeBytes() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -87,7 +82,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应正确格式化 KB")
+    @DisplayName("testFormatFileSizeKB")
     void testFormatFileSizeKB() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -97,7 +92,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应正确格式化 MB")
+    @DisplayName("testFormatFileSizeMB")
     void testFormatFileSizeMB() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -108,7 +103,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应正确格式化 GB")
+    @DisplayName("testFormatFileSizeGB")
     void testFormatFileSizeGB() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -119,7 +114,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理 0 字节")
+    @DisplayName("testFormatFileSizeZero")
     void testFormatFileSizeZero() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -129,7 +124,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理 1 字节")
+    @DisplayName("testFormatFileSizeOne")
     void testFormatFileSizeOne() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -139,7 +134,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理边界值 1023 字节")
+    @DisplayName("testFormatFileSizeBoundary")
     void testFormatFileSizeBoundary() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -149,7 +144,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理刚好 1 KB")
+    @DisplayName("testFormatFileSizeExactly1KB")
     void testFormatFileSizeExactly1KB() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -159,7 +154,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理大文件")
+    @DisplayName("testFormatFileSizeLargeFile")
     void testFormatFileSizeLargeFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -170,7 +165,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应对 null 安全处理")
+    @DisplayName("testDeleteFileOrDirectoryNull")
     void testDeleteFileOrDirectoryNull() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -179,7 +174,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应对不存在的文件安全处理")
+    @DisplayName("testDeleteFileOrDirectoryNonExistent")
     void testDeleteFileOrDirectoryNonExistent() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -189,7 +184,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应删除单个文件")
+    @DisplayName("testDeleteFileOrDirectorySingleFile")
     void testDeleteFileOrDirectorySingleFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -203,7 +198,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应删除目录及其内容")
+    @DisplayName("testDeleteFileOrDirectoryDirectory")
     void testDeleteFileOrDirectoryDirectory() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -222,7 +217,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应处理嵌套目录")
+    @DisplayName("testDeleteFileOrDirectoryNestedDirectories")
     void testDeleteFileOrDirectoryNestedDirectories() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -240,11 +235,11 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 在 debug 模式下应输出详细信息")
+    @DisplayName("testDeleteFileOrDirectoryDebugMode")
     void testDeleteFileOrDirectoryDebugMode() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
-        NeoLink.isDebugMode = true;
+        FeatureState.setDebugMode(true);
 
         File file = tempDir.resolve("debug_test.txt").toFile();
         file.createNewFile();
@@ -254,7 +249,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("resolveUpdateDirectory 应优先使用运行包基准目录")
+    @DisplayName("testResolveUpdateDirectoryUsesBasePackageDir")
     void testResolveUpdateDirectoryUsesBasePackageDir() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("resolveUpdateDirectory");
         method.setAccessible(true);
@@ -265,7 +260,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 对无效 URL 应返回 null")
+    @DisplayName("testDownloadFileFromUrlInvalidUrl")
     void testDownloadFileFromUrlInvalidUrl() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
         method.setAccessible(true);
@@ -277,7 +272,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 应按 URL 下载 Windows installer exe")
+    @DisplayName("testDownloadFileFromUrlDownloadsInstallerExe")
     void testDownloadFileFromUrlDownloadsInstallerExe() throws Exception {
         byte[] installerBytes = "MZ fake installer payload".getBytes(StandardCharsets.UTF_8);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -315,7 +310,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 应尊重 Content-Disposition 文件名")
+    @DisplayName("testDownloadFileFromUrlUsesContentDispositionFileName")
     void testDownloadFileFromUrlUsesContentDispositionFileName() throws Exception {
         byte[] installerBytes = "MZ named installer payload".getBytes(StandardCharsets.UTF_8);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -348,7 +343,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 应显式跟随 301 重定向下载 installer exe")
+    @DisplayName("testDownloadFileFromUrlFollowsMovedPermanentlyRedirect")
     void testDownloadFileFromUrlFollowsMovedPermanentlyRedirect() throws Exception {
         byte[] installerBytes = "MZ redirected installer payload".getBytes(StandardCharsets.UTF_8);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -385,7 +380,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("downloadFileFromUrl 对不存在的域名应返回 null")
+    @DisplayName("testDownloadFileFromUrlNonExistentDomain")
     void testDownloadFileFromUrlNonExistentDomain() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("downloadFileFromUrl", String.class, File.class);
         method.setAccessible(true);
@@ -397,7 +392,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("startInstaller 对 null 文件应返回 false")
+    @DisplayName("testStartInstallerNullFile")
     void testStartInstallerNullFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
@@ -408,7 +403,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("startInstaller 对不存在的文件应返回 false")
+    @DisplayName("testStartInstallerNonExistentFile")
     void testStartInstallerNonExistentFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
@@ -421,7 +416,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("startInstaller 对目录应返回 false")
+    @DisplayName("testStartInstallerDirectory")
     void testStartInstallerDirectory() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("startInstaller", File.class);
         method.setAccessible(true);
@@ -434,7 +429,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 对只读文件应处理异常")
+    @DisplayName("testDeleteFileOrDirectoryReadOnlyFile")
     void testDeleteFileOrDirectoryReadOnlyFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -447,7 +442,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 对包含只读文件的目录应处理")
+    @DisplayName("testDeleteFileOrDirectoryWithReadOnlyFile")
     void testDeleteFileOrDirectoryWithReadOnlyFile() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);
@@ -462,7 +457,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("formatFileSize 应处理负数字节")
+    @DisplayName("testFormatFileSizeNegative")
     void testFormatFileSizeNegative() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("formatFileSize", long.class);
         method.setAccessible(true);
@@ -472,7 +467,7 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("deleteFileOrDirectory 应处理 listFiles 返回 null")
+    @DisplayName("testDeleteFileOrDirectoryListFilesNull")
     void testDeleteFileOrDirectoryListFilesNull() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("deleteFileOrDirectory", File.class);
         method.setAccessible(true);

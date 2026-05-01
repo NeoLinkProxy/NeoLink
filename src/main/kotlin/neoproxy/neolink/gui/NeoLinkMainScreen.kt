@@ -56,7 +56,6 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
 import kotlinx.coroutines.launch
-import neoproxy.neolink.NeoLink
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.ByteArrayInputStream
@@ -734,7 +733,7 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         labelText("传输协议"); Spacer(modifier = Modifier.height(6.dp))
-                        // 🔴 实时生效：修改时同步更新 NeoLink 静态变量
+                        // 传输协议运行时即时同步；其它开关同步到独立 FeatureState。
                         modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
                             viewModel.updateTransportProtocols(it, viewModel.isUdpEnabled)
                         }
@@ -745,24 +744,20 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {
                             viewModel.isPpv2Enabled = it
-                            NeoLink.enableProxyProtocol = it
                         }
                     }
                     Column(Modifier.weight(1f)) {
                         labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
                         modernCheckbox("自动重连", viewModel.isAutoReconnect) {
                             viewModel.isAutoReconnect = it
-                            NeoLink.enableAutoReconnect = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("调试模式", viewModel.isDebugMode) {
                             viewModel.isDebugMode = it
-                            NeoLink.isDebugMode = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("显示详情", viewModel.isShowConnection) {
                             viewModel.isShowConnection = it
-                            NeoLink.showConnection = it
                         }
                     }
                 }
@@ -949,7 +944,7 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
         animationSpec = tween(durationMillis = 500)
     )
     val indicatorColor by animateColorAsState(
-        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.textSecondary,
+        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.error,
         animationSpec = tween(durationMillis = 500)
     )
 
@@ -967,13 +962,18 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                if (viewModel.isRunning) "服务运行中" else "服务已停止",
+                when {
+                    viewModel.isStopping -> "服务停止中"
+                    viewModel.isRunning -> "服务运行中"
+                    else -> "服务已停止"
+                },
                 color = ModernTheme.textSecondary,
                 fontSize = 12.sp,
             )
         }
 
         Button(
+            enabled = !viewModel.isStopping,
             onClick = {
                 if (viewModel.isRunning) {
                     viewModel.stopService()
@@ -1003,7 +1003,11 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
             modifier = Modifier.height(34.dp).width(100.dp)
         ) {
             Text(
-                if (viewModel.isRunning) "停止服务" else "立即启动",
+                when {
+                    viewModel.isStopping -> "停止中"
+                    viewModel.isRunning -> "停止服务"
+                    else -> "立即启动"
+                },
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp
             )

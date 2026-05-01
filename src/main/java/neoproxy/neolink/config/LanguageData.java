@@ -2,7 +2,7 @@ package neoproxy.neolink.config;
 
 import java.io.Serializable;
 
-import static neoproxy.neolink.NeoLink.say;
+import neoproxy.neolink.cli.ClientConsole;
 
 /**
  * 语言数据类
@@ -178,9 +178,9 @@ public class LanguageData implements Serializable {
 
     public void sayReconnectMsg(int seconds) {
         if ("en".equals(currentLanguage)) {
-            say("Reconnection will begin after " + seconds + " seconds.");
+            ClientConsole.say("Reconnection will begin after " + seconds + " seconds.");
         } else {
-            say(seconds + " 秒将会后开始重新连接");
+            ClientConsole.say(seconds + " 秒后将开始重新连接。");
         }
     }
 

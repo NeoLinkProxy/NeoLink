@@ -1,7 +1,6 @@
-package neoproxy.neolink.gui
+﻿package neoproxy.neolink.gui
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -12,61 +11,145 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.*
 import neoproxy.neolink.NeoLink
+import neoproxy.neolink.app.LanguageManager
+import neoproxy.neolink.cli.ClientConsole
+import neoproxy.neolink.cli.CommandLineProcessor
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.NodeConfig
 import neoproxy.neolink.core.NeoLinkCoreRunner
+import neoproxy.neolink.node.NodeWorkflow
+import neoproxy.neolink.state.ConnectionSettings
+import neoproxy.neolink.state.ConnectionState
+import neoproxy.neolink.state.FeatureSettings
+import neoproxy.neolink.state.FeatureState
+import neoproxy.neolink.state.RuntimeState
 import top.ceroxe.api.neolink.NeoLinkCfg
-import top.ceroxe.api.neolink.NodeFetcher
+import top.ceroxe.api.neolink.NeoNode
 import java.io.File
 import java.io.IOException
 
 /**
- * NeoLink 图形界面视图模型
+ * View-model boundary for NeoLink desktop UI.
  *
- * 核心职责：
- * 1. 管理图形界面的所有状态数据
- * 2. 处理用户输入和配置变更
- * 3. 协调后台服务的启动和停止
- * 4. 管理日志显示和终端颜色解析
- * 5. 加载和解析节点列表
- *
- * 架构设计：
- * - 使用 Compose 状态实现响应式数据绑定
- * - 使用协程作用域处理异步操作
- * - 通过自定义 Loggist 包装器实现日志重定向
- *
- * 状态管理：
- * - 连接配置：远程域名、本地端口、访问密钥等
- * - 功能开关：TCP/UDP 启用、代理协议、自动重连等
- * - 运行时状态：服务运行状态、日志消息列表
- *
- * @author NeoProxy Team
- * @since 5.0.0
+ * The UI keeps editable form state locally and commits into the dedicated core state objects only at
+ * explicit synchronization points. This prevents Compose recomposition from mutating runtime globals
+ * and keeps CLI behavior isolated from GUI-only state transitions.
  */
 class NeoLinkViewModel {
-    var remoteDomain by mutableStateOf(NeoLink.remoteDomainName)
-    var localPort by mutableStateOf(if (NeoLink.localPort == -1) "" else NeoLink.localPort.toString())
-    var accessKey by mutableStateOf(NeoLink.key ?: "")
-    var nodeList = mutableStateListOf<NeoNode>()
-    var selectedNode by mutableStateOf<NeoNode?>(null)
-    var localDomain by mutableStateOf(NeoLink.localDomainName)
-    var hostHookPort by mutableStateOf(NeoLink.hostHookPort.toString())
-    var hostConnectPort by mutableStateOf(NeoLink.hostConnectPort.toString())
-    var isTcpEnabled by mutableStateOf(!NeoLink.isDisableTCP)
-    var isUdpEnabled by mutableStateOf(!NeoLink.isDisableUDP)
-    var isPpv2Enabled by mutableStateOf(NeoLink.enableProxyProtocol)
-    var isAutoReconnect by mutableStateOf(NeoLink.enableAutoReconnect)
-    var isDebugMode by mutableStateOf(NeoLink.isDebugMode)
-    var isShowConnection by mutableStateOf(NeoLink.showConnection)
-    var isRunning by mutableStateOf(false)
-    val logMessages = mutableStateListOf<AnnotatedString>()
+    var connectionState by mutableStateOf(connectionUiStateFromCore())
+        private set
+    var featureState by mutableStateOf(featureUiStateFromCore())
+        private set
+    var uiState by mutableStateOf(UiState())
+        private set
+    var runtimeState by mutableStateOf(RuntimeUiState())
+        private set
+
+    var remoteDomain: String
+        get() = connectionState.remoteDomain
+        set(value) {
+            connectionState = connectionState.copy(remoteDomain = value)
+        }
+
+    var localPort: String
+        get() = connectionState.localPort
+        set(value) {
+            connectionState = connectionState.copy(localPort = value)
+        }
+
+    var accessKey: String
+        get() = connectionState.accessKey
+        set(value) {
+            connectionState = connectionState.copy(accessKey = value)
+        }
+
+    val nodeList: List<NeoNode>
+        get() = uiState.nodeList
+
+    var selectedNode: NeoNode?
+        get() = uiState.selectedNode
+        private set(value) {
+            uiState = uiState.copy(selectedNode = value)
+        }
+    var localDomain: String
+        get() = connectionState.localDomain
+        set(value) {
+            connectionState = connectionState.copy(localDomain = value)
+        }
+
+    var hostHookPort: String
+        get() = connectionState.hostHookPort
+        set(value) {
+            connectionState = connectionState.copy(hostHookPort = value)
+        }
+
+    var hostConnectPort: String
+        get() = connectionState.hostConnectPort
+        set(value) {
+            connectionState = connectionState.copy(hostConnectPort = value)
+        }
+
+    var isTcpEnabled: Boolean
+        get() = featureState.tcpEnabled
+        set(value) {
+            featureState = featureState.copy(tcpEnabled = value)
+        }
+
+    var isUdpEnabled: Boolean
+        get() = featureState.udpEnabled
+        set(value) {
+            featureState = featureState.copy(udpEnabled = value)
+        }
+
+    var isPpv2Enabled: Boolean
+        get() = featureState.ppv2Enabled
+        set(value) {
+            applyFeatureToggles(featureState.copy(ppv2Enabled = value))
+        }
+
+    var isAutoReconnect: Boolean
+        get() = featureState.autoReconnect
+        set(value) {
+            applyFeatureToggles(featureState.copy(autoReconnect = value))
+        }
+
+    var isDebugMode: Boolean
+        get() = featureState.debugMode
+        set(value) {
+            applyFeatureToggles(featureState.copy(debugMode = value))
+        }
+
+    var isShowConnection: Boolean
+        get() = featureState.showConnection
+        set(value) {
+            applyFeatureToggles(featureState.copy(showConnection = value))
+        }
+
+    var isRunning: Boolean
+        get() = runtimeState.isRunning
+        set(value) {
+            runtimeState = runtimeState.copy(isRunning = value)
+        }
+
+    var isStopping: Boolean
+        get() = runtimeState.isStopping
+        private set(value) {
+            runtimeState = runtimeState.copy(isStopping = value)
+        }
+
+    val logMessages: List<AnnotatedString>
+        get() = runtimeState.logMessages
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    var logFontSize by mutableStateOf(12.sp)
+    var logFontSize: androidx.compose.ui.unit.TextUnit
+        get() = uiState.logFontSize
+        set(value) {
+            uiState = uiState.copy(logFontSize = value)
+        }
 
     private var isInitialized = false
     private var isLogRedirected = false
-    fun initialize(args: Array<String>) {
-        // [修复] 增加初始化锁，防止窗口重建导致重复调用
+    fun initialize(args: Array<String>) {        // 防止 Compose 重建界面时重复初始化（duplicate initialization）。
         if (isInitialized) return
         isInitialized = true
 
@@ -74,19 +157,17 @@ class NeoLinkViewModel {
         File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
 
         ConfigOperator.readAndSetValue()
-        NeoLink.applyCommandLineArgs(args)
-        NeoLink.detectLanguage()
+        CommandLineProcessor.applyCommandLineArgs(args)
+        LanguageManager.detectLanguage()
         syncStateFromCore()
-        NeoLink.initializeLogger()
+        ClientConsole.initializeLogger(false)
 
         setupLogRedirector()
 
-        NeoLink.printLogo()
-        NeoLink.printBasicInfo()
-
-        // 【优化】使用协程后台加载节点，防止阻塞 GUI 初始化
+        ClientConsole.printLogo()
+        ClientConsole.printBasicInfo()        // 异步刷新公开节点（public nodes），避免首次渲染被网络 I/O 阻塞。
         scope.launch(Dispatchers.IO) {
-            fetchNodesFromApi()
+            NodeWorkflow.fetchAndSaveNodes()
             withContext(Dispatchers.Main) {
                 loadNodes()
             }
@@ -96,14 +177,13 @@ class NeoLinkViewModel {
     }
 
 
-    private fun loadNodes() {
-        // [修改] 使用 ConfigOperator.WORKING_DIR 构造文件路径
+    private fun loadNodes() {        // 从 CLI / GUI 共用的可写工作目录加载节点缓存。
         val nodeFile = File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME)
         if (!nodeFile.exists()) return
         try {
-            nodeList.clear()
+            val loadedNodes = mutableListOf<NeoNode>()
             for (node in NodeConfig.loadAll(nodeFile)) {
-                nodeList.add(
+                loadedNodes.add(
                     NeoNode(
                         node.name,
                         node.realId,
@@ -114,77 +194,167 @@ class NeoLinkViewModel {
                     )
                 )
             }
-            if (nodeList.isNotEmpty()) selectNode(nodeList[0])
+            uiState = uiState.copy(
+                nodeList = loadedNodes,
+                selectedNode = loadedNodes.firstOrNull()
+            )
+            loadedNodes.firstOrNull()?.let(::selectNode)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     private fun syncStateFromCore() {
-        remoteDomain = NeoLink.remoteDomainName
-        localPort = if (NeoLink.localPort == -1) "" else NeoLink.localPort.toString()
-        accessKey = NeoLink.key ?: ""
-        localDomain = NeoLink.localDomainName
-        hostHookPort = NeoLink.hostHookPort.toString()
-        hostConnectPort = NeoLink.hostConnectPort.toString()
-        isTcpEnabled = !NeoLink.isDisableTCP
-        isUdpEnabled = !NeoLink.isDisableUDP
-        isPpv2Enabled = NeoLink.enableProxyProtocol
-        isAutoReconnect = NeoLink.enableAutoReconnect
-        isDebugMode = NeoLink.isDebugMode
-        isShowConnection = NeoLink.showConnection
+        connectionState = connectionUiStateFromCore()
+        featureState = featureUiStateFromCore()
     }
 
     fun selectNode(node: NeoNode) {
-        selectedNode = node; remoteDomain = node.address; hostHookPort = node.hookPort.toString(); hostConnectPort =
-            node.connectPort.toString()
+        selectedNode = node
+        connectionState = connectionState.copy(
+            remoteDomain = node.address,
+            hostHookPort = node.hookPort.toString(),
+            hostConnectPort = node.connectPort.toString()
+        )
+    }
+
+    private fun connectionUiStateFromCore(): ConnectionUiState {
+        val connection = ConnectionState.snapshot()
+        return ConnectionUiState(
+            remoteDomain = connection.remoteDomainName(),
+            localPort = if (connection.localPort() == NeoLink.INVALID_LOCAL_PORT) "" else connection.localPort().toString(),
+            accessKey = connection.key() ?: "",
+            localDomain = connection.localDomainName(),
+            hostHookPort = connection.hostHookPort().toString(),
+            hostConnectPort = connection.hostConnectPort().toString()
+        )
+    }
+
+    private fun featureUiStateFromCore(): FeatureToggleUiState {
+        val features = FeatureState.snapshot()
+        return FeatureToggleUiState(
+            tcpEnabled = !features.disableTcp(),
+            udpEnabled = !features.disableUdp(),
+            ppv2Enabled = features.enableProxyProtocol(),
+            autoReconnect = features.enableAutoReconnect(),
+            debugMode = features.debugMode(),
+            showConnection = features.showConnection()
+        )
+    }
+
+    private fun applyFeatureToggles(updated: FeatureToggleUiState) {
+        featureState = updated
+        val current = FeatureState.snapshot()
+        FeatureState.apply(
+            FeatureSettings(
+                updated.debugMode,
+                updated.showConnection,
+                current.guiMode(),
+                !updated.tcpEnabled,
+                !updated.udpEnabled,
+                updated.ppv2Enabled,
+                updated.autoReconnect,
+                current.enableAutoUpdate(),
+                current.testUpdate(),
+                current.noEffectMode(),
+                current.heartbeatPacketDelay(),
+                current.reconnectionIntervalSeconds(),
+                current.proxyIPToLocalServer(),
+                current.proxyIPToNeoServer(),
+                current.outputFilePath(),
+                current.nkmNodeListUrl()
+            )
+        )
     }
 
     fun updateTransportProtocols(tcpEnabled: Boolean, udpEnabled: Boolean) {
         val previousTcpEnabled = isTcpEnabled
         val previousUdpEnabled = isUdpEnabled
 
-        isTcpEnabled = tcpEnabled
-        isUdpEnabled = udpEnabled
-        NeoLink.isDisableTCP = !tcpEnabled
-        NeoLink.isDisableUDP = !udpEnabled
+        featureState = featureState.copy(tcpEnabled = tcpEnabled, udpEnabled = udpEnabled)
 
         if (!isRunning) {
+            FeatureState.applyRuntimeTransportSelection(tcpEnabled, udpEnabled)
+            appendLog(
+                "[系统] 已更新协议开关（protocol flags）：TCP=" +
+                        if (tcpEnabled) "开启" else "关闭" +
+                        "，UDP=" +
+                        if (udpEnabled) "开启" else "关闭"
+            )
             return
         }
 
         scope.launch(Dispatchers.IO) {
             try {
                 NeoLinkCoreRunner.updateRuntimeProtocolFlags(tcpEnabled, udpEnabled)
-                appendLog("[SYSTEM] Transport protocols updated at runtime. TCP=$tcpEnabled, UDP=$udpEnabled")
+                appendLog(
+                        "[系统] 运行时协议已更新（runtime protocol update）：TCP=" +
+                                if (tcpEnabled) "开启" else "关闭" +
+                                "，UDP=" +
+                                if (udpEnabled) "开启" else "关闭"
+                )
             } catch (e: IOException) {
-                NeoLink.isDisableTCP = !previousTcpEnabled
-                NeoLink.isDisableUDP = !previousUdpEnabled
                 withContext(Dispatchers.Main) {
-                    isTcpEnabled = previousTcpEnabled
-                    isUdpEnabled = previousUdpEnabled
-                    appendLog("[SYSTEM] Failed to update runtime transport protocols: ${e.message}")
+                    featureState = featureState.copy(
+                        tcpEnabled = previousTcpEnabled,
+                        udpEnabled = previousUdpEnabled
+                    )
+                    FeatureState.applyRuntimeTransportSelection(previousTcpEnabled, previousUdpEnabled)
+                    appendLog("[系统] 运行时协议更新失败：${e.message}")
                 }
             }
         }
     }
 
     fun startService() {
-        if (isRunning || remoteDomain.isBlank() || localPort.isBlank() || accessKey.isBlank() || localDomain.isBlank()) return
+        if (isRunning || isStopping || remoteDomain.isBlank() || localPort.isBlank() || accessKey.isBlank() || localDomain.isBlank()) return
         val parsedLocalPort = localPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
         val parsedHookPort = hostHookPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
         val parsedConnectPort = hostConnectPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
         val tunnelConfig = buildTunnelConfig(parsedLocalPort, parsedHookPort, parsedConnectPort)
-        NeoLink.localDomainName = localDomain.trim()
-        NeoLink.isDisableTCP = !isTcpEnabled; NeoLink.isDisableUDP = !isUdpEnabled; NeoLink.enableProxyProtocol =
-            isPpv2Enabled; NeoLink.enableAutoReconnect = isAutoReconnect; NeoLink.isDebugMode =
-            isDebugMode; NeoLink.showConnection = isShowConnection
+        val currentFeatures = FeatureState.snapshot()
+        ConnectionState.apply(
+            ConnectionSettings(
+                remoteDomain.trim(),
+                localDomain.trim(),
+                parsedHookPort,
+                parsedConnectPort,
+                accessKey,
+                parsedLocalPort,
+                selectedNode?.realId
+            )
+        )
+        FeatureState.apply(
+            FeatureSettings(
+                isDebugMode,
+                isShowConnection,
+                currentFeatures.guiMode(),
+                !isTcpEnabled,
+                !isUdpEnabled,
+                isPpv2Enabled,
+                isAutoReconnect,
+                currentFeatures.enableAutoUpdate(),
+                currentFeatures.testUpdate(),
+                currentFeatures.noEffectMode(),
+                currentFeatures.heartbeatPacketDelay(),
+                currentFeatures.reconnectionIntervalSeconds(),
+                currentFeatures.proxyIPToLocalServer(),
+                currentFeatures.proxyIPToNeoServer(),
+                currentFeatures.outputFilePath(),
+                currentFeatures.nkmNodeListUrl()
+            )
+        )
         isRunning = true
+        isStopping = false
         scope.launch(Dispatchers.IO) {
             try {
                 NeoLinkCoreRunner.runCore(tunnelConfig)
             } finally {
-                withContext(Dispatchers.Main) { isRunning = false; appendLog("\n[SYSTEM] 服务已停止") }
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    isStopping = false
+                    appendLog("[系统] 服务已停止。")
+                }
             }
         }
     }
@@ -204,44 +374,22 @@ class NeoLinkViewModel {
     }
 
     fun stopService() {
-        if (!isRunning) return
-        NeoLink.say("正在停止 NeoLink 服务...")
+        if (!isRunning || isStopping) return
+        isStopping = true
+        ClientConsole.say("正在停止 NeoLink 服务（service）...")
         scope.launch(Dispatchers.IO) {
             NeoLinkCoreRunner.requestStop()
         }
     }
 
-    private fun fetchNodesFromApi() {
-        if (NeoLink.nkmNodeListUrl.isBlank()) return
-
-        NeoLink.say(
-            NeoLink.languageData.FETCHING_NODE_LIST + NeoLink.nkmNodeListUrl,
-            top.ceroxe.api.print.log.LogType.INFO
-        )
-        try {
-            val nodes = NodeFetcher.getFromNKM(NeoLink.nkmNodeListUrl)
-            if (nodes.isEmpty()) {
-                NeoLink.say(NeoLink.languageData.NODE_LIST_EMPTY, top.ceroxe.api.print.log.LogType.INFO)
-                return
-            }
-            NodeConfig.saveAll(File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME), nodes.values)
-            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_SUCCESS, top.ceroxe.api.print.log.LogType.INFO)
-        } catch (e: Exception) {
-            neoproxy.neolink.util.Debugger.debugOperation(e)
-            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_FAIL, top.ceroxe.api.print.log.LogType.WARNING)
-        }
-    }
-
-    private fun setupLogRedirector() {
-        // [修复] 检查是否已经重定向过，防止递归包装导致日志重复
+    private fun setupLogRedirector() {        // 只安装一次 GUI 日志桥（GUI log bridge），原始 logger 继续负责文件落盘。
         if (isLogRedirected) return
         isLogRedirected = true
 
-        val originalLoggist = NeoLink.loggist
-        // 关键：将 gui_internal.log 强制放入 logs 文件夹
+        val originalLoggist = RuntimeState.loggist()        // GUI 桥的内部诊断日志仍落在常规 logs 目录。
         val internalLogFile = File(ConfigOperator.WORKING_DIR, "logs/gui_internal.log")
 
-        NeoLink.loggist = object : top.ceroxe.api.print.log.Loggist(internalLogFile) {
+        RuntimeState.setLoggist(object : top.ceroxe.api.print.log.Loggist(internalLogFile) {
             override fun say(state: top.ceroxe.api.print.log.State) {
                 addLogSafe(getLogString(state)); originalLoggist?.say(state)
             }
@@ -253,15 +401,18 @@ class NeoLinkViewModel {
             override fun write(str: String?, isNewLine: Boolean) {
                 originalLoggist?.write(str, isNewLine)
             }
-        }
+        })
     }
 
 
     private fun addLogSafe(ansiMsg: String) {
         scope.launch(Dispatchers.Main) {
-            val styled = parseAnsi(ansiMsg); logMessages.add(styled); if (logMessages.size > 1000) logMessages.removeAt(
-            0
-        )
+            val updatedMessages = runtimeState.logMessages.toMutableList()
+            updatedMessages.add(parseAnsi(ansiMsg))
+            if (updatedMessages.size > 1000) {
+                updatedMessages.removeAt(0)
+            }
+            runtimeState = runtimeState.copy(logMessages = updatedMessages)
         }
     }
 
@@ -291,3 +442,7 @@ class NeoLinkViewModel {
         addLogSafe(ansiText)
     }
 }
+
+
+
+
