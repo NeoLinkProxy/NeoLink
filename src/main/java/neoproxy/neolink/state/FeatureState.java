@@ -22,6 +22,10 @@ public final class FeatureState {
             ""
     );
 
+    static {
+        top.ceroxe.api.neolink.util.Debugger.setEnabled(settings.debugMode());
+    }
+
     private FeatureState() {
     }
 
@@ -34,6 +38,7 @@ public final class FeatureState {
             return;
         }
         settings = newSettings;
+        top.ceroxe.api.neolink.util.Debugger.setEnabled(newSettings.debugMode());
     }
 
     public static synchronized void update(UnaryOperator<FeatureSettings> updater) {

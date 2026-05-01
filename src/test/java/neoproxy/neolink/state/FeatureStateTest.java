@@ -83,4 +83,14 @@ class FeatureStateTest {
         assertEquals("logs/test.log", snapshot.outputFilePath());
         assertEquals("https://example.com/nodes.json", snapshot.nkmNodeListUrl());
     }
+
+    @Test
+    @DisplayName("testDebugModeSyncsNeoLinkApiDebugger")
+    void testDebugModeSyncsNeoLinkApiDebugger() {
+        FeatureState.setDebugMode(true);
+        assertTrue(top.ceroxe.api.neolink.util.Debugger.isEnabled());
+
+        FeatureState.setDebugMode(false);
+        assertFalse(top.ceroxe.api.neolink.util.Debugger.isEnabled());
+    }
 }

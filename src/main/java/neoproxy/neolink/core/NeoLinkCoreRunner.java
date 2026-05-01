@@ -198,7 +198,9 @@ public final class NeoLinkCoreRunner {
                 .setTCPEnabled(selection.tcpEnabled())
                 .setUDPEnabled(selection.udpEnabled())
                 .setPPV2Enabled(featureSettings.enableProxyProtocol())
-                .setDebugMsg(featureSettings.debugMode())
+                // 调试开关统一由 FeatureState -> NeoLinkAPI 全局 Debugger 同步，避免把一次启动时的布尔值
+                // 固化进 runtimeCfg 后，GUI 运行时切换调试模式却无法正确关闭后续调试输出。
+                .setDebugMsg(false)
                 .setHeartBeatPacketDelay(featureSettings.heartbeatPacketDelay())
                 .setProxyIPToNeoServer(featureSettings.proxyIPToNeoServer())
                 .setProxyIPToLocalServer(featureSettings.proxyIPToLocalServer())
