@@ -1,7 +1,7 @@
 package neoproxy.neolink.config;
 
+import neoproxy.neolink.NeoLink;
 import top.ceroxe.api.utils.config.LineConfigReader;
-import neoproxy.neolink.core.NeoLink;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,13 +12,13 @@ import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
  * 配置管理器
- *
+ * <p>
  * 核心职责：
  * 1. 检测并初始化应用程序运行环境
  * 2. 确定工作目录（可写目录优先，否则重定向到系统数据目录）
  * 3. 读取并解析配置文件 config.cfg
  * 4. 同步安装包中的配置文件到用户数据目录
- *
+ * <p>
  * 设计特点：
  * - 智能目录检测：支持 IDEA 开发环境、Windows 安装版、macOS 安装版
  * - 自动权限处理：检测到只读环境时自动重定向到用户数据目录
@@ -64,12 +64,12 @@ public final class ConfigOperator {
         if (new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME).exists())
             return System.getProperty("user.dir");
 
-        // 2. Windows 安装目录或其 app 子目录
+        // 2. Windows 安装目录或其应用子目录
         if (new File(programDir, NodeConfig.NODE_LIST_FILE_NAME).exists()) return programDir;
         File s2 = new File(programDir + File.separator + "app", NodeConfig.NODE_LIST_FILE_NAME);
         if (s2.exists()) return s2.getParent();
 
-        // 3. macOS Resources 目录
+        // 3. macOS 资源目录
         if (System.getProperty("os.name").toLowerCase().contains("mac")) {
             File s3 = new File(programDir + "/../Resources/" + NodeConfig.NODE_LIST_FILE_NAME);
             if (s3.exists()) return s3.getParent();
@@ -140,7 +140,13 @@ public final class ConfigOperator {
     private static String getPlatformSpecificDataPath() {
         String os = System.getProperty("os.name").toLowerCase();
         String home = System.getProperty("user.home");
-        if (os.contains("win")) return System.getenv("LOCALAPPDATA") + File.separator + "NeoLink";
+        if (os.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null && !localAppData.isBlank()) {
+                return localAppData + File.separator + "NeoLink";
+            }
+            return home + File.separator + "AppData" + File.separator + "Local" + File.separator + "NeoLink";
+        }
         if (os.contains("mac")) return home + "/Library/Application Support/NeoLink";
         return home + File.separator + ".neolink";
     }

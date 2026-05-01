@@ -1,6 +1,7 @@
 package neoproxy.neolink.gui
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
@@ -10,8 +11,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
+import neoproxy.neolink.NeoLink
 import neoproxy.neolink.config.ConfigOperator
-import neoproxy.neolink.core.NeoLink
 import java.awt.Dimension
 import java.io.PrintStream
 import java.util.*
@@ -24,15 +25,15 @@ import kotlin.system.exitProcess
  *
  * 核心职责：
  * 1. 执行 DWM 透明背板预检
- * 2. 配置 GUI 渲染决策（DirectX + 亚克力，或 Software + 不透明）
+ * 2. 配置图形界面渲染决策（DirectX + 亚克力，或 Software + 不透明）
  * 3. 初始化日志系统和语言设置
  * 4. 设置 Swing 外观
  * 5. 创建并显示主窗口
  *
  * 渲染策略：
  * - 优先使用 DirectX + 亚克力窗口
- * - 检测到 DWM/透明窗口风险时自动回退到 Software + 不透明窗口
- * - 捕获并处理 RenderException 异常
+ * - 检测到 DWM 或透明窗口风险时自动回退到 Software + 不透明窗口
+ * - 捕获并处理渲染异常
  *
  * @param args 命令行参数
  */
@@ -41,7 +42,7 @@ fun main(args: Array<String>) {
     val isNoEffectMode = args.contains("--no-effect")
 
     if (isNoEffectMode) {
-        // 显式禁用特效，强制使用软件渲染
+        // 显式禁用特效，强制使用 Software
         RenderState.useSoftwareOpaque("用户通过 --no-effect 显式禁用 GUI 特效", forcedByUser = true)
         println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
     } else {
@@ -120,7 +121,7 @@ fun main(args: Array<String>) {
 
             LaunchedEffect(Unit) {
                 // [优化点]：确保 ViewModel 初始化具备容错性
-                // 即使 NodeFetcher 还在后台写文件，viewModel 也应有逻辑跳过或延迟加载节点
+                // 节点拉取失败或缓存缺失时，ViewModel 应保持界面可用。
                 viewModel.initialize(args)
 
                 if (useTransparentWindow) {

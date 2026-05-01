@@ -1,9 +1,9 @@
 package neoproxy.neolink.update;
 
 import com.sun.net.httpserver.HttpServer;
+import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
-import neoproxy.neolink.core.NeoLink;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -20,22 +19,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * UpdateManager 测试类
- *
+ * <p>
  * 测试范围：
  * 1. 文件大小格式化
  * 2. 文件/目录删除
  * 3. 可执行文件查找
  * 4. 常量验证
- * 5. 下载文件方法
- * 6. 启动新版本方法
+ * 5. downloadFileFromUrl 方法
+ * 6. startInstaller 方法
  */
 @DisplayName("UpdateManager 更新管理器测试")
 class UpdateManagerTest {
 
+    @TempDir
+    Path tempDir;
     private boolean originalIsDebugMode;
     private LanguageData originalLanguageData;
     private boolean originalIsGUIMode;
@@ -43,9 +45,6 @@ class UpdateManagerTest {
     private int originalLocalPort;
     private String originalOutputFilePath;
     private String originalBasePackageDir;
-
-    @TempDir
-    Path tempDir;
 
     @BeforeEach
     void setUp() {

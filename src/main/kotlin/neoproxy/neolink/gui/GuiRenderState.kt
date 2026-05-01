@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
  * GUI 渲染决策的单一状态源。
  *
  * 这里刻意把「渲染后端」和「窗口背板」拆开：亚克力不可用并不总是等价于
- * 当前进程已经成功切到了 SOFTWARE。状态建模必须反映真实约束，否则 UI 层会把
+ * 当前进程已经成功切到了 SOFTWARE。状态建模必须反映真实约束，否则界面层会把
  * 一个半透明窗口误认为已经安全降级。
  */
 object RenderState {

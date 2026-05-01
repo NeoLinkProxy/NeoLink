@@ -1,26 +1,20 @@
 package neoproxy.neolink.util;
 
-import top.ceroxe.api.print.log.LogType;
-import top.ceroxe.api.print.log.State;
-import neoproxy.neolink.core.NeoLink;
+import neoproxy.neolink.NeoLink;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.PrintStream;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Debugger 测试类
- *
+ * <p>
  * 测试范围：
  * 1. 调试模式开启时的输出行为
  * 2. 调试模式关闭时的静默行为

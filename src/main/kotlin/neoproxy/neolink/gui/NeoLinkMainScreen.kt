@@ -56,24 +56,25 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
 import kotlinx.coroutines.launch
+import neoproxy.neolink.NeoLink
 import org.w3c.dom.Element
+import org.xml.sax.InputSource
 import java.io.ByteArrayInputStream
 import java.io.StringReader
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
-import org.xml.sax.InputSource
 
 /**
  * NeoLink 现代感主题配置
  *
  * 核心职责：
  * 1. 定义应用程序的视觉主题和配色方案
- * 2. 根据 GUI 渲染决策动态调整 UI 表现
+ * 2. 根据图形界面渲染决策动态调整界面表现
  * 3. 提供统一的样式配置（颜色、字体、尺寸等）
  *
  * 设计特点：
  * - 支持透明背景（DirectX + 亚克力模式）
- * - 支持不透明背景（软件渲染或运行时特效失败）
+ * - 支持不透明背景（Software 或运行时特效失败）
  * - 暗色主题，保护视力
  * - 统一的圆角和间距设计
  *
@@ -85,7 +86,7 @@ import org.xml.sax.InputSource
  * @since 5.11.0
  */
 object ModernTheme {
-    // 不透明安全态检测：软件渲染、用户禁用特效或真实窗口注入失败时，都不能继续绘制半透明根背景。
+    // 不透明安全态检测：Software、用户禁用特效或真实窗口注入失败时，都不能继续绘制半透明根背景。
     val background: Color
         get() = if (RenderState.isOpaqueFallback) {
             Color(0xFF121214) // 100% 不透明，防止透明窗口残态导致内容消失或点击穿透
@@ -172,10 +173,10 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
 }
 
 /**
- * NeoLink 主屏幕 Composable
+ * NeoLink 主屏幕可组合函数
  *
  * 核心职责：
- * 1. 构建 NeoLink GUI 的主界面布局
+ * 1. 构建 NeoLink 图形界面的主界面布局
  * 2. 整合标题栏、连接配置区、日志控制台、底部操作栏
  * 3. 处理窗口拖拽、最小化、最大化、关闭等操作
  * 4. 应用 Windows 亚克力特效
@@ -736,34 +737,34 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                         // 🔴 实时生效：修改时同步更新 NeoLink 静态变量
                         modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
                             viewModel.isTcpEnabled = it
-                            neoproxy.neolink.core.NeoLink.isDisableTCP = !it
+                            NeoLink.isDisableTCP = !it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("启用 UDP", viewModel.isUdpEnabled) {
                             viewModel.isUdpEnabled = it
-                            neoproxy.neolink.core.NeoLink.isDisableUDP = !it
+                            NeoLink.isDisableUDP = !it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {
                             viewModel.isPpv2Enabled = it
-                            neoproxy.neolink.core.NeoLink.enableProxyProtocol = it
+                            NeoLink.enableProxyProtocol = it
                         }
                     }
                     Column(Modifier.weight(1f)) {
                         labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
                         modernCheckbox("自动重连", viewModel.isAutoReconnect) {
                             viewModel.isAutoReconnect = it
-                            neoproxy.neolink.core.NeoLink.enableAutoReconnect = it
+                            NeoLink.enableAutoReconnect = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("调试模式", viewModel.isDebugMode) {
                             viewModel.isDebugMode = it
-                            neoproxy.neolink.core.NeoLink.isDebugMode = it
+                            NeoLink.isDebugMode = it
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("显示详情", viewModel.isShowConnection) {
                             viewModel.isShowConnection = it
-                            neoproxy.neolink.core.NeoLink.showConnection = it
+                            NeoLink.showConnection = it
                         }
                     }
                 }
@@ -826,7 +827,7 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
                         .onPointerEvent(PointerEventType.Scroll) { event ->
                             if (event.keyboardModifiers.isCtrlPressed) {
                                 val delta = event.changes.first().scrollDelta.y
-                                // 向上滚 delta 为负，向下滚为正
+                                // 向上滚动量为负，向下滚动量为正
                                 val newSize = if (delta < 0) {
                                     (viewModel.logFontSize.value + 1f).coerceAtMost(30f)
                                 } else {
@@ -987,7 +988,6 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
                     if (!isValidPort(viewModel.hostHookPort)) errors.add("Hook端口必须在 1~65535 之间")
                     if (!isValidPort(viewModel.hostConnectPort)) errors.add("连接端口必须在 1~65535 之间")
                     if (viewModel.accessKey.isBlank()) errors.add("访问密钥 (Token) 不能为空")
-                    if (!viewModel.isTcpEnabled && !viewModel.isUdpEnabled) errors.add("TCP 和 UDP 不能同时关闭")
 
                     if (errors.isNotEmpty()) {
                         onValidationError(errors.joinToString("\n") { "• $it" })

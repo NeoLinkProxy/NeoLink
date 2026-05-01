@@ -16,12 +16,12 @@ import java.awt.Window
  * 3. 根据预检和运行时状态决定是否应用特效
  *
  * 设计特点：
- * - 使用 JNA 调用 Windows DWM API
+ * - 使用 JNA 调用 Windows DWM 接口
  * - 支持深色模式基底设置
  * - 自动检测不透明安全态，避免无效操作
  *
  * 特效类型：
- * - 亚克力 (Acrylic): 半透明模糊背景
+ * - 亚克力：半透明模糊背景
  *
  * @author NeoProxy Team
  * @since 5.11.0

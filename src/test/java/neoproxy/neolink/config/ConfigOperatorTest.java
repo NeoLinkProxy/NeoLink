@@ -1,6 +1,5 @@
 package neoproxy.neolink.config;
 
-import neoproxy.neolink.core.NeoLink;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -17,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * ConfigOperator 测试类
- *
+ * <p>
  * 测试范围：
  * 1. 平台特定路径获取
  * 2. 基准包目录查找

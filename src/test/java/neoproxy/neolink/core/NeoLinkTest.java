@@ -1,11 +1,6 @@
 package neoproxy.neolink.core;
 
-import top.ceroxe.api.print.log.LogType;
-import top.ceroxe.api.print.log.Loggist;
-import top.ceroxe.api.print.log.State;
-import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
-import top.ceroxe.api.neolink.exception.NoSuchKeyException;
-import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
+import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -13,12 +8,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import top.ceroxe.api.neolink.NeoLinkCfg;
+import top.ceroxe.api.neolink.NeoNode;
+import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
+import top.ceroxe.api.neolink.exception.NoSuchKeyException;
+import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
+import top.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.Loggist;
+import top.ceroxe.api.print.log.State;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -31,7 +32,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * NeoLink 测试类
- *
+ * <p>
  * 测试范围：
  * 1. 语言检测
  * 2. 客户端信息格式化
@@ -44,6 +45,8 @@ import static org.mockito.Mockito.*;
 @DisplayName("NeoLink 主类测试")
 class NeoLinkTest {
 
+    @TempDir
+    File tempDir;
     private Locale originalDefaultLocale;
     private LanguageData originalLanguageData;
     private boolean originalDisableTCP;
@@ -68,9 +71,6 @@ class NeoLinkTest {
     private String originalSpecifiedNodeName;
     private String originalNkmNodeListUrl;
     private int originalRemotePort;
-
-    @TempDir
-    File tempDir;
 
     @BeforeEach
     void setUp() {
@@ -1002,6 +1002,54 @@ class NeoLinkTest {
         assertEquals("p.ceroxe.fun", NeoLink.remoteDomainName);
         assertEquals(44901, NeoLink.hostHookPort);
         assertEquals(44902, NeoLink.hostConnectPort);
+    }
+
+    @Test
+    @DisplayName("buildTunnelConfig 选择节点时应使用 API NeoNode.toCfg")
+    void testBuildTunnelConfigUsesApiNeoNodeConversion() throws Exception {
+        Method method = NeoLink.class.getDeclaredMethod("buildTunnelConfig", NeoNode.class);
+        method.setAccessible(true);
+        NeoNode node = new NeoNode(
+                "node",
+                "real-id",
+                "node.example.com",
+                null,
+                44901,
+                44902
+        );
+        NeoLink.key = "access-key";
+        NeoLink.localPort = 25565;
+        NeoLink.remoteDomainName = "manual.example.com";
+        NeoLink.hostHookPort = 44801;
+        NeoLink.hostConnectPort = 44802;
+
+        NeoLinkCfg cfg = (NeoLinkCfg) method.invoke(null, node);
+
+        assertEquals("node.example.com", cfg.getRemoteDomainName());
+        assertEquals(44901, cfg.getHookPort());
+        assertEquals(44902, cfg.getHostConnectPort());
+        assertEquals("access-key", cfg.getKey());
+        assertEquals(25565, cfg.getLocalPort());
+    }
+
+    @Test
+    @DisplayName("buildTunnelConfig 无节点时应使用自定义连接参数")
+    void testBuildTunnelConfigUsesManualConfigWithoutNode() throws Exception {
+        Method method = NeoLink.class.getDeclaredMethod("buildTunnelConfig", NeoNode.class);
+        method.setAccessible(true);
+        NeoLink.key = "access-key";
+        NeoLink.localPort = 25565;
+        NeoLink.remoteDomainName = "manual.example.com";
+        NeoLink.hostHookPort = 44801;
+        NeoLink.hostConnectPort = 44802;
+
+        NeoLinkCfg cfg = (NeoLinkCfg) method.invoke(null, new Object[]{null});
+
+        assertEquals("manual.example.com", cfg.getRemoteDomainName());
+        assertEquals(44801, cfg.getHookPort());
+        assertEquals(44802, cfg.getHostConnectPort());
+        assertEquals("access-key", cfg.getKey());
+        assertEquals(25565, cfg.getLocalPort());
     }
 
     @Test

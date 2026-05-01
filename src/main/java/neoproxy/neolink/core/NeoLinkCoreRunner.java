@@ -1,6 +1,8 @@
 package neoproxy.neolink.core;
 
-import top.ceroxe.api.print.log.LogType;
+import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.config.LanguageData;
+import neoproxy.neolink.update.UpdateManager;
 import top.ceroxe.api.neolink.NeoLinkAPI;
 import top.ceroxe.api.neolink.NeoLinkAPI.TransportProtocol;
 import top.ceroxe.api.neolink.NeoLinkCfg;
@@ -8,8 +10,7 @@ import top.ceroxe.api.neolink.NeoLinkState;
 import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
 import top.ceroxe.api.neolink.exception.NoSuchKeyException;
 import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
-import neoproxy.neolink.config.LanguageData;
-import neoproxy.neolink.update.UpdateManager;
+import top.ceroxe.api.print.log.LogType;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -19,12 +20,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * Application-layer owner for the single NeoLinkAPI tunnel instance.
+ * 单个 NeoLinkAPI 隧道实例的应用层所有者。
  *
- * <p>The desktop client is intentionally a shell: configuration, UI, logging,
- * node loading, and update orchestration stay here; all protocol lifecycle and
- * TCP/UDP forwarding belong to NeoLinkAPI. Keeping the only API instance in
- * this class avoids scattering tunnel ownership across GUI and CLI code.</p>
+ * <p>桌面客户端有意保持为壳层：配置、UI、日志、节点加载和更新编排留在这里；
+ * 协议生命周期与 TCP/UDP 转发全部交给 NeoLinkAPI。把唯一 API 实例收敛到本类，
+ * 可以避免 GUI 和 CLI 代码分散持有隧道所有权。</p>
  */
 public final class NeoLinkCoreRunner {
     private static final Object LOCK = new Object();
@@ -62,6 +62,14 @@ public final class NeoLinkCoreRunner {
     }
 
     public static void runCore(String remoteDomain, int localPort, String accessKey) {
+        runCore(new NeoLinkCfg(remoteDomain, NeoLink.hostHookPort, NeoLink.hostConnectPort, accessKey, localPort));
+    }
+
+    public static void runCore(NeoLinkCfg cfg) {
+        Objects.requireNonNull(cfg, "cfg");
+        String remoteDomain = cfg.getRemoteDomainName();
+        int localPort = cfg.getLocalPort();
+        String accessKey = cfg.getKey();
         Objects.requireNonNull(remoteDomain, "remoteDomain");
         Objects.requireNonNull(accessKey, "accessKey");
         debugOperation("Starting NeoLinkAPI tunnel. Remote: " + remoteDomain + ", Local: " + localPort);
@@ -69,6 +77,8 @@ public final class NeoLinkCoreRunner {
         NeoLink.remoteDomainName = remoteDomain;
         NeoLink.localPort = localPort;
         NeoLink.key = accessKey;
+        NeoLink.hostHookPort = cfg.getHookPort();
+        NeoLink.hostConnectPort = cfg.getHostConnectPort();
 
         boolean firstRun = true;
         while (!shouldStop) {
@@ -81,7 +91,7 @@ public final class NeoLinkCoreRunner {
             firstRun = false;
 
             AtomicBoolean tunnelReachedRunningState = new AtomicBoolean(false);
-            NeoLinkAPI activeTunnel = buildTunnel(remoteDomain, localPort, accessKey, tunnelReachedRunningState);
+            NeoLinkAPI activeTunnel = buildTunnel(cfg, tunnelReachedRunningState);
             synchronized (LOCK) {
                 if (shouldStop) {
                     activeTunnel.close();
@@ -92,7 +102,6 @@ public final class NeoLinkCoreRunner {
 
             try {
                 activeTunnel.start();
-                waitUntilStopped(activeTunnel);
             } catch (UnsupportedVersionException e) {
                 NeoLink.say(clientFacingApiErrorMessage(e.serverResponse(), e), LogType.ERROR);
                 if (NeoLink.enableAutoUpdate) {
@@ -132,14 +141,8 @@ public final class NeoLinkCoreRunner {
         debugOperation("NeoLinkAPI tunnel runner exited.");
     }
 
-    private static NeoLinkAPI buildTunnel(
-            String remoteDomain,
-            int localPort,
-            String accessKey,
-            AtomicBoolean tunnelReachedRunningState
-    ) {
-        NeoLinkCfg cfg = new NeoLinkCfg(remoteDomain, NeoLink.hostHookPort, NeoLink.hostConnectPort, accessKey, localPort)
-                .setLocalDomainName(NeoLink.localDomainName)
+    private static NeoLinkAPI buildTunnel(NeoLinkCfg cfg, AtomicBoolean tunnelReachedRunningState) {
+        cfg.setLocalDomainName(NeoLink.localDomainName)
                 .setTCPEnabled(!NeoLink.isDisableTCP)
                 .setUDPEnabled(!NeoLink.isDisableUDP)
                 .setPPV2Enabled(NeoLink.enableProxyProtocol)
@@ -205,18 +208,6 @@ public final class NeoLinkCoreRunner {
             }
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                shouldStop = true;
-                break;
-            }
-        }
-    }
-
-    private static void waitUntilStopped(NeoLinkAPI activeTunnel) {
-        while (!shouldStop && activeTunnel.isActive()) {
-            try {
-                Thread.sleep(200);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 shouldStop = true;

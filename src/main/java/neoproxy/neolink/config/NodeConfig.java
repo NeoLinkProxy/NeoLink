@@ -5,19 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
- * Centralized parser for nodes.json.
- *
- * The CLI and GUI used to parse the same file with separate regular-expression
- * implementations. Keeping the schema rules here prevents drift between the two
- * entry points while preserving the existing node-list schema field names.
- *
- * NeoKeyManager now publishes a stable realId beside the display name. NeoLink
- * still treats name as the user-facing label, but matching by realId avoids
- * breaking CLI automation when display names are renamed.
+ * nodes.json 的集中解析器。
+ * <p>
+ * CLI 和 GUI 过去用两套正则分别解析同一个文件。把结构规则集中在这里，
+ * 可以避免两个入口的行为漂移，同时保留现有节点列表结构中的字段名。
+ * <p>
+ * NeoKeyManager 现在会在显示名称旁提供稳定的 realId。NeoLink 仍把 name
+ * 作为面向用户的标签，但用 realId 匹配可以避免显示名称变更时破坏 CLI 自动化。
  */
 public final class NodeConfig {
     public static final String NODE_LIST_FILE_NAME = "nodes.json";
@@ -91,6 +88,54 @@ public final class NodeConfig {
         return null;
     }
 
+    public static void saveAll(File nodeFile, Collection<top.ceroxe.api.neolink.NeoNode> nodes) throws IOException {
+        if (nodeFile == null) {
+            throw new IOException(NODE_LIST_FILE_NAME + " target file must not be null.");
+        }
+        if (nodes == null) {
+            throw new IOException(NODE_LIST_FILE_NAME + " source nodes must not be null.");
+        }
+
+        File absoluteNodeFile = nodeFile.getAbsoluteFile();
+        File parent = absoluteNodeFile.getParentFile();
+        if (parent != null) {
+            java.nio.file.Files.createDirectories(parent.toPath());
+        }
+
+        File tempFile = File.createTempFile("node-list-", ".json", parent);
+        try {
+            writeAll(tempFile, nodes);
+            try {
+                java.nio.file.Files.move(tempFile.toPath(), absoluteNodeFile.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                java.nio.file.Files.move(tempFile.toPath(), absoluteNodeFile.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
+    private static void writeAll(File nodeFile, Collection<top.ceroxe.api.neolink.NeoNode> nodes) throws IOException {
+        List<Map<String, Object>> serializedNodes = new ArrayList<>();
+        for (top.ceroxe.api.neolink.NeoNode node : nodes) {
+            if (node == null) {
+                throw new IOException(NODE_LIST_FILE_NAME + " contains a null node.");
+            }
+            Map<String, Object> serializedNode = new LinkedHashMap<>();
+            serializedNode.put("realId", node.getRealId());
+            serializedNode.put("name", node.getName());
+            serializedNode.put("address", node.getAddress());
+            serializedNode.put("iconSvg", node.getIconSvg());
+            serializedNode.put("hookPort", node.getHookPort());
+            serializedNode.put("connectPort", node.getConnectPort());
+            serializedNodes.add(serializedNode);
+        }
+        OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(nodeFile, serializedNodes);
+    }
+
     private static NodeConfig parseNode(JsonNode item) throws IOException {
         if (item == null || !item.isObject()) {
             return null;
@@ -106,15 +151,20 @@ public final class NodeConfig {
                 name,
                 readText(item, "realId"),
                 address,
-                readText(item, "icon"),
+                readText(item, "icon", "iconSvg"),
                 readPort(item, DEFAULT_HOST_HOOK_PORT, "HOST_HOOK_PORT", "hookPort"),
                 readPort(item, DEFAULT_HOST_CONNECT_PORT, "HOST_CONNECT_PORT", "connectPort")
         );
     }
 
-    private static String readText(JsonNode item, String fieldName) {
-        JsonNode value = item.get(fieldName);
-        return value != null && value.isTextual() ? value.asText() : null;
+    private static String readText(JsonNode item, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = item.get(fieldName);
+            if (value != null && value.isTextual()) {
+                return value.asText();
+            }
+        }
+        return null;
     }
 
     private static int readPort(JsonNode item, int defaultValue, String... aliases) throws IOException {
@@ -167,5 +217,16 @@ public final class NodeConfig {
 
     public int getHostConnectPort() {
         return hostConnectPort;
+    }
+
+    public top.ceroxe.api.neolink.NeoNode toNeoNode() {
+        return new top.ceroxe.api.neolink.NeoNode(
+                name,
+                realId,
+                address,
+                icon,
+                hostHookPort,
+                hostConnectPort
+        );
     }
 }

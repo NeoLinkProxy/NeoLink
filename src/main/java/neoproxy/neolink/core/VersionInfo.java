@@ -1,6 +1,7 @@
 package neoproxy.neolink.core;
 
-import neoproxy.neolink.util.Debugger;
+import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.config.ConfigOperator;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -10,14 +11,14 @@ import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
  * 版本信息类
- *
+ * <p>
  * 核心职责：
  * 1. 管理应用程序版本号
  * 2. 生成并输出 EULA 协议文件
  * 3. 提供版本相关的元数据
- *
+ * <p>
  * 设计特点：
- * - 版本号从 manifest 或 gradle.properties 读取
+ * - 版本号从清单或 Gradle 属性文件读取
  * - 支持开发环境和生产环境
  * - 自动生成 EULA 文件
  *
@@ -29,19 +30,22 @@ public class VersionInfo {
     public static final String AUTHOR = "Ceroxe";
 
     public static void outPutEula() {
-        File eulaTXT = new File(System.getProperty("user.dir") + File.separator + "eula.txt");
+        File eulaTXT = new File(resolveEulaDirectory(), "eula.txt");
         if (eulaTXT.exists()) {
             eulaTXT.delete();
         }
         if (!eulaTXT.exists()) {
             try {
+                File parent = eulaTXT.getParentFile();
+                if (parent != null) {
+                    parent.mkdirs();
+                }
                 eulaTXT.createNewFile();
             } catch (IOException e) {
                 e.printStackTrace();
                 System.exit(-3);
             }
-            try {
-                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(eulaTXT, StandardCharsets.UTF_8));
+            try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(eulaTXT, StandardCharsets.UTF_8))) {
                 bufferedWriter.write("""
                         NeoLink 最终用户许可协议 (EULA)
                         
@@ -157,11 +161,17 @@ public class VersionInfo {
                         
                         7. Miscellaneous
                         This Agreement constitutes the entire agreement between you and the Developer regarding the use of the Software and supersedes all prior oral or written agreements. If any provision of this Agreement is found to be invalid or unenforceable, the remaining provisions shall remain in full force and effect. The Developer reserves the right to amend this Agreement as necessary. The updated Agreement will be published within the Software or on the official website. Your continued use of the Software shall be deemed as acceptance of the revised Agreement.""");
-                bufferedWriter.close();
             } catch (Exception e) {
                 debugOperation(e);
             }
         }
+    }
+
+    private static File resolveEulaDirectory() {
+        if (ConfigOperator.WORKING_DIR != null && !ConfigOperator.WORKING_DIR.isBlank()) {
+            return new File(ConfigOperator.WORKING_DIR);
+        }
+        return new File(System.getProperty("user.dir"));
     }
 
     private static String getAppVersion() {
@@ -180,7 +190,7 @@ public class VersionInfo {
         // 【新增修复逻辑】
         // 如果没有配置成功，version 拿到的会是原始字符串 "${version}"
         if (version == null || version.isEmpty() || version.contains("${")) {
-            // 这里可以直接返回 project 指定的版本号作为兜底，或者返回开发版标识
+            // 这里可以直接返回项目指定的版本号作为兜底，或者返回开发版标识
             return "Dev-ver";
         }
 

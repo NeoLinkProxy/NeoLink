@@ -1,10 +1,10 @@
 package neoproxy.neolink.update;
 
-import top.ceroxe.api.print.log.LogType;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
 import neoproxy.neolink.util.Debugger;
+import top.ceroxe.api.print.log.LogType;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -19,26 +19,26 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import static neoproxy.neolink.NeoLink.*;
 import static neoproxy.neolink.util.Debugger.debugOperation;
-import static neoproxy.neolink.core.NeoLink.*;
 
 /**
  * 更新管理器
- *
+ * <p>
  * 核心职责：
  * 1. 检查并下载 NeoLink 客户端更新
- * 2. 下载到 exe 时直接启动上游提供的 installer
+ * 2. 下载到可执行文件时直接启动上游提供的安装器
  * 3. 下载到 jar 时保持 JAR 更新与备份流程
- *
+ * <p>
  * 设计特点：
  * - 更新文件类型由 NeoLinkAPI 与 NPS 协商，壳层只按实际下载文件分流
  * - 文件大小校验，确保下载完整
- * - installer 由安装器接管替换逻辑，避免在运行中覆盖自身
+ * - 安装器接管替换逻辑，避免在运行中覆盖自身
  * - JAR 更新使用自动备份和替换机制
- *
+ * <p>
  * 更新流程：
  * 1. 从服务器下载对应平台的更新文件
- * 2. exe 交给 installer 接管
+ * 2. 可执行文件交给安装器接管
  * 3. jar 备份当前 JAR 并替换为新版本
  *
  * @author NeoProxy Team
@@ -131,11 +131,11 @@ public class UpdateManager {
         } catch (IOException e) {
             Debugger.debugOperation(e);
             say(userFacingFailure(languageData.FAILED_TO_CHECK_UPDATES), LogType.ERROR);
-            finishUpdateProcess(0);
+            finishUpdateProcess(-1);
         } catch (Exception e) {
             Debugger.debugOperation(e);
             say(userFacingFailure(languageData.UNEXPECTED_ERROR_DURING_UPDATE), LogType.ERROR);
-            finishUpdateProcess(0);
+            finishUpdateProcess(-1);
         }
     }
 
@@ -274,7 +274,7 @@ public class UpdateManager {
         File temporaryFile = null;
         boolean movedToDestination = false;
         try {
-            // 先下载到同目录临时文件，成功后再替换目标，避免失败时留下半截 installer。
+            // 先下载到同目录临时文件，成功后再替换目标，避免失败时留下半截安装器。
             temporaryFile = createTemporaryDownloadFile(outputFile);
             if (!writeResponseBody(httpConn, temporaryFile)) {
                 return null;
@@ -588,9 +588,9 @@ public class UpdateManager {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
         for (StackTraceElement element : stackTrace) {
             String className = element.getClassName();
-            if (className.contains("org.junit") || 
-                className.contains("org.mockito") ||
-                className.contains(".test.")) {
+            if (className.contains("org.junit") ||
+                    className.contains("org.mockito") ||
+                    className.contains(".test.")) {
                 return true;
             }
         }

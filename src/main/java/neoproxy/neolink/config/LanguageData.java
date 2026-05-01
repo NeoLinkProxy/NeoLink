@@ -2,18 +2,18 @@ package neoproxy.neolink.config;
 
 import java.io.Serializable;
 
-import static neoproxy.neolink.core.NeoLink.say;
+import static neoproxy.neolink.NeoLink.say;
 
 /**
  * 语言数据类
- *
+ * <p>
  * 核心职责：
  * 1. 管理应用程序的所有用户界面文本
  * 2. 支持中英文双语切换
  * 3. 提供统一的文本访问接口
- *
+ * <p>
  * 设计特点：
- * - 使用 public 字段直接暴露文本，便于访问
+ * - 使用公开字段直接暴露文本，便于访问
  * - 通过 getChineseLanguage() 工厂方法创建中文实例
  * - 支持序列化，便于配置持久化
  *
@@ -49,7 +49,7 @@ public class LanguageData implements Serializable {
     public String LISTEN_AT = "Listen at ";
     public String NO_FLOW_LEFT = "No extra network traffic left.";
 
-    // UpdateManager类中的字符串
+    // 更新管理器类中的字符串
     public String FAILED_TO_DOWNLOAD_UPDATE_FILE = "Failed to download update file.";
     public String FAILED_TO_BACKUP_EXISTING_JAR = "Failed to backup existing jar file.";
     public String FAILED_TO_DELETE_EXISTING_JAR = "Failed to delete existing jar file.";

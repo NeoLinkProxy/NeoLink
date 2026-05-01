@@ -10,7 +10,7 @@ plugins {
 
 group = "neoproxy"
 
-val neoLinkApiVersion = "7.0.0"
+val neoLinkApiVersion = "7.1.0"
 
 version = neoLinkApiVersion
 
@@ -32,6 +32,7 @@ java {
 dependencies {
     implementation("top.ceroxe.api:neolinkapi:$neoLinkApiVersion")
     implementation("top.ceroxe.api:ceroxe-core:2.0.0")
+    implementation("top.ceroxe.api:ceroxe-detector:2.0.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
     implementation(compose.desktop.common)
     implementation(compose.desktop.windows_x64)

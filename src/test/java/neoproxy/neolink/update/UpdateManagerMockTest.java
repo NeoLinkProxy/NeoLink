@@ -1,8 +1,11 @@
 package neoproxy.neolink.update;
 
+import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.config.LanguageData;
-import neoproxy.neolink.core.NeoLink;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 
 import java.io.File;
@@ -15,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * UpdateManager 静态方法 Mock 测试
- * 
+ * <p>
  * 使用 mockito-inline 来 mock 静态方法
  */
 @DisplayName("UpdateManager 静态方法 Mock 测试")

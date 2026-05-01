@@ -10,36 +10,33 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import neoproxy.neolink.NeoLink
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.NodeConfig
-import neoproxy.neolink.core.NeoLink
 import neoproxy.neolink.core.NeoLinkCoreRunner
+import top.ceroxe.api.neolink.NeoLinkCfg
+import top.ceroxe.api.neolink.NodeFetcher
 import java.io.File
 
 /**
- * NeoLink GUI 视图模型
+ * NeoLink 图形界面视图模型
  *
  * 核心职责：
- * 1. 管理 GUI 界面的所有状态数据
+ * 1. 管理图形界面的所有状态数据
  * 2. 处理用户输入和配置变更
  * 3. 协调后台服务的启动和停止
- * 4. 管理日志显示和 ANSI 颜色解析
+ * 4. 管理日志显示和终端颜色解析
  * 5. 加载和解析节点列表
  *
  * 架构设计：
- * - 使用 Compose 的 mutableStateOf 实现响应式数据绑定
- * - 使用 CoroutineScope 处理异步操作
+ * - 使用 Compose 状态实现响应式数据绑定
+ * - 使用协程作用域处理异步操作
  * - 通过自定义 Loggist 包装器实现日志重定向
  *
  * 状态管理：
  * - 连接配置：远程域名、本地端口、访问密钥等
- * - 功能开关：TCP/UDP 启用、Proxy Protocol、自动重连等
+ * - 功能开关：TCP/UDP 启用、代理协议、自动重连等
  * - 运行时状态：服务运行状态、日志消息列表
  *
  * @author NeoProxy Team
@@ -88,7 +85,7 @@ class NeoLinkViewModel {
 
         // 【优化】使用协程后台加载节点，防止阻塞 GUI 初始化
         scope.launch(Dispatchers.IO) {
-            neoproxy.neolink.network.NodeFetcher.fetchAndSaveNodes()
+            fetchNodesFromApi()
             withContext(Dispatchers.Main) {
                 loadNodes()
             }
@@ -103,6 +100,7 @@ class NeoLinkViewModel {
         val nodeFile = File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME)
         if (!nodeFile.exists()) return
         try {
+            nodeList.clear()
             for (node in NodeConfig.loadAll(nodeFile)) {
                 nodeList.add(
                     NeoNode(
@@ -146,19 +144,27 @@ class NeoLinkViewModel {
         val parsedLocalPort = localPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
         val parsedHookPort = hostHookPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
         val parsedConnectPort = hostConnectPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
-        NeoLink.remoteDomainName = remoteDomain.trim(); NeoLink.localPort = parsedLocalPort; NeoLink.key = accessKey
-        NeoLink.localDomainName = localDomain.trim(); NeoLink.hostHookPort = parsedHookPort; NeoLink.hostConnectPort =
-            parsedConnectPort
+        val tunnelConfig = buildTunnelConfig(parsedLocalPort, parsedHookPort, parsedConnectPort)
+        NeoLink.localDomainName = localDomain.trim()
         NeoLink.isDisableTCP = !isTcpEnabled; NeoLink.isDisableUDP = !isUdpEnabled; NeoLink.enableProxyProtocol =
             isPpv2Enabled; NeoLink.enableAutoReconnect = isAutoReconnect; NeoLink.isDebugMode =
             isDebugMode; NeoLink.showConnection = isShowConnection
         isRunning = true
         scope.launch(Dispatchers.IO) {
             try {
-                NeoLinkCoreRunner.runCore(NeoLink.remoteDomainName, NeoLink.localPort, NeoLink.key)
+                NeoLinkCoreRunner.runCore(tunnelConfig)
             } finally {
                 withContext(Dispatchers.Main) { isRunning = false; appendLog("\n[SYSTEM] 服务已停止") }
             }
+        }
+    }
+
+    private fun buildTunnelConfig(parsedLocalPort: Int, parsedHookPort: Int, parsedConnectPort: Int): NeoLinkCfg {
+        val selected = selectedNode
+        return if (selected != null && remoteDomain.trim() == selected.address) {
+            selected.toCfg(accessKey, parsedLocalPort)
+        } else {
+            NeoLinkCfg(remoteDomain.trim(), parsedHookPort, parsedConnectPort, accessKey, parsedLocalPort)
         }
     }
 
@@ -172,6 +178,27 @@ class NeoLinkViewModel {
         NeoLink.say("正在停止 NeoLink 服务...")
         scope.launch(Dispatchers.IO) {
             NeoLinkCoreRunner.requestStop()
+        }
+    }
+
+    private fun fetchNodesFromApi() {
+        if (NeoLink.nkmNodeListUrl.isBlank()) return
+
+        NeoLink.say(
+            NeoLink.languageData.FETCHING_NODE_LIST + NeoLink.nkmNodeListUrl,
+            top.ceroxe.api.print.log.LogType.INFO
+        )
+        try {
+            val nodes = NodeFetcher.getFromNKM(NeoLink.nkmNodeListUrl)
+            if (nodes.isEmpty()) {
+                NeoLink.say(NeoLink.languageData.NODE_LIST_EMPTY, top.ceroxe.api.print.log.LogType.INFO)
+                return
+            }
+            NodeConfig.saveAll(File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME), nodes.values)
+            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_SUCCESS, top.ceroxe.api.print.log.LogType.INFO)
+        } catch (e: Exception) {
+            neoproxy.neolink.util.Debugger.debugOperation(e)
+            NeoLink.say(NeoLink.languageData.NODE_LIST_FETCH_FAIL, top.ceroxe.api.print.log.LogType.WARNING)
         }
     }
 

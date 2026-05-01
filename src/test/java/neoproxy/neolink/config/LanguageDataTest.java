@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * LanguageData 测试类
- *
+ * <p>
  * 测试范围：
  * 1. 默认英文语言实例创建
  * 2. 中文语言实例创建

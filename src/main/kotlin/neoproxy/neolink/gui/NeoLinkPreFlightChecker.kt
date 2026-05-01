@@ -7,7 +7,7 @@ import com.sun.jna.platform.win32.WinDef
  * NeoLink 全链路环境预检器
  *
  * 核心职责：
- * 1. 检测系统是否接受 DWM（Desktop Window Manager）透明背板请求
+ * 1. 检测系统是否接受 DWM（桌面窗口管理器）透明背板请求
  * 2. 用实测结果决定是否允许 DirectX + 透明亚克力组合
  * 3. 防止在 RDP、旧版 Windows 或基础显卡驱动环境下出现透明窗口风险
  *
@@ -47,10 +47,10 @@ object NeoLinkPreFlightChecker {
 
             val probeHwnd = hwnd
             if (probeHwnd == null) {
-                // 如果创建窗口都失败了，保险起见走软件模式
+                // 如果创建窗口都失败了，保险起见走 Software
                 CheckResult(false, "无法创建测试窗口")
             } else {
-                // 实测申请 Desktop Acrylic 对应的系统背板。只要 DWM 拒绝，就走不透明软件模式。
+                // 实测申请桌面亚克力对应的系统背板。只要 DWM 拒绝，就走不透明 Software 模式。
                 val hrAcrylic = WindowsDwm.setIntAttribute(
                     dwm,
                     probeHwnd,

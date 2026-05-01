@@ -1,23 +1,23 @@
 package neoproxy.neolink.util;
 
+import neoproxy.neolink.NeoLink;
 import top.ceroxe.api.print.log.LogType;
 import top.ceroxe.api.print.log.State;
-import neoproxy.neolink.core.NeoLink;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static neoproxy.neolink.core.NeoLink.isGUIMode;
-import static neoproxy.neolink.core.NeoLink.loggist;
+import static neoproxy.neolink.NeoLink.isGUIMode;
+import static neoproxy.neolink.NeoLink.loggist;
 
 /**
  * 调试器
- *
+ * <p>
  * 核心职责：
  * 1. 在调试模式下输出详细的异常堆栈和调试信息
  * 2. 统一处理调试信息的输出方式（CLI/GUI 兼容）
  * 3. 提供安全的调试输出，避免空指针异常
- *
+ * <p>
  * 设计特点：
  * - 仅在 isDebugMode 为 true 时输出信息
  * - 自动适配 CLI 和 GUI 模式的输出方式
@@ -53,7 +53,7 @@ public class Debugger {
         if (NeoLink.isDebugMode) {
             if (loggist != null) {
                 // Loggist 已初始化：委托给它处理
-                // CLI: 原生 Loggist 会自动 System.out.println，所以这里不需要手动 sout，否则会重复！
+                // 命令行：原生 Loggist 会自动 System.out.println，所以这里不需要手动输出，否则会重复！
                 // GUI: QueueBasedLoggist 会处理上屏和写文件
                 loggist.say(new State(LogType.INFO, "DEBUG", infoMsg));
             } else {

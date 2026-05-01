@@ -1,37 +1,50 @@
-package neoproxy.neolink.core;
+package neoproxy.neolink;
 
-import top.ceroxe.api.print.log.LogType;
-import top.ceroxe.api.print.log.Loggist;
-import top.ceroxe.api.print.log.State;
-import top.ceroxe.api.thread.ThreadManager;
-import top.ceroxe.api.utils.TimeUtils;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;
+import neoproxy.neolink.core.NeoLinkCoreRunner;
+import neoproxy.neolink.core.VersionInfo;
 import neoproxy.neolink.gui.ComposeEntryKt;
-import neoproxy.neolink.network.NodeFetcher;
+import top.ceroxe.api.neolink.NeoLinkCfg;
+import top.ceroxe.api.neolink.NeoNode;
+import top.ceroxe.api.print.log.LogType;
+import top.ceroxe.api.print.log.Loggist;
+import top.ceroxe.api.print.log.State;
+import top.ceroxe.api.utils.TimeUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Scanner;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * NeoLink desktop/application entrypoint.
+ * NeoLink 桌面客户端和应用程序入口。
  *
- * <p>This class intentionally contains only application-layer concerns:
- * command-line parsing, config state, node selection, language, logging and
- * process startup. The tunnel protocol itself is owned by NeoLinkAPI through
- * {@link NeoLinkCoreRunner}.</p>
+ * <p>本类有意只承载应用层职责：命令行解析、配置状态、节点选择、语言、
+ * 日志和进程启动。隧道协议本身由 {@link NeoLinkCoreRunner} 通过 NeoLinkAPI 持有。</p>
  */
 public final class NeoLink {
     public static final String CLIENT_FILE_PREFIX = "NeoLink-";
     public static final String TEST_UPDATE_VERSION = "0.0.1";
     public static final String CURRENT_DIR_PATH = System.getProperty("user.dir");
     public static final int INVALID_LOCAL_PORT = -1;
-
+    public static final String ASCII_LOGO = """
+            
+               _____
+              / ____|
+             | |        ___   _ __    ___   __  __   ___
+             | |       / _ \\ | '__|  / _ \\  \\ \\\\/ /  / _ \\
+             | |____  |  __/ | |    | (_) |  >  <  |  __/
+              \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
+            
+            
+            """;
     public static int remotePort;
     public static String remoteDomainName = "localhost";
     public static String localDomainName = "localhost";
@@ -60,7 +73,6 @@ public final class NeoLink {
     public static boolean isTestUpdate = false;
     public static String nkmNodeListUrl = "";
     public static boolean isNoEffectMode = false;
-
     private static boolean shouldAutoStartInGUI = false;
     private static boolean noColor = false;
 
@@ -86,16 +98,16 @@ public final class NeoLink {
         debugOperation("Mode: " + (isGUIMode ? "GUI" : "CLI") + ", Debug: " + isDebugMode);
 
         if (isGUIMode) {
-            ThreadManager.runAsync(NodeFetcher::fetchAndSaveNodes);
             ComposeEntryKt.main(args);
             System.exit(0);
         }
 
         initializeLogger();
         detectLanguage();
-        NodeFetcher.fetchAndSaveNodes();
+        fetchAndSaveNodes();
+        NeoNode selectedNode = null;
         if (specifiedNodeName != null) {
-            loadNodeConfiguration();
+            selectedNode = loadNodeConfiguration();
         }
 
         if (!isReconnectedOperation) {
@@ -106,14 +118,14 @@ public final class NeoLink {
         try {
             promptForAccessKey();
             promptForLocalPort();
-            NeoLinkCoreRunner.runCore(remoteDomainName, localPort, key);
+            NeoLinkCoreRunner.runCore(buildTunnelConfig(selectedNode));
         } catch (Exception e) {
             debugOperation(e);
             exitAndFreeze(-1);
         }
     }
 
-    private static void loadNodeConfiguration() {
+    private static NeoNode loadNodeConfiguration() {
         debugOperation("Attempting to load configuration for node: " + specifiedNodeName);
         File nodeFile = new File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME);
         try {
@@ -127,9 +139,50 @@ public final class NeoLink {
             remoteDomainName = node.getAddress();
             hostHookPort = node.getHostHookPort();
             hostConnectPort = node.getHostConnectPort();
+            return node.toNeoNode();
         } catch (Exception e) {
             debugOperation("Failed to load node config: " + e.getMessage());
+            return null;
         }
+    }
+
+    private static NeoLinkCfg buildTunnelConfig(NeoNode selectedNode) {
+        if (selectedNode != null) {
+            return selectedNode.toCfg(key, localPort);
+        }
+        return new NeoLinkCfg(remoteDomainName, hostHookPort, hostConnectPort, key, localPort);
+    }
+
+    public static void fetchAndSaveNodes() {
+        if (languageData == null) {
+            detectLanguage();
+        }
+        if (nkmNodeListUrl == null || nkmNodeListUrl.isBlank()) {
+            return;
+        }
+
+        say(languageData.FETCHING_NODE_LIST + nkmNodeListUrl, LogType.INFO);
+        try {
+            Map<String, top.ceroxe.api.neolink.NeoNode> nodes =
+                    top.ceroxe.api.neolink.NodeFetcher.getFromNKM(nkmNodeListUrl);
+            if (nodes.isEmpty()) {
+                say(languageData.NODE_LIST_EMPTY, LogType.INFO);
+                return;
+            }
+            saveFetchedNodes(nodes);
+            say(languageData.NODE_LIST_FETCH_SUCCESS, LogType.INFO);
+        } catch (IOException | IllegalArgumentException e) {
+            debugOperation(e);
+            say(languageData.NODE_LIST_FETCH_FAIL, LogType.WARNING);
+        }
+    }
+
+    private static void saveFetchedNodes(Map<String, top.ceroxe.api.neolink.NeoNode> nodes) throws IOException {
+        File workingDir = new File(ConfigOperator.WORKING_DIR);
+        Files.createDirectories(workingDir.toPath());
+
+        File nodeFile = new File(workingDir, NodeConfig.NODE_LIST_FILE_NAME);
+        NodeConfig.saveAll(nodeFile, nodes.values());
     }
 
     public static void applyCommandLineArgs(String[] args) {
@@ -270,18 +323,6 @@ public final class NeoLink {
         System.exit(exitCode);
     }
 
-    public static final String ASCII_LOGO = """
-            
-               _____                                    
-              / ____|                                   
-             | |        ___   _ __    ___   __  __   ___
-             | |       / _ \\ | '__|  / _ \\  \\ \\\\/ /  / _ \\
-             | |____  |  __/ | |    | (_) |  >  <  |  __/
-              \\_____|  \\___| |_|     \\___/  /_/\\_\\  \\___|
-                                                        
-
-            """;
-
     public static void printLogo() {
         say(ASCII_LOGO);
     }
@@ -302,7 +343,7 @@ public final class NeoLink {
         VersionInfo.outPutEula();
     }
 
-    static String getClientVersionToReport() {
+    public static String getClientVersionToReport() {
         return isTestUpdate ? TEST_UPDATE_VERSION : VersionInfo.VERSION;
     }
 
