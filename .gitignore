@@ -28,13 +28,14 @@ bin/
 # MacOS
 .DS_Store
 
-# NeoLink 运行产物
-logs/
+# NeoLink 运行产物（runtime artifacts）
+/logs/
 /config.cfg
 /nodes.json
-eula.txt
+/eula.txt
+/*-env-bundled/
 
-# 临时文件
+# 临时文件（temporary files）
 all_code.txt
 *.log
 *.temp
