@@ -11,7 +11,12 @@ import org.junit.jupiter.api.io.TempDir;
 import top.ceroxe.api.neolink.NeoLinkCfg;
 import top.ceroxe.api.neolink.NeoNode;
 import top.ceroxe.api.neolink.exception.NoMoreNetworkFlowException;
+import top.ceroxe.api.neolink.exception.NoMorePortException;
 import top.ceroxe.api.neolink.exception.NoSuchKeyException;
+import top.ceroxe.api.neolink.exception.OutDatedKeyException;
+import top.ceroxe.api.neolink.exception.PortOccupiedException;
+import top.ceroxe.api.neolink.exception.UnRecognizedKeyException;
+import top.ceroxe.api.neolink.exception.UnSupportHostVersionException;
 import top.ceroxe.api.neolink.exception.UnsupportedVersionException;
 import top.ceroxe.api.print.log.LogType;
 import top.ceroxe.api.print.log.Loggist;
@@ -412,6 +417,41 @@ class NeoLinkTest {
                         new UnsupportedVersionException("Unsupported version:6.0.1")
                 )
         );
+        assertEquals(
+                "Outdated key.",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "ignored",
+                        new OutDatedKeyException("Outdated key.")
+                )
+        );
+        assertEquals(
+                "Port is occupied.",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        null,
+                        new PortOccupiedException("Port is occupied.")
+                )
+        );
+        assertEquals(
+                "No port left.",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        null,
+                        new NoMorePortException("No port left.")
+                )
+        );
+        assertEquals(
+                "Unrecognized key.",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "ignored",
+                        new UnRecognizedKeyException("Unrecognized key.")
+                )
+        );
+        assertEquals(
+                "Unsupported host version.",
+                NeoLinkCoreRunner.clientFacingApiErrorMessage(
+                        "ignored",
+                        new UnSupportHostVersionException("Unsupported host version.")
+                )
+        );
     }
 
     @Test
@@ -434,6 +474,14 @@ class NeoLinkTest {
                 NeoLinkCoreRunner.clientFacingCallbackErrorMessage(
                         "NeoProxyServer terminated the tunnel because no network flow remains: exitNoFlow",
                         new NoMoreNetworkFlowException(),
+                        true
+                )
+        );
+        assertEquals(
+                "Port is occupied.",
+                NeoLinkCoreRunner.clientFacingCallbackErrorMessage(
+                        null,
+                        new PortOccupiedException("Port is occupied."),
                         true
                 )
         );

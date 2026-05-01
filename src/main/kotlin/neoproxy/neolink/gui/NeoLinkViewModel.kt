@@ -18,6 +18,7 @@ import neoproxy.neolink.core.NeoLinkCoreRunner
 import top.ceroxe.api.neolink.NeoLinkCfg
 import top.ceroxe.api.neolink.NodeFetcher
 import java.io.File
+import java.io.IOException
 
 /**
  * NeoLink 图形界面视图模型
@@ -137,6 +138,35 @@ class NeoLinkViewModel {
     fun selectNode(node: NeoNode) {
         selectedNode = node; remoteDomain = node.address; hostHookPort = node.hookPort.toString(); hostConnectPort =
             node.connectPort.toString()
+    }
+
+    fun updateTransportProtocols(tcpEnabled: Boolean, udpEnabled: Boolean) {
+        val previousTcpEnabled = isTcpEnabled
+        val previousUdpEnabled = isUdpEnabled
+
+        isTcpEnabled = tcpEnabled
+        isUdpEnabled = udpEnabled
+        NeoLink.isDisableTCP = !tcpEnabled
+        NeoLink.isDisableUDP = !udpEnabled
+
+        if (!isRunning) {
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                NeoLinkCoreRunner.updateRuntimeProtocolFlags(tcpEnabled, udpEnabled)
+                appendLog("[SYSTEM] Transport protocols updated at runtime. TCP=$tcpEnabled, UDP=$udpEnabled")
+            } catch (e: IOException) {
+                NeoLink.isDisableTCP = !previousTcpEnabled
+                NeoLink.isDisableUDP = !previousUdpEnabled
+                withContext(Dispatchers.Main) {
+                    isTcpEnabled = previousTcpEnabled
+                    isUdpEnabled = previousUdpEnabled
+                    appendLog("[SYSTEM] Failed to update runtime transport protocols: ${e.message}")
+                }
+            }
+        }
     }
 
     fun startService() {

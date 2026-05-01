@@ -736,13 +736,11 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                         labelText("传输协议"); Spacer(modifier = Modifier.height(6.dp))
                         // 🔴 实时生效：修改时同步更新 NeoLink 静态变量
                         modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
-                            viewModel.isTcpEnabled = it
-                            NeoLink.isDisableTCP = !it
+                            viewModel.updateTransportProtocols(it, viewModel.isUdpEnabled)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("启用 UDP", viewModel.isUdpEnabled) {
-                            viewModel.isUdpEnabled = it
-                            NeoLink.isDisableUDP = !it
+                            viewModel.updateTransportProtocols(viewModel.isTcpEnabled, it)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {

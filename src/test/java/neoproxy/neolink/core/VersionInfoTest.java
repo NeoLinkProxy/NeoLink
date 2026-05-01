@@ -51,7 +51,7 @@ class VersionInfoTest {
     void testVersionIsNotEmpty() {
         assertNotNull(VersionInfo.VERSION);
         assertFalse(VersionInfo.VERSION.isEmpty());
-        assertEquals("7.1.1", VersionInfo.VERSION);
+        assertEquals("7.1.2", VersionInfo.VERSION);
     }
 
     @Test

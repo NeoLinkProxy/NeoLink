@@ -10,7 +10,7 @@ plugins {
 
 group = "neoproxy"
 
-val neoLinkApiVersion = "7.1.1"
+val neoLinkApiVersion = "7.1.2"
 
 version = neoLinkApiVersion
 
