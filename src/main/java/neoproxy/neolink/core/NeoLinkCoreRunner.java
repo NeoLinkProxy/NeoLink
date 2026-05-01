@@ -92,6 +92,7 @@ public final class NeoLinkCoreRunner {
 
             AtomicBoolean tunnelReachedRunningState = new AtomicBoolean(false);
             NeoLinkAPI activeTunnel = buildTunnel(cfg, tunnelReachedRunningState);
+            NeoLink.tunnelAddress = null;
             synchronized (LOCK) {
                 if (shouldStop) {
                     activeTunnel.close();
@@ -135,7 +136,7 @@ public final class NeoLinkCoreRunner {
                         tunnel = null;
                     }
                 }
-                NeoLink.remotePort = 0;
+                NeoLink.tunnelAddress = null;
             }
         }
         debugOperation("NeoLinkAPI tunnel runner exited.");
@@ -160,9 +161,11 @@ public final class NeoLinkCoreRunner {
                 .setOnStateChanged(state -> {
                     if (state == NeoLinkState.RUNNING) {
                         tunnelReachedRunningState.set(true);
+                        Thread.ofVirtual().name("NeoLink-tunnel-address-listener").start(
+                                () -> publishTunnelAddress(api)
+                        );
                     }
                 })
-                .setOnRemotePortChanged(port -> NeoLink.remotePort = port)
                 .setOnServerMessage(NeoLink::say)
                 .setOnError((message, cause) -> {
                     String displayMessage = clientFacingCallbackErrorMessage(
@@ -195,6 +198,15 @@ public final class NeoLinkCoreRunner {
                         debugOperation(exception);
                     }
                 });
+    }
+
+    private static void publishTunnelAddress(NeoLinkAPI activeTunnel) {
+        try {
+            NeoLink.tunnelAddress = activeTunnel.getTunAddr();
+            debugOperation("NeoLink tunnel address received from NeoLinkAPI: " + NeoLink.tunnelAddress);
+        } catch (RuntimeException e) {
+            debugOperation(e);
+        }
     }
 
     private static void waitBeforeReconnect() {

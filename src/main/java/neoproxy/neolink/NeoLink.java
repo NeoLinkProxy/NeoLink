@@ -45,7 +45,7 @@ public final class NeoLink {
             
             
             """;
-    public static int remotePort;
+    public static volatile String tunnelAddress;
     public static String remoteDomainName = "localhost";
     public static String localDomainName = "localhost";
     public static int hostHookPort = NodeConfig.DEFAULT_HOST_HOOK_PORT;

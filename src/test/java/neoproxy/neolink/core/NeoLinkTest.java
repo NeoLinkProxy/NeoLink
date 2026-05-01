@@ -70,7 +70,7 @@ class NeoLinkTest {
     private int originalReconnectionIntervalSeconds;
     private String originalSpecifiedNodeName;
     private String originalNkmNodeListUrl;
-    private int originalRemotePort;
+    private String originalTunnelAddress;
 
     @BeforeEach
     void setUp() {
@@ -97,7 +97,7 @@ class NeoLinkTest {
         originalReconnectionIntervalSeconds = NeoLink.reconnectionIntervalSeconds;
         originalSpecifiedNodeName = NeoLink.specifiedNodeName;
         originalNkmNodeListUrl = NeoLink.nkmNodeListUrl;
-        originalRemotePort = NeoLink.remotePort;
+        originalTunnelAddress = NeoLink.tunnelAddress;
     }
 
     @AfterEach
@@ -125,7 +125,7 @@ class NeoLinkTest {
         NeoLink.reconnectionIntervalSeconds = originalReconnectionIntervalSeconds;
         NeoLink.specifiedNodeName = originalSpecifiedNodeName;
         NeoLink.nkmNodeListUrl = originalNkmNodeListUrl;
-        NeoLink.remotePort = originalRemotePort;
+        NeoLink.tunnelAddress = originalTunnelAddress;
     }
 
     @Test
@@ -447,9 +447,9 @@ class NeoLinkTest {
     }
 
     @Test
-    @DisplayName("remotePort 默认应为 0")
-    void testRemotePortDefaultAfterShellMigration() {
-        assertEquals(0, NeoLink.remotePort);
+    @DisplayName("tunnelAddress 默认应为 null")
+    void testTunnelAddressDefaultAfterShellMigration() {
+        assertNull(NeoLink.tunnelAddress);
     }
 
     @Test
@@ -1172,9 +1172,9 @@ class NeoLinkTest {
     }
 
     @Test
-    @DisplayName("remotePort 默认应为 0")
-    void testRemotePortDefault() {
-        assertEquals(0, NeoLink.remotePort);
+    @DisplayName("tunnelAddress 默认应为 null")
+    void testTunnelAddressDefault() {
+        assertNull(NeoLink.tunnelAddress);
     }
 
     @Test
