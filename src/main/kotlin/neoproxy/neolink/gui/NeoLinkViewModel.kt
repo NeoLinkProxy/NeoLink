@@ -36,6 +36,10 @@ import java.io.IOException
  * and keeps CLI behavior isolated from GUI-only state transitions.
  */
 class NeoLinkViewModel {
+    private companion object {
+        const val GUI_SYSTEM_PREFIX = "[ System ]"
+    }
+
     var connectionState by mutableStateOf(connectionUiStateFromCore())
         private set
     var featureState by mutableStateOf(featureUiStateFromCore())
@@ -243,6 +247,7 @@ class NeoLinkViewModel {
     }
 
     private fun applyFeatureToggles(updated: FeatureToggleUiState) {
+        val previous = featureState
         featureState = updated
         val current = FeatureState.snapshot()
         FeatureState.apply(
@@ -265,6 +270,13 @@ class NeoLinkViewModel {
                 current.nkmNodeListUrl()
             )
         )
+
+        if (previous.autoReconnect != updated.autoReconnect) {
+            appendSystemLog("自动重连已${if (updated.autoReconnect) "开启" else "关闭"}。")
+        }
+        if (previous.debugMode != updated.debugMode) {
+            appendSystemLog("调试模式已${if (updated.debugMode) "开启" else "关闭"}。")
+        }
     }
 
     fun updateTransportProtocols(tcpEnabled: Boolean, udpEnabled: Boolean) {
@@ -275,24 +287,14 @@ class NeoLinkViewModel {
 
         if (!isRunning) {
             FeatureState.applyRuntimeTransportSelection(tcpEnabled, udpEnabled)
-            appendLog(
-                "[系统] 已更新协议开关（protocol flags）：TCP=" +
-                        if (tcpEnabled) "开启" else "关闭" +
-                        "，UDP=" +
-                        if (udpEnabled) "开启" else "关闭"
-            )
+            appendSystemLog(buildProtocolUpdateMessage(tcpEnabled, udpEnabled))
             return
         }
 
         scope.launch(Dispatchers.IO) {
             try {
                 NeoLinkCoreRunner.updateRuntimeProtocolFlags(tcpEnabled, udpEnabled)
-                appendLog(
-                        "[系统] 运行时协议已更新（runtime protocol update）：TCP=" +
-                                if (tcpEnabled) "开启" else "关闭" +
-                                "，UDP=" +
-                                if (udpEnabled) "开启" else "关闭"
-                )
+                appendSystemLog(buildProtocolUpdateMessage(tcpEnabled, udpEnabled))
             } catch (e: IOException) {
                 withContext(Dispatchers.Main) {
                     featureState = featureState.copy(
@@ -300,7 +302,7 @@ class NeoLinkViewModel {
                         udpEnabled = previousUdpEnabled
                     )
                     FeatureState.applyRuntimeTransportSelection(previousTcpEnabled, previousUdpEnabled)
-                    appendLog("[系统] 运行时协议更新失败：${e.message}")
+                    appendSystemLog("运行时协议更新失败：${e.message}")
                 }
             }
         }
@@ -353,7 +355,7 @@ class NeoLinkViewModel {
                 withContext(Dispatchers.Main) {
                     isRunning = false
                     isStopping = false
-                    appendLog("[系统] 服务已停止。")
+                    appendSystemLog("服务已停止。", insertBlankLineBefore = true)
                 }
             }
         }
@@ -376,7 +378,7 @@ class NeoLinkViewModel {
     fun stopService() {
         if (!isRunning || isStopping) return
         isStopping = true
-        ClientConsole.say("正在停止 NeoLink 服务（service）...")
+        ClientConsole.say("正在停止 NeoLink 服务...")
         scope.launch(Dispatchers.IO) {
             NeoLinkCoreRunner.requestStop()
         }
@@ -440,6 +442,34 @@ class NeoLinkViewModel {
 
     fun appendLog(ansiText: String) {
         addLogSafe(ansiText)
+    }
+
+    /**
+     * GUI 系统提示统一走单一模板，避免同一界面混用中文/英文标签与冗余括注。
+     *
+     * Why:
+     * 1. 系统消息属于 GUI 自有语义，不应再拼接 CLI 调试式英文补注。
+     * 2. 停止完成提示需要与前一条运行日志显式分隔，避免视觉上像同一批流式输出。
+     */
+    private fun appendSystemLog(message: String, insertBlankLineBefore: Boolean = false) {
+        val normalizedMessage = buildString {
+            if (insertBlankLineBefore && runtimeState.logMessages.isNotEmpty()) {
+                append('\n')
+            }
+            append(GUI_SYSTEM_PREFIX)
+            append(' ')
+            append(message)
+        }
+        addLogSafe(normalizedMessage)
+    }
+
+    /**
+     * 协议切换提示只保留用户真正关心的结论，避免把内部实现说明暴露到 GUI。
+     */
+    private fun buildProtocolUpdateMessage(tcpEnabled: Boolean, udpEnabled: Boolean): String {
+        val tcpStatus = if (tcpEnabled) "已开启" else "已关闭"
+        val udpStatus = if (udpEnabled) "已开启" else "已关闭"
+        return "TCP $tcpStatus，UDP $udpStatus。"
     }
 }
 
