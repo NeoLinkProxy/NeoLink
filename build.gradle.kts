@@ -16,8 +16,13 @@ version = neoLinkApiVersion
 
 repositories {
     mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/public/compose/dev")
     google()
+    maven("https://maven.pkg.jetbrains.space/public/p/public/compose/dev") {
+        content {
+            includeGroup("org.jetbrains.compose")
+            includeGroup("org.jetbrains.skiko")
+        }
+    }
 }
 
 kotlin {
