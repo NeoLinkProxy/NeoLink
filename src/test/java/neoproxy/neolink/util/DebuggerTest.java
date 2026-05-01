@@ -143,6 +143,21 @@ class DebuggerTest {
     }
 
     @Test
+    @DisplayName("testRawLoggistWritePersistsExactContent")
+    void testRawLoggistWritePersistsExactContent() throws Exception {
+        Path logFile = tempDir.resolve("raw-loggist-write.log");
+        Loggist realLoggist = new Loggist(logFile.toFile());
+        String rawMessage = "\n[System] 服务已停止。\n";
+        try {
+            realLoggist.write(rawMessage, false);
+        } finally {
+            realLoggist.close();
+        }
+        String content = Files.readString(logFile, StandardCharsets.UTF_8);
+        assertTrue(content.contains(rawMessage));
+    }
+
+    @Test
     @DisplayName("testDebugOperationExceptionWhenDebugModeOff")
     void testDebugOperationExceptionWhenDebugModeOff() {
         FeatureState.setDebugMode(false);

@@ -37,7 +37,7 @@ import java.io.IOException
  */
 class NeoLinkViewModel {
     private companion object {
-        const val GUI_SYSTEM_PREFIX = "[ System ]"
+        const val GUI_SYSTEM_PREFIX = "[System]"
     }
 
     var connectionState by mutableStateOf(connectionUiStateFromCore())
@@ -277,6 +277,12 @@ class NeoLinkViewModel {
         if (previous.debugMode != updated.debugMode) {
             appendSystemLog("调试模式已${if (updated.debugMode) "开启" else "关闭"}。")
         }
+        if (previous.ppv2Enabled != updated.ppv2Enabled) {
+            appendSystemLog("真实IP (PPv2) 已${if (updated.ppv2Enabled) "开启" else "关闭"}。")
+        }
+        if (previous.showConnection != updated.showConnection) {
+            appendSystemLog("${if (updated.showConnection) "开启" else "关闭"}显示详细连接。")
+        }
     }
 
     fun updateTransportProtocols(tcpEnabled: Boolean, udpEnabled: Boolean) {
@@ -355,7 +361,7 @@ class NeoLinkViewModel {
                 withContext(Dispatchers.Main) {
                     isRunning = false
                     isStopping = false
-                    appendSystemLog("服务已停止。", insertBlankLineBefore = true)
+                    appendSystemLog("服务已停止。", surroundWithBlankLines = true)
                 }
             }
         }
@@ -401,6 +407,16 @@ class NeoLinkViewModel {
             }
 
             override fun write(str: String?, isNewLine: Boolean) {
+                if (str != null) {
+                    addLogSafe(
+                        buildString {
+                            append(str)
+                            if (isNewLine) {
+                                appendLine()
+                            }
+                        }
+                    )
+                }
                 originalLoggist?.write(str, isNewLine)
             }
         })
@@ -449,18 +465,21 @@ class NeoLinkViewModel {
      *
      * Why:
      * 1. 系统消息属于 GUI 自有语义，不应再拼接 CLI 调试式英文补注。
-     * 2. 停止完成提示需要与前一条运行日志显式分隔，避免视觉上像同一批流式输出。
+     * 2. 仅“服务已停止”作为状态终结提示前后留空行，避免其它系统提示把日志流切得过碎。
      */
-    private fun appendSystemLog(message: String, insertBlankLineBefore: Boolean = false) {
+    private fun appendSystemLog(message: String, surroundWithBlankLines: Boolean = false) {
         val normalizedMessage = buildString {
-            if (insertBlankLineBefore && runtimeState.logMessages.isNotEmpty()) {
+            if (surroundWithBlankLines && runtimeState.logMessages.isNotEmpty()) {
                 append('\n')
             }
             append(GUI_SYSTEM_PREFIX)
             append(' ')
             append(message)
+            if (surroundWithBlankLines) {
+                append('\n')
+            }
         }
-        addLogSafe(normalizedMessage)
+        RuntimeState.loggist()?.write(normalizedMessage, false) ?: addLogSafe(normalizedMessage)
     }
 
     /**
