@@ -25,7 +25,7 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * DebuggerTest regression tests.
+ * `DebuggerTest` 回归测试。
  */
 @DisplayName("DebuggerTest")
 class DebuggerTest {
@@ -253,8 +253,8 @@ class DebuggerTest {
     }
 
     /**
-     * Loggist uses asynchronous queued persistence, so tests must wait for the durable file content instead of
-     * assuming the write is visible immediately after debugOperation(...).
+     * `Loggist` 采用异步队列持久化，所以测试必须等待文件内容真正落盘，而不能假设
+     * 在调用 `debugOperation(...)` 后立刻就能看到写入结果。
      */
     private static String waitForFileContent(Path logFile, String expectedText) throws Exception {
         long deadline = System.nanoTime() + 5_000_000_000L;

@@ -14,7 +14,7 @@ import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ConfigOperatorTest regression tests.
+ * `ConfigOperatorTest` 回归测试。
  */
 @DisplayName("ConfigOperatorTest")
 class ConfigOperatorTest {
@@ -187,5 +187,16 @@ class ConfigOperatorTest {
 
         assertEquals(String.class, workingDirField.getType());
         assertEquals(String.class, basePackageDirField.getType());
+    }
+
+    @Test
+    @DisplayName("testResolveWritableRuntimeDirectoryPrefersWorkingDir")
+    void testResolveWritableRuntimeDirectoryPrefersWorkingDir() {
+        ConfigOperator.BASE_PACKAGE_DIR = tempDir.toPath().resolve("base").toString();
+        ConfigOperator.WORKING_DIR = tempDir.toPath().resolve("working").toString();
+
+        File result = ConfigOperator.resolveWritableRuntimeDirectory();
+
+        assertEquals(new File(ConfigOperator.WORKING_DIR).getAbsoluteFile(), result);
     }
 }

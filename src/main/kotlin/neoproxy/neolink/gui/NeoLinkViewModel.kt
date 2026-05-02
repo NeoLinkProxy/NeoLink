@@ -1,4 +1,4 @@
-﻿package neoproxy.neolink.gui
+package neoproxy.neolink.gui
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -8,13 +8,17 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import neoproxy.neolink.NeoLink
-import neoproxy.neolink.app.LanguageManager
 import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.cli.CommandLineProcessor
 import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.config.NodeConfig
 import neoproxy.neolink.core.NeoLinkCoreRunner
 import neoproxy.neolink.node.NodeWorkflow
@@ -29,11 +33,12 @@ import java.io.File
 import java.io.IOException
 
 /**
- * View-model boundary for NeoLink desktop UI.
+ * NeoLink 桌面 UI 的 View-model 边界。
  *
- * The UI keeps editable form state locally and commits into the dedicated core state objects only at
- * explicit synchronization points. This prevents Compose recomposition from mutating runtime globals
- * and keeps CLI behavior isolated from GUI-only state transitions.
+ * <p>设计原因：
+ * GUI 会把可编辑表单状态保留在本地，只在用户明确启动或修改运行时行为时，才把已经
+ * 校验过的值回写到共享核心状态。这样可以避免无效 GUI 输入、损坏的配置文件或 CLI 参数
+ * 直接把窗口弄崩，或者污染全局运行时状态。</p>
  */
 class NeoLinkViewModel {
     private companion object {
@@ -75,6 +80,7 @@ class NeoLinkViewModel {
         private set(value) {
             uiState = uiState.copy(selectedNode = value)
         }
+
     var localDomain: String
         get() = connectionState.localDomain
         set(value) {
@@ -153,23 +159,39 @@ class NeoLinkViewModel {
 
     private var isInitialized = false
     private var isLogRedirected = false
-    fun initialize(args: Array<String>) {        // 防止 Compose 重建界面时重复初始化（duplicate initialization）。
+
+    fun initialize(args: Array<String>) {
         if (isInitialized) return
         isInitialized = true
 
         ConfigOperator.initEnvironment()
         File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
 
-        ConfigOperator.readAndSetValue()
-        CommandLineProcessor.applyCommandLineArgs(args)
-        LanguageManager.detectLanguage()
+        val originalConnectionState = ConnectionState.snapshot()
+        val originalFeatureState = FeatureState.snapshot()
+        var initializationError: String? = null
+
+        try {
+            ConfigOperator.readAndSetValue()
+            CommandLineProcessor.applyCommandLineArgs(args)
+        } catch (e: IllegalArgumentException) {
+            ConnectionState.apply(originalConnectionState)
+            FeatureState.apply(originalFeatureState)
+            initializationError = e.message ?: "未知错误"
+        }
+
+        forceGuiChineseLanguage()
         syncStateFromCore()
         ClientConsole.initializeLogger(false)
-
         setupLogRedirector()
 
+        if (initializationError != null) {
+            appendSystemLog("配置或参数无效，已回退到安全默认值：$initializationError", surroundWithBlankLines = true)
+        }
+
         ClientConsole.printLogo()
-        ClientConsole.printBasicInfo()        // 异步刷新公开节点（public nodes），避免首次渲染被网络 I/O 阻塞。
+        ClientConsole.printBasicInfo()
+
         scope.launch(Dispatchers.IO) {
             NodeWorkflow.fetchAndSaveNodes()
             withContext(Dispatchers.Main) {
@@ -177,35 +199,41 @@ class NeoLinkViewModel {
             }
         }
 
-        if (NeoLink.shouldAutoStart()) startService()
+        if (NeoLink.shouldAutoStart()) {
+            startService()
+        }
     }
 
-
-    private fun loadNodes() {        // 从 CLI / GUI 共用的可写工作目录加载节点缓存。
+    private fun loadNodes() {
         val nodeFile = File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME)
-        if (!nodeFile.exists()) return
+        if (!nodeFile.exists()) {
+            return
+        }
+
         try {
-            val loadedNodes = mutableListOf<NeoNode>()
-            for (node in NodeConfig.loadAll(nodeFile)) {
-                loadedNodes.add(
-                    NeoNode(
-                        node.name,
-                        node.realId,
-                        node.address,
-                        node.icon,
-                        node.hostHookPort,
-                        node.hostConnectPort
-                    )
+            val loadedNodes = NodeConfig.loadAll(nodeFile).map { node ->
+                NeoNode(
+                    node.name,
+                    node.realId,
+                    node.address,
+                    node.icon,
+                    node.hostHookPort,
+                    node.hostConnectPort
                 )
             }
+
             uiState = uiState.copy(
                 nodeList = loadedNodes,
                 selectedNode = loadedNodes.firstOrNull()
             )
             loadedNodes.firstOrNull()?.let(::selectNode)
         } catch (e: Exception) {
-            e.printStackTrace()
+            appendSystemLog("节点列表加载失败：${e.message ?: e.javaClass.simpleName}")
         }
+    }
+
+    private fun forceGuiChineseLanguage() {
+        RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
     }
 
     private fun syncStateFromCore() {
@@ -278,16 +306,25 @@ class NeoLinkViewModel {
             appendSystemLog("调试模式已${if (updated.debugMode) "开启" else "关闭"}。")
         }
         if (previous.ppv2Enabled != updated.ppv2Enabled) {
-            appendSystemLog("真实IP (PPv2) 已${if (updated.ppv2Enabled) "开启" else "关闭"}。")
+            appendSystemLog("真实 IP 透传已${if (updated.ppv2Enabled) "开启" else "关闭"}。")
         }
         if (previous.showConnection != updated.showConnection) {
-            appendSystemLog("${if (updated.showConnection) "开启" else "关闭"}显示详细连接。")
+            appendSystemLog("详细连接日志已${if (updated.showConnection) "开启" else "关闭"}。")
         }
     }
 
     fun updateTransportProtocols(tcpEnabled: Boolean, udpEnabled: Boolean) {
         val previousTcpEnabled = isTcpEnabled
         val previousUdpEnabled = isUdpEnabled
+
+        if (!tcpEnabled && !udpEnabled) {
+            featureState = featureState.copy(
+                tcpEnabled = previousTcpEnabled,
+                udpEnabled = previousUdpEnabled
+            )
+            appendSystemLog("GUI 至少需要保留一种传输协议，TCP 和 UDP 不能同时关闭。")
+            return
+        }
 
         featureState = featureState.copy(tcpEnabled = tcpEnabled, udpEnabled = udpEnabled)
 
@@ -308,26 +345,39 @@ class NeoLinkViewModel {
                         udpEnabled = previousUdpEnabled
                     )
                     FeatureState.applyRuntimeTransportSelection(previousTcpEnabled, previousUdpEnabled)
-                    appendSystemLog("运行时协议更新失败：${e.message}")
+                    appendSystemLog("运行时协议更新失败：${e.message ?: e.javaClass.simpleName}")
                 }
             }
         }
     }
 
     fun startService() {
-        if (isRunning || isStopping || remoteDomain.isBlank() || localPort.isBlank() || accessKey.isBlank() || localDomain.isBlank()) return
-        val parsedLocalPort = localPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
-        val parsedHookPort = hostHookPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
-        val parsedConnectPort = hostConnectPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: return
+        if (isRunning || isStopping) {
+            return
+        }
+
+        val validationError = validateStartRequest()
+        if (validationError != null) {
+            appendSystemLog(validationError, surroundWithBlankLines = true)
+            return
+        }
+
+        val normalizedRemoteDomain = remoteDomain.trim()
+        val normalizedLocalDomain = localDomain.trim()
+        val normalizedAccessKey = accessKey.trim()
+        val parsedLocalPort = localPort.trim().toInt()
+        val parsedHookPort = hostHookPort.trim().toInt()
+        val parsedConnectPort = hostConnectPort.trim().toInt()
         val tunnelConfig = buildTunnelConfig(parsedLocalPort, parsedHookPort, parsedConnectPort)
         val currentFeatures = FeatureState.snapshot()
+
         ConnectionState.apply(
             ConnectionSettings(
-                remoteDomain.trim(),
-                localDomain.trim(),
+                normalizedRemoteDomain,
+                normalizedLocalDomain,
                 parsedHookPort,
                 parsedConnectPort,
-                accessKey,
+                normalizedAccessKey,
                 parsedLocalPort,
                 selectedNode?.realId
             )
@@ -352,6 +402,7 @@ class NeoLinkViewModel {
                 currentFeatures.nkmNodeListUrl()
             )
         )
+
         isRunning = true
         isStopping = false
         scope.launch(Dispatchers.IO) {
@@ -367,13 +418,33 @@ class NeoLinkViewModel {
         }
     }
 
-    private fun buildTunnelConfig(parsedLocalPort: Int, parsedHookPort: Int, parsedConnectPort: Int): NeoLinkCfg {
-        val selected = selectedNode
-        return if (selected != null && remoteDomain.trim() == selected.address) {
-            selected.toCfg(accessKey, parsedLocalPort)
-        } else {
-            NeoLinkCfg(remoteDomain.trim(), parsedHookPort, parsedConnectPort, accessKey, parsedLocalPort)
+    private fun validateStartRequest(): String? {
+        if (remoteDomain.trim().isBlank()) {
+            return "远程地址不能为空。"
         }
+        if (localDomain.trim().isBlank()) {
+            return "本地域名不能为空。"
+        }
+        if (accessKey.trim().isBlank()) {
+            return "访问密钥不能为空。"
+        }
+        if (!isTcpEnabled && !isUdpEnabled) {
+            return "TCP 和 UDP 不能同时关闭。"
+        }
+        if (localPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) {
+            return "本地端口必须是 1-65535 的整数。"
+        }
+        if (hostHookPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) {
+            return "Hook 端口必须是 1-65535 的整数。"
+        }
+        if (hostConnectPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) {
+            return "Connect 端口必须是 1-65535 的整数。"
+        }
+        return null
+    }
+
+    private fun buildTunnelConfig(parsedLocalPort: Int, parsedHookPort: Int, parsedConnectPort: Int): NeoLinkCfg {
+        return NeoLinkCfg(remoteDomain.trim(), parsedHookPort, parsedConnectPort, accessKey.trim(), parsedLocalPort)
     }
 
     fun dispose() {
@@ -382,7 +453,9 @@ class NeoLinkViewModel {
     }
 
     fun stopService() {
-        if (!isRunning || isStopping) return
+        if (!isRunning || isStopping) {
+            return
+        }
         isStopping = true
         ClientConsole.say("正在停止 NeoLink 服务...")
         scope.launch(Dispatchers.IO) {
@@ -390,20 +463,24 @@ class NeoLinkViewModel {
         }
     }
 
-    private fun setupLogRedirector() {        // 只安装一次 GUI 日志桥（GUI log bridge），原始 logger 继续负责文件落盘。
-        if (isLogRedirected) return
+    private fun setupLogRedirector() {
+        if (isLogRedirected) {
+            return
+        }
         isLogRedirected = true
 
-        val originalLoggist = RuntimeState.loggist()        // GUI 桥的内部诊断日志仍落在常规 logs 目录。
+        val originalLoggist = RuntimeState.loggist()
         val internalLogFile = File(ConfigOperator.WORKING_DIR, "logs/gui_internal.log")
 
         RuntimeState.setLoggist(object : top.ceroxe.api.print.log.Loggist(internalLogFile) {
             override fun say(state: top.ceroxe.api.print.log.State) {
-                addLogSafe(getLogString(state)); originalLoggist?.say(state)
+                addLogSafe(getLogString(state))
+                originalLoggist?.say(state)
             }
 
             override fun sayNoNewLine(state: top.ceroxe.api.print.log.State) {
-                addLogSafe(getLogString(state)); originalLoggist?.sayNoNewLine(state)
+                addLogSafe(getLogString(state))
+                originalLoggist?.sayNoNewLine(state)
             }
 
             override fun write(str: String?, isNewLine: Boolean) {
@@ -422,7 +499,6 @@ class NeoLinkViewModel {
         })
     }
 
-
     private fun addLogSafe(ansiMsg: String) {
         scope.launch(Dispatchers.Main) {
             val updatedMessages = runtimeState.logMessages.toMutableList()
@@ -436,23 +512,30 @@ class NeoLinkViewModel {
 
     private fun parseAnsi(text: String): AnnotatedString {
         return buildAnnotatedString {
-            val ansiRegex = Regex("\u001B\\[([0-9;]*)m");
-            var lastIndex = 0;
+            val ansiRegex = Regex("\u001B\\[([0-9;]*)m")
+            var lastIndex = 0
             var currentStyle = SpanStyle(color = Color(0xFFCCCCCC))
+
             ansiRegex.findAll(text).forEach { result ->
                 val beforeText = text.substring(lastIndex, result.range.first)
-                if (beforeText.isNotEmpty()) withStyle(currentStyle) { append(beforeText) }
+                if (beforeText.isNotEmpty()) {
+                    withStyle(currentStyle) { append(beforeText) }
+                }
                 val code = result.groupValues[1]
                 currentStyle = when (code) {
-                    "31" -> SpanStyle(color = Color(0xFFFF5555)); "32" -> SpanStyle(color = Color(0xFF50FA7B)); "33" -> SpanStyle(
-                        color = Color(0xFFF1FA8C)
-                    ); "34" -> SpanStyle(color = Color(0xFFBD93F9)); "36" -> SpanStyle(color = Color(0xFF8BE9FD)); else -> SpanStyle(
-                        color = Color(0xFFCCCCCC)
-                    )
+                    "31" -> SpanStyle(color = Color(0xFFFF5555))
+                    "32" -> SpanStyle(color = Color(0xFF50FA7B))
+                    "33" -> SpanStyle(color = Color(0xFFF1FA8C))
+                    "34" -> SpanStyle(color = Color(0xFFBD93F9))
+                    "36" -> SpanStyle(color = Color(0xFF8BE9FD))
+                    else -> SpanStyle(color = Color(0xFFCCCCCC))
                 }
                 lastIndex = result.range.last + 1
             }
-            if (lastIndex < text.length) withStyle(currentStyle) { append(text.substring(lastIndex)) }
+
+            if (lastIndex < text.length) {
+                withStyle(currentStyle) { append(text.substring(lastIndex)) }
+            }
         }
     }
 
@@ -460,13 +543,6 @@ class NeoLinkViewModel {
         addLogSafe(ansiText)
     }
 
-    /**
-     * GUI 系统提示统一走单一模板，避免同一界面混用中文/英文标签与冗余括注。
-     *
-     * Why:
-     * 1. 系统消息属于 GUI 自有语义，不应再拼接 CLI 调试式英文补注。
-     * 2. 仅“服务已停止”作为状态终结提示前后留空行，避免其它系统提示把日志流切得过碎。
-     */
     private fun appendSystemLog(message: String, surroundWithBlankLines: Boolean = false) {
         val normalizedMessage = buildString {
             if (surroundWithBlankLines && runtimeState.logMessages.isNotEmpty()) {
@@ -482,16 +558,9 @@ class NeoLinkViewModel {
         RuntimeState.loggist()?.write(normalizedMessage, false) ?: addLogSafe(normalizedMessage)
     }
 
-    /**
-     * 协议切换提示只保留用户真正关心的结论，避免把内部实现说明暴露到 GUI。
-     */
     private fun buildProtocolUpdateMessage(tcpEnabled: Boolean, udpEnabled: Boolean): String {
         val tcpStatus = if (tcpEnabled) "已开启" else "已关闭"
         val udpStatus = if (udpEnabled) "已开启" else "已关闭"
         return "TCP $tcpStatus，UDP $udpStatus。"
     }
 }
-
-
-
-

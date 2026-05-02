@@ -44,6 +44,10 @@ public final class CommandLineProcessor {
                 parseFlagArgument(arg);
             }
         }
+        if (FeatureState.snapshot().guiMode()) {
+            // GUI 仅保留中文界面，语言标志仍然只对 CLI 生效。
+            RuntimeState.setLanguageData(LanguageData.getChineseLanguage());
+        }
         return new LaunchOptions(hasKey && hasLocalPort && FeatureState.snapshot().guiMode(), noColor);
     }
 

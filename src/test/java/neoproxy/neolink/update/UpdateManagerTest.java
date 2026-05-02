@@ -26,7 +26,7 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * UpdateManagerTest regression tests.
+ * `UpdateManagerTest` 回归测试。
  */
 @DisplayName("UpdateManagerTest")
 class UpdateManagerTest {
@@ -40,6 +40,7 @@ class UpdateManagerTest {
     private int originalLocalPort;
     private String originalOutputFilePath;
     private String originalBasePackageDir;
+    private String originalWorkingDir;
 
     @BeforeEach
     void setUp() {
@@ -50,6 +51,7 @@ class UpdateManagerTest {
         originalLocalPort = ConnectionState.snapshot().localPort();
         originalOutputFilePath = FeatureState.snapshot().outputFilePath();
         originalBasePackageDir = ConfigOperator.BASE_PACKAGE_DIR;
+        originalWorkingDir = ConfigOperator.WORKING_DIR;
 
         FeatureState.setDebugMode(false);
         RuntimeState.setLanguageData(new LanguageData());
@@ -58,6 +60,7 @@ class UpdateManagerTest {
         ConnectionState.setLocalPort(8080);
         FeatureState.setOutputFilePath(null);
         ConfigOperator.BASE_PACKAGE_DIR = tempDir.toString();
+        ConfigOperator.WORKING_DIR = tempDir.resolve("working").toString();
     }
 
     @AfterEach
@@ -69,6 +72,7 @@ class UpdateManagerTest {
         ConnectionState.setLocalPort(originalLocalPort);
         FeatureState.setOutputFilePath(originalOutputFilePath);
         ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
+        ConfigOperator.WORKING_DIR = originalWorkingDir;
     }
 
     @Test
@@ -249,14 +253,14 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("testResolveUpdateDirectoryUsesBasePackageDir")
-    void testResolveUpdateDirectoryUsesBasePackageDir() throws Exception {
+    @DisplayName("testResolveUpdateDirectoryUsesWorkingDir")
+    void testResolveUpdateDirectoryUsesWorkingDir() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("resolveUpdateDirectory");
         method.setAccessible(true);
 
         File value = (File) method.invoke(null);
 
-        assertEquals(tempDir.toFile().getAbsoluteFile(), value.getAbsoluteFile());
+        assertEquals(tempDir.resolve("working").toFile().getAbsoluteFile(), value.getAbsoluteFile());
     }
 
     @Test

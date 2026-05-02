@@ -8,15 +8,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * VersionInfoTest regression tests.
+ * `VersionInfo` 回归测试。
  */
 @DisplayName("VersionInfoTest")
 class VersionInfoTest {
+    private static final Pattern BUILD_SCRIPT_VERSION_PATTERN =
+            Pattern.compile("(?m)^\\s*val\\s+neoLinkApiVersion\\s*=\\s*\"([^\"]+)\"");
 
     @TempDir
     File tempDir;
@@ -41,12 +48,19 @@ class VersionInfoTest {
         ConfigOperator.WORKING_DIR = directory.getAbsolutePath();
     }
 
+    private String versionFromBuildScript() throws IOException {
+        String content = Files.readString(Path.of("build.gradle.kts"), StandardCharsets.UTF_8);
+        Matcher matcher = BUILD_SCRIPT_VERSION_PATTERN.matcher(content);
+        assertTrue(matcher.find(), "build.gradle.kts must declare neoLinkApiVersion");
+        return matcher.group(1);
+    }
+
     @Test
-    @DisplayName("testVersionIsNotEmpty")
-    void testVersionIsNotEmpty() {
+    @DisplayName("testVersionIsResolvedFromBuildScript")
+    void testVersionIsResolvedFromBuildScript() throws Exception {
         assertNotNull(VersionInfo.VERSION);
         assertFalse(VersionInfo.VERSION.isEmpty());
-        assertEquals("7.1.2", VersionInfo.VERSION);
+        assertEquals(versionFromBuildScript(), VersionInfo.VERSION);
     }
 
     @Test
@@ -71,15 +85,14 @@ class VersionInfoTest {
         String content = Files.readString(new File(tempDir, "eula.txt").toPath());
         assertTrue(content.contains("NeoLink"));
         assertTrue(content.contains("Ceroxe"));
-        assertFalse(content.contains("【软件名称】"));
         assertFalse(content.contains("[Software Name]"));
-        assertFalse(content.contains("【请填写您的开发者/公司名称】"));
         assertFalse(content.contains("[Your Developer/Company Name Here]"));
+        assertFalse(content.contains("__NEOLINK_VERSION__"));
     }
 
     @Test
     @DisplayName("testOutPutEulaCreatesFile")
-    void testOutPutEulaCreatesFile() throws Exception {
+    void testOutPutEulaCreatesFile() {
         useEulaDirectory(tempDir);
 
         File eulaFile = new File(tempDir, "eula.txt");
@@ -92,7 +105,7 @@ class VersionInfoTest {
 
     @Test
     @DisplayName("testOutPutEulaUsesWorkingDir")
-    void testOutPutEulaUsesWorkingDir() throws Exception {
+    void testOutPutEulaUsesWorkingDir() {
         File userDir = new File(tempDir, "user-dir");
         File workingDir = new File(tempDir, "working-dir");
         assertTrue(userDir.mkdirs());
@@ -116,7 +129,7 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("最终用户许可协议"));
+        assertTrue(content.contains("(EULA)"));
         assertTrue(content.contains("NeoLink"));
     }
 
@@ -144,13 +157,13 @@ class VersionInfoTest {
         VersionInfo.outPutEula();
 
         String content = Files.readString(eulaFile.toPath());
-        assertTrue(content.contains("最终用户许可协议"));
+        assertTrue(content.contains("NeoLink"));
         assertFalse(content.contains("Old content"));
     }
 
     @Test
-    @DisplayName("testEulaContainsVersion")
-    void testEulaContainsVersion() throws Exception {
+    @DisplayName("testEulaContainsResolvedVersion")
+    void testEulaContainsResolvedVersion() throws Exception {
         useEulaDirectory(tempDir);
 
         VersionInfo.outPutEula();
@@ -158,7 +171,8 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("鐗堟湰锛?.0") || content.contains("Version: 1.0"));
+        assertTrue(content.contains("Version: " + VersionInfo.VERSION));
+        assertFalse(content.contains("__NEOLINK_VERSION__"));
     }
 
     @Test
@@ -171,7 +185,7 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("生效日期") || content.contains("Effective Date"));
+        assertTrue(content.contains("Effective Date"));
     }
 
     @Test
@@ -184,6 +198,6 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("鐭ヨ瘑浜ф潈") || content.contains("Intellectual Property"));
+        assertTrue(content.contains("Intellectual Property"));
     }
 }

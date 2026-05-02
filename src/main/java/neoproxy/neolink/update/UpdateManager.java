@@ -1,7 +1,6 @@
 package neoproxy.neolink.update;
 
 import neoproxy.neolink.NeoLink;
-import neoproxy.neolink.app.ApplicationFiles;
 import neoproxy.neolink.app.LanguageManager;
 import neoproxy.neolink.cli.ClientConsole;
 import neoproxy.neolink.config.ConfigOperator;
@@ -59,7 +58,7 @@ public class UpdateManager {
 
     public static void checkUpdate(String fileName, String responseUrl) {
         debugOperation("Checking for updates: " + fileName);
-        try {                // The installer owns replacement after launch, so this JVM exits immediately.
+        try {                // 安装器在启动后接管替换流程，因此这个 JVM 会立即退出。
             debugOperation("Server response (URL): " + responseUrl);
 
             if (responseUrl == null || "false".equalsIgnoreCase(responseUrl) || responseUrl.trim().isEmpty()) {
@@ -180,17 +179,7 @@ public class UpdateManager {
     }
 
     private static File resolveUpdateDirectory() {
-        if (ConfigOperator.BASE_PACKAGE_DIR != null && !ConfigOperator.BASE_PACKAGE_DIR.isBlank()) {
-            return new File(ConfigOperator.BASE_PACKAGE_DIR);
-        }
-
-        File currentFile = ApplicationFiles.currentExecutableFile();
-        File currentParent = currentFile != null ? currentFile.getParentFile() : null;
-        if (currentParent != null) {
-            return currentParent;
-        }
-
-        return new File(NeoLink.CURRENT_DIR_PATH);
+        return ConfigOperator.resolveWritableRuntimeDirectory();
     }
 
     private static File createTemporaryDownloadFile(File outputFile) throws IOException {
@@ -252,7 +241,7 @@ public class UpdateManager {
     }
 
     private static HttpURLConnection openDownloadConnection(URL url) throws IOException {
-        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();        // Redirects are handled manually so arbitrary HTTP and HTTPS sources stay accepted.
+        HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();        // 手动处理重定向，确保任意 HTTP 和 HTTPS 源都能继续被接受。
         httpConn.setInstanceFollowRedirects(false);
         httpConn.setConnectTimeout(DOWNLOAD_CONNECT_TIMEOUT_MS);
         httpConn.setReadTimeout(DOWNLOAD_READ_TIMEOUT_MS);
@@ -594,7 +583,7 @@ public class UpdateManager {
     }
 
     /**
-     * Detects unit-test execution so update handoff never terminates the test JVM.
+     * 检测单元测试执行环境，避免更新交接流程意外终止测试 JVM。
      */
     private static boolean isRunningInUnitTest() {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();

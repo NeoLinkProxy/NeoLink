@@ -3,154 +3,114 @@ package neoproxy.neolink.core;
 import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.config.ConfigOperator;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * Version metadata and EULA writer.
+ * 版本元数据与 EULA 写入器。
  *
- * <p>The EULA template is kept as a UTF-8 Java text block and written with an explicit UTF-8 charset so
- * Windows consoles and packaged builds cannot silently corrupt Chinese legal text.</p>
+ * <p>设计原因：
+ * 打包后的应用应当信任资源过滤后的版本号，但开发与测试运行仍必须从同一份 Gradle
+ * 真源解析版本，而不能依赖另一份硬编码常量。EULA 文本由单一模板渲染，确保输出文件
+ * 不会与实际应用版本产生漂移。</p>
  */
-public class VersionInfo {
+public final class VersionInfo {
+    private static final String VERSION_TOKEN = "__NEOLINK_VERSION__";
+    private static final String BUILD_SCRIPT_NAME = "build.gradle.kts";
+    private static final Pattern BUILD_SCRIPT_VERSION_PATTERN =
+            Pattern.compile("(?m)^\\s*val\\s+neoLinkApiVersion\\s*=\\s*\"([^\"]+)\"");
+
     public static final String VERSION = getAppVersion();
     public static final String AUTHOR = "Ceroxe";
+
     private static final String EULA_TEMPLATE = """
-            NeoLink 最终用户许可协议 (EULA)
+            NeoLink 最终用户许可协议（EULA）
             
-            版本：1.0
+            版本：__NEOLINK_VERSION__
             生效日期：2025-11-1
             
             欢迎使用 NeoLink 软件（以下简称“本软件”）。本最终用户许可协议（以下简称“本协议”）是您（个人或单一实体，以下简称“用户”）与 Ceroxe（以下简称“开发者”）之间关于使用本软件的法律协议。
             
             1. 协议的接受
-            在安装、复制、下载、访问或以其他方式使用本软件前，请您仔细阅读本协议的全部条款。一旦您实施了上述任一行为，即表示您已充分理解、同意并接受本协议的全部条款。如果您不同意本协议的任何条款，请立即停止使用本软件。
-            
+            在安装、复制、下载、访问或以其他方式使用本软件之前，请您仔细阅读本协议的全部条款。一旦您实施上述任一行为，即表示您已充分理解、同意并接受本协议的全部条款。如果您不同意本协议的任何条款，请立即停止使用本软件。
+
             2. 知识产权许可
-            开发者授予您一项非排他性的、不可转让的、可撤销的许可，允许您在本协议条款的约束下，为个人或内部商业目的使用本软件。本软件及其所有内容、功能、设计、知识产权（包括但不限于著作权、商标权、专利权等）均归开发者所有，受中华人民共和国法律和国际知识产权法的保护。未经开发者事先书面同意，您不得对本软件进行反向工程、反编译、反汇编、破解、出租、出借、分发或创建衍生作品。
-            
-            3. 用户行为规范与责任
-            您承诺，将严格遵守中华人民共和国现行有效的法律法规、社会公德及公共秩序，并独立对您使用本软件的一切行为承担全部法律责任。
-            
-            3.1. 禁止的用途
-            您不得利用本软件从事任何违法违规或侵犯他人合法权益的活动，包括但不限于：
-            a) 危害国家安全、泄露国家秘密、颠覆国家政权、破坏国家统一的；
-            b) 损害国家荣誉和利益的；
-            c) 煽动民族仇恨、民族歧视，破坏民族团结的；
-            d) 破坏国家宗教政策，宣扬邪教和封建迷信的；
-            e) 散布谣言，扰乱社会秩序，破坏社会稳定的；
-            f) 散布淫秽、色情、赌博、暴力、凶杀、恐怖或者教唆犯罪的；
-            g) 侮辱或者诽谤他人，侵害他人名誉权、隐私权、肖像权等合法权益的；
-            h) 侵入、干扰、破坏他人计算机信息系统或网络，或窃取他人数据的；
-            i) 传播病毒、木马或其他恶意代码的；
-            j) 从事任何形式的网络诈骗、传销、非法集资等活动的；
-            k) 侵犯他人知识产权、商业秘密的；
-            l) 未经授权访问或使用他人内网资源、设备或数据的；
-            m) 其他违反法律、行政法规、社会公德或公共秩序的行为。
+            开发者授予您一项非独占、不可转让、可撤销的许可，允许您在本协议条款和条件约束下，将本软件用于个人或内部商业目的。本软件及其全部内容、功能、设计和知识产权（包括但不限于著作权、商标权、专利权等）均归开发者所有，并受中华人民共和国法律及国际知识产权条约保护。未经开发者事先书面同意，您不得对本软件进行反向工程、反编译、反汇编、破解、出租、出借、分发或基于本软件创建衍生作品。
+
+            3. 用户行为与责任
+            您承诺严格遵守中华人民共和国现行有效的法律法规、社会公德和公共秩序，并对您使用本软件时的全部行为独立承担全部法律责任。
+
+            3.1. 禁止用途
+            您不得将本软件用于任何违法或侵权活动，亦不得用于侵犯他人合法权益的行为，包括但不限于：
+            a) 危害国家安全、泄露国家秘密、颠覆国家政权、破坏国家统一；
+            b) 损害国家荣誉和利益；
+            c) 煽动民族仇恨、民族歧视，破坏民族团结；
+            d) 破坏国家宗教政策，宣扬邪教和封建迷信；
+            e) 散布谣言，扰乱社会秩序，破坏社会稳定；
+            f) 散布淫秽、色情、赌博、暴力、凶杀、恐怖或者教唆犯罪；
+            g) 侮辱或者诽谤他人，侵害他人名誉权、隐私权、肖像权等合法权益；
+            h) 侵入、干扰、破坏他人计算机信息系统或者网络，或者窃取他人数据；
+            i) 传播病毒、木马或者其他恶意代码；
+            j) 从事任何形式的网络诈骗、传销、非法集资等活动；
+            k) 侵犯他人知识产权、商业秘密等；
+            l) 未经授权访问或使用他人内网资源、设备或数据；
+            m) 其他违反法律、行政法规、社会公德或者公共秩序的行为。
             
             3.2. 用户内容责任
-            您通过本软件穿透内网后所访问、传输、存储或展示的任何数据、信息或内容（以下统称“用户内容”），其所有权及全部法律责任均由您本人承担。开发者作为中立的软件技术提供方，不对任何用户内容进行任何形式的审查、监控、编辑或背书。您保证您的用户内容及使用行为不违反本协议第3.1条的任何规定。
+            您通过本软件穿透内网后访问、传输、存储或展示的任何数据、信息或内容（统称“用户内容”）均由您自行拥有并由您独立承担全部法律责任。开发者作为中立的软件技术提供方，不会以任何形式审查、监控、编辑或认可任何用户内容。您保证您的用户内容以及您对本软件的使用不违反本协议第 3.1 条的任何规定。
             
             4. 免责声明与责任限制
             4.1. “按现状”提供
-            本软件按“现状”和“可用”状态提供。开发者不就本软件作任何明示或暗示的保证，包括但不限于对适销性、特定用途适用性、准确性、可靠性、不侵权性等任何保证。
+            本软件按照“现状”和“可用”状态提供。开发者对本软件不作任何明示或默示担保，包括但不限于适销性、特定用途适用性、准确性、可靠性或不侵权等方面的担保。
             
-            4.2. 责任免除
-            开发者明确声明，对于因您使用或无法使用本软件而导致的任何直接、间接、偶然、特殊、后果性或惩罚性的损害（包括但不限于利润损失、数据丢失、业务中断、商誉损害或其他经济损失），开发者均不承担任何责任，无论该等损害是基于保证、合同、侵权行为或任何其他法律理论，且无论开发者是否已被告知发生此种损害的可能性。
+            4.2. 责任限制
+            对于因您使用或无法使用本软件而导致的任何直接、间接、附带、特殊、后果性或惩罚性损害（包括但不限于利润损失、数据丢失、业务中断、声誉受损或其他任何经济损失），无论其依据是否为担保、合同、侵权行为（包括过失）或其他任何法律理论，开发者均不承担任何责任，即使开发者已被告知发生此类损害的可能性。
             
             4.3. 用户行为免责
-            您是您使用本软件行为的唯一责任主体。对于您或任何第三方利用本软件从事的任何行为所引发的任何争议、纠纷、行政处罚、诉讼、仲裁或任何形式的损失（包括但不限于律师费、诉讼费、赔偿金等），开发者概不负责。您同意赔偿开发者及其关联方因此遭受的全部损失和费用。
+            您对自己使用本软件期间的行为承担全部责任。对于您或任何第三方使用本软件所引发的任何争议、行政处罚、诉讼、仲裁或任何形式的损失（包括但不限于律师费、诉讼费和赔偿金），开发者概不负责。您同意就因此而使开发者及其关联方遭受的全部损失和费用向其作出赔偿并使其免受损害。
             
             4.4. “避风港”原则
-            开发者尊重他人的合法权益。如果我们依据相关法律法规或有权机关的要求，或在接到权利人的有效通知后，对您的相关行为或内容采取了删除、屏蔽、断开链接等必要措施，我们不因此承担任何责任，且保留向您追偿因我们采取该等措施而产生的合理费用的权利。
+            开发者尊重他人的合法权益。如果我们根据适用的法律法规或有权机关的要求，或者在收到权利人的有效通知后，对您的相关行为或内容采取删除、屏蔽、断开链接等必要措施，则我们不因此承担任何责任，并保留就我们因采取该等措施而产生的合理费用向您追偿的权利。
             
             5. 协议的终止
-            如果您违反了本协议的任何条款，开发者有权在不事先通知的情况下，立即终止您使用本软件的许可，并禁止您继续使用。协议终止后，您应立即销毁本软件的所有副本。
+            如果您违反本协议的任何条款，开发者有权在不事先通知的情况下立即终止您使用本软件的许可，并禁止您继续使用。本协议终止后，您应立即销毁本软件的所有副本。
             
             6. 适用法律与争议解决
-            本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。因本协议引起的或与本协议有关的任何争议，双方应友好协商解决；协商不成的，任何一方均有权向开发者所在地有管辖权的人民法院提起诉讼。
+            本协议的订立、效力、解释、履行及争议解决均适用中华人民共和国法律。因本协议引起或与本协议有关的任何争议，双方应先行友好协商解决；协商不成的，任何一方均有权向开发者所在地有管辖权的人民法院提起诉讼。
             
             7. 其他
-            本协议构成您与开发者之间关于使用本软件的完整协议，取代之前的所有口头或书面约定。如本协议的任何条款被认定为无效或不可执行，不影响其他条款的效力。开发者有权根据业务需要修订本协议，更新后的协议将在软件内或官方网站公布，您继续使用本软件即视为接受修订后的协议。
-            
-            English Version
-            NeoLink End-User License Agreement (EULA)
-            
-            Version: 1.0
-            Effective Date: 2025-11-1
-            
-            Welcome to NeoLink software (the "Software"). This End-User License Agreement (the "Agreement") is a legal agreement between you (an individual or a single entity, the "User") and Ceroxe (the "Developer") regarding the use of the Software.
-            
-            1. Acceptance of the Agreement
-            Before installing, copying, downloading, accessing, or otherwise using the Software, please read carefully all the terms of this Agreement. By performing any of the aforementioned actions, you signify that you have fully understood, agreed to, and accept all terms of this Agreement. If you do not agree to any of the terms of this Agreement, please immediately cease using the Software.
-            
-            2. Intellectual Property License
-            The Developer grants you a non-exclusive, non-transferable, and revocable license to use the Software for personal or internal business purposes, subject to the terms and conditions of this Agreement. The Software and all its content, features, design, and intellectual property (including but not limited to copyrights, trademarks, patents, etc.) are the sole property of the Developer and are protected by the laws of the People's Republic of China and international intellectual property treaties. Without the prior written consent of the Developer, you may not reverse engineer, decompile, disassemble, crack, rent, lend, distribute, or create derivative works based on the Software.
-            
-            3. User Conduct and Responsibilities
-            You undertake to strictly comply with all current and effective laws and regulations of the People's Republic of China, public order, and social morality, and you shall be solely and fully responsible for all of your actions when using the Software.
-            
-            3.1. Prohibited Uses
-            You shall not use the Software for any illegal or infringing activities that violate the rights of others, including but not limited to:
-            a) Endangering national security, leaking state secrets, subverting state power, or undermining national unity;
-            b) Harming national honor and interests;
-            c) Inciting ethnic hatred or discrimination, and undermining national unity;
-            d) Undermining the state's religious policies, propagating cults or feudal superstition;
-            e) Spreading rumors, disturbing social order, or undermining social stability;
-            f) Spreading obscenity, pornography, gambling, violence, murder, terror, or abetting crime;
-            g) Insulting or defaming others, infringing upon their rights to reputation, privacy, portrait, etc.;
-            h) Intruding into, interfering with, or damaging another person's computer information system or network, or stealing another person's data;
-            i) Distributing viruses, Trojans, or other malicious code;
-            j) Engaging in any form of online fraud, pyramid schemes, illegal fundraising, etc.;
-            k) Infringing upon another person's intellectual property rights, trade secrets, etc.;
-            l) Accessing or using another person's intranet resources, devices, or data without authorization;
-            m) Any other acts that violate laws, administrative regulations, public morality, or public order.
-            
-            3.2. Responsibility for User Content
-            Any data, information, or content that you access, transmit, store, or display through the Software after penetrating the intranet (collectively, "User Content") is solely owned by and is the sole legal responsibility of you. The Developer, as a neutral provider of software technology, does not review, monitor, edit, or endorse any User Content in any form. You guarantee that your User Content and your use of the Software do not violate any of the provisions in Section 3.1 of this Agreement.
-            
-            4. Disclaimer of Warranty and Limitation of Liability
-            4.1. "AS IS" Provision
-            The Software is provided on an "AS IS" and "AS AVAILABLE" basis. The Developer makes no warranties of any kind, whether express or implied, regarding the Software, including but not limited to warranties of merchantability, fitness for a particular purpose, accuracy, reliability, or non-infringement.
-            
-            4.2. Limitation of Liability
-            THE DEVELOPER EXPRESSLY DISCLAIMS ANY AND ALL LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES (INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, LOSS OF DATA, BUSINESS INTERRUPTION, DAMAGE TO REPUTATION, OR ANY OTHER ECONOMIC LOSS) RESULTING FROM YOUR USE OR INABILITY TO USE THE SOFTWARE, WHETHER BASED ON WARRANTY, CONTRACT, TORT (INCLUDING NEGLIGENCE), OR ANY OTHER LEGAL THEORY, EVEN IF THE DEVELOPER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
-            
-            4.3. Disclaimer for User Actions
-            You are the sole responsible party for your actions while using the Software. The Developer shall not be held liable for any disputes, disputes, administrative penalties, lawsuits, arbitrations, or any form of loss (including but not limited to attorney's fees, court costs, and compensation) arising from any actions undertaken by you or any third party using the Software. You agree to indemnify and hold the Developer and its affiliates harmless from all losses and expenses incurred in this regard.
-            
-            4.4. "Safe Harbor" Principle
-            The Developer respects the legitimate rights and interests of others. If we, in accordance with applicable laws and regulations or the requirements of competent authorities, or upon receiving a valid notice from a rights holder, take necessary measures such as deleting, blocking, or disconnecting links to your relevant actions or content, we shall not bear any liability for such actions and reserve the right to seek reimbursement from you for any reasonable expenses incurred by us in taking such measures.
-            
-            5. Termination of the Agreement
-            If you violate any provision of this Agreement, the Developer has the right to immediately terminate your license to use the Software without prior notice and prohibit you from further use. Upon termination, you must immediately destroy all copies of the Software.
-            
-            6. Governing Law and Dispute Resolution
-            The formation, validity, interpretation, performance, and dispute resolution of this Agreement shall be governed by the laws of the People's Republic of China. Any dispute arising from or in connection with this Agreement shall be settled through amicable negotiation between the parties; if negotiation fails, either party shall have the right to file a lawsuit with the people's court having jurisdiction in the location of the Developer.
-            
-            7. Miscellaneous
-            This Agreement constitutes the entire agreement between you and the Developer regarding the use of the Software and supersedes all prior oral or written agreements. If any provision of this Agreement is found to be invalid or unenforceable, the remaining provisions shall remain in full force and effect. The Developer reserves the right to amend this Agreement as necessary. The updated Agreement will be published within the Software or on the official website. Your continued use of the Software shall be deemed as acceptance of the revised Agreement.
+            本协议构成您与开发者之间关于使用本软件的完整协议，并取代此前所有口头或书面约定。如果本协议任何条款被认定为无效或不可执行，不影响其他条款的效力。开发者保留根据业务需要修订本协议的权利。修订后的协议将发布于本软件内或官方网站上。您继续使用本软件即视为接受修订后的协议。
             """;
 
+    private VersionInfo() {
+    }
+
     public static void outPutEula() {
-        File eulaTXT = new File(resolveEulaDirectory(), "eula.txt");
+        File eulaFile = new File(resolveEulaDirectory(), "eula.txt");
         try {
-            File parent = eulaTXT.getParentFile();
+            File parent = eulaFile.getParentFile();
             if (parent != null) {
                 Files.createDirectories(parent.toPath());
             }
-            String currentContent = eulaTXT.exists()
-                    ? Files.readString(eulaTXT.toPath(), StandardCharsets.UTF_8)
+
+            String renderedEula = renderedEula();
+            String currentContent = eulaFile.exists()
+                    ? Files.readString(eulaFile.toPath(), StandardCharsets.UTF_8)
                     : null;
-            if (!EULA_TEMPLATE.equals(currentContent)) {
+            if (!renderedEula.equals(currentContent)) {
                 Files.writeString(
-                        eulaTXT.toPath(),
-                        EULA_TEMPLATE,
+                        eulaFile.toPath(),
+                        renderedEula,
                         StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING
@@ -161,6 +121,10 @@ public class VersionInfo {
         }
     }
 
+    static String renderedEula() {
+        return EULA_TEMPLATE.replace(VERSION_TOKEN, VERSION);
+    }
+
     private static File resolveEulaDirectory() {
         if (ConfigOperator.WORKING_DIR != null && !ConfigOperator.WORKING_DIR.isBlank()) {
             return new File(ConfigOperator.WORKING_DIR);
@@ -169,22 +133,56 @@ public class VersionInfo {
     }
 
     private static String getAppVersion() {
-        Properties props = new Properties();
-        try (InputStream is = NeoLink.class.getClassLoader().getResourceAsStream("app.properties")) {
-            if (is == null) {
-                return "Dev-Build";
+        Properties properties = new Properties();
+        try (InputStream inputStream = NeoLink.class.getClassLoader().getResourceAsStream("app.properties")) {
+            if (inputStream == null) {
+                return versionFromBuildScriptOrFallback();
             }
-            props.load(is);
+            properties.load(inputStream);
         } catch (IOException e) {
-            return "Unknown";
+            return versionFromBuildScriptOrFallback();
         }
 
-        String version = props.getProperty("app.version");
-        // Gradle filtering may leave the literal placeholder in development runs.
-        if (version == null || version.isEmpty() || version.contains("${")) {            // Fall back to a deterministic development version instead of leaking ${version}.
-            return "Dev-ver";
+        String version = properties.getProperty("app.version");
+        if (version == null || version.isBlank() || version.contains("${")) {
+            return versionFromBuildScriptOrFallback();
         }
-
         return version.trim();
+    }
+
+    private static String versionFromBuildScriptOrFallback() {
+        String buildScriptVersion = findVersionFromBuildScript();
+        return buildScriptVersion != null ? buildScriptVersion : "Dev-ver";
+    }
+
+    private static String findVersionFromBuildScript() {
+        Path[] candidates = new Path[]{
+                Path.of(System.getProperty("user.dir"), BUILD_SCRIPT_NAME),
+                Path.of(NeoLink.CURRENT_DIR_PATH, BUILD_SCRIPT_NAME)
+        };
+        for (Path candidate : candidates) {
+            String version = readVersionFromBuildScript(candidate);
+            if (version != null) {
+                return version;
+            }
+        }
+        return null;
+    }
+
+    private static String readVersionFromBuildScript(Path buildScriptPath) {
+        try {
+            if (buildScriptPath == null || !Files.isRegularFile(buildScriptPath)) {
+                return null;
+            }
+            String content = Files.readString(buildScriptPath, StandardCharsets.UTF_8);
+            Matcher matcher = BUILD_SCRIPT_VERSION_PATTERN.matcher(content);
+            if (!matcher.find()) {
+                return null;
+            }
+            String version = matcher.group(1);
+            return version == null || version.isBlank() ? null : version.trim();
+        } catch (IOException e) {
+            return null;
+        }
     }
 }

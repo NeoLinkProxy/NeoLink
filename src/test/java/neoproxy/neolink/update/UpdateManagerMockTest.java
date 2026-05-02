@@ -19,7 +19,7 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * UpdateManagerMockTest regression tests.
+ * `UpdateManagerMockTest` 回归测试。
  */
 @DisplayName("UpdateManagerMockTest")
 class UpdateManagerMockTest {

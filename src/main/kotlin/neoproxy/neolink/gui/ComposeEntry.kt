@@ -11,44 +11,32 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
-import neoproxy.neolink.app.LanguageManager
 import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.config.LanguageData
+import neoproxy.neolink.state.RuntimeState
 import java.awt.Dimension
 import java.io.PrintStream
-import java.util.*
+import java.util.Locale
 import javax.swing.UIManager
 import javax.swing.plaf.ColorUIResource
 import kotlin.system.exitProcess
 
 /**
- * GUI 应用程序入口点
+ * GUI 应用入口。
  *
- * 核心职责：
- * 1. 执行 DWM 透明背板预检
- * 2. 配置图形界面渲染决策（DirectX + 亚克力，或 Software + 不透明）
- * 3. 初始化日志系统和语言设置
- * 4. 设置 Swing 外观
- * 5. 创建并显示主窗口
- *
- * 渲染策略：
- * - 优先使用 DirectX + 亚克力窗口
- * - 检测到 DWM 或透明窗口风险时自动回退到 Software + 不透明窗口
- * - 捕获并处理渲染异常
- *
- * @param args 命令行参数
+ * <p>设计原因：
+ * 桌面 GUI 明确只使用中文，因此入口会在输出任何面向用户的日志之前先锁定运行时语言。
+ * 初始化过程也做了包装，避免无效配置或参数把整个窗口生命周期直接打崩。</p>
  */
 fun main(args: Array<String>) {
-    // 检查是否显式指定无特效模式
     val isNoEffectMode = args.contains("--no-effect")
 
     if (isNoEffectMode) {
-        // 显式禁用特效，强制使用 Software
         RenderState.useSoftwareOpaque("用户通过 --no-effect 显式禁用 GUI 特效", forcedByUser = true)
         println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
     } else {
         val checkResult = NeoLinkPreFlightChecker.runFullCheck()
-
         if (checkResult.allowsAcrylicDirectX) {
             RenderState.useDirectXAcrylic(checkResult.description)
         } else {
@@ -56,10 +44,9 @@ fun main(args: Array<String>) {
         }
     }
 
-    // 确保任何组件在输出日志前，日志桥（logger bridge）已经可用。
     ConfigOperator.initEnvironment()
+    RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
     ClientConsole.initializeLogger(false)
-    LanguageManager.detectLanguage()
 
     val originalErr = System.err
     System.setErr(object : PrintStream(originalErr) {
@@ -68,7 +55,7 @@ fun main(args: Array<String>) {
             if (msg.contains("RenderException") || msg.contains("DirectX12")) {
                 if (!RenderState.isOpaqueFallback) {
                     WindowsEffects.markEffectUnavailable()
-                    RenderState.disableEffectsForCurrentProcess("Skiko 渲染异常，当前进程关闭透明背板")
+                    RenderState.disableEffectsForCurrentProcess("Skiko 渲染异常，当前进程关闭透明背景")
                     System.setProperty("skiko.renderApi", GuiRenderBackend.SOFTWARE.skikoValue)
                 }
             }
@@ -121,9 +108,11 @@ fun main(args: Array<String>) {
             }
 
             LaunchedEffect(Unit) {
-                // [优化点]：确保 ViewModel 初始化具备容错性
-                // 节点拉取失败或缓存缺失时，ViewModel 应保持界面可用。
-                viewModel.initialize(args)
+                try {
+                    viewModel.initialize(args)
+                } catch (e: Exception) {
+                    viewModel.appendLog("[System] GUI 初始化失败：${e.message ?: e.javaClass.simpleName}")
+                }
 
                 if (useTransparentWindow) {
                     delay(500)
@@ -155,7 +144,9 @@ fun customizeSwingLook() {
             "MenuItem.selectionBackground", accent, "MenuItem.selectionForeground", ColorUIResource(255, 255, 255)
         )
         val defaults = UIManager.getDefaults()
-        for (i in keys.indices step 2) defaults[keys[i]] = keys[i + 1]
+        for (i in keys.indices step 2) {
+            defaults[keys[i]] = keys[i + 1]
+        }
     } catch (e: Exception) {
         e.printStackTrace()
     }

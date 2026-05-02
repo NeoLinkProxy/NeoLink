@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,5 +77,16 @@ class CommandLineProcessorTest {
         LaunchOptions launchOptions = CommandLineProcessor.applyCommandLineArgs(new String[]{"--key=test-key"});
 
         assertFalse(launchOptions.autoStartInGui());
+    }
+
+    @Test
+    @DisplayName("GUI 模式强制中文，忽略 CLI 语言参数")
+    void guiModeForcesChineseLanguage() {
+        FeatureState.setGuiMode(true);
+
+        CommandLineProcessor.applyCommandLineArgs(new String[]{"--en-us"});
+
+        assertNotNull(RuntimeState.languageData());
+        assertEquals("zh", RuntimeState.languageData().getCurrentLanguage());
     }
 }

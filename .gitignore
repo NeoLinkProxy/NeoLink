@@ -1,41 +1,39 @@
 # Gradle
-.gradle
+.gradle/
 .gradle-home/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-# IntelliJ IDEA
+# IDEs
 .idea/
 *.iws
 *.iml
 *.ipr
 out/
 bin/
+.vscode/
 
 # Eclipse
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
 
-# VS Code
-.vscode/
-
-# MacOS
+# OS files
 .DS_Store
 
-# NeoLink 运行产物（runtime artifacts）
+# NeoLink runtime artifacts
 /logs/
 /config.cfg
 /nodes.json
 /eula.txt
 /*-env-bundled/
 
-# 临时文件（temporary files）
+# Temporary files
 all_code.txt
 *.log
 *.temp

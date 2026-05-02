@@ -1,5 +1,6 @@
 package neoproxy.neolink.config;
 
+import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.app.ApplicationFiles;
 import neoproxy.neolink.state.ConnectionSettings;
 import neoproxy.neolink.state.ConnectionState;
@@ -15,10 +16,11 @@ import java.nio.file.StandardCopyOption;
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * 配置环境初始化器与 `config.cfg` 读取器（configuration bootstrap & config loader）。
+ * 配置引导与配置加载器。
  *
- * <p>本类只负责定位资源目录 / 可写目录，并把解析后的配置写入 `state` 包。这样 CLI、GUI、
- * 测试代码都不需要再依赖入口类上的隐式静态变量。</p>
+ * <p>设计原因：
+ * 环境探测必须产出一个所有子系统都能写入的运行时目录。把这个解析过程集中在这里，
+ * 可以避免在安装目录只读时，更新文件、配置文件、日志和 EULA 输出分别落到不同位置。</p>
  */
 public final class ConfigOperator {
     public static String WORKING_DIR;
@@ -34,32 +36,69 @@ public final class ConfigOperator {
         BASE_PACKAGE_DIR = findBasePackageDir(programDir);
         debugOperation("Base resources path: " + BASE_PACKAGE_DIR);
 
-        File testFile = new File(BASE_PACKAGE_DIR, ".write_test");
+        File basePackageDir = safeDirectory(BASE_PACKAGE_DIR);
+        if (basePackageDir != null && isWritableDirectory(basePackageDir)) {
+            WORKING_DIR = basePackageDir.getAbsolutePath();
+            return;
+        }
+
+        File workingDirectory = new File(getPlatformSpecificDataPath());
+        WORKING_DIR = workingDirectory.getAbsolutePath();
+        if (!workingDirectory.exists()) {
+            workingDirectory.mkdirs();
+        }
+        new File(workingDirectory, "logs").mkdirs();
+        forceSyncBaseline("config.cfg");
+        forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
+        debugOperation("Redirected to AppData: " + WORKING_DIR);
+    }
+
+    public static File resolveWritableRuntimeDirectory() {
+        File workingDirectory = safeDirectory(WORKING_DIR);
+        if (workingDirectory != null) {
+            return workingDirectory;
+        }
+
+        File basePackageDirectory = safeDirectory(BASE_PACKAGE_DIR);
+        if (basePackageDirectory != null) {
+            return basePackageDirectory;
+        }
+
+        File currentFile = ApplicationFiles.currentExecutableFile();
+        File currentParent = currentFile != null ? currentFile.getParentFile() : null;
+        if (currentParent != null) {
+            return currentParent.getAbsoluteFile();
+        }
+
+        return new File(NeoLink.CURRENT_DIR_PATH).getAbsoluteFile();
+    }
+
+    private static boolean isWritableDirectory(File directory) {
+        if (directory == null) {
+            return false;
+        }
         try {
-            if (testFile.createNewFile()) {
-                testFile.delete();
-                WORKING_DIR = BASE_PACKAGE_DIR;
-            } else {
-                throw new IOException("Base package directory is not writable.");
-            }
+            Files.createDirectories(directory.toPath());
+            File probeFile = File.createTempFile("neolink-write-test-", ".tmp", directory);
+            Files.deleteIfExists(probeFile.toPath());
+            return true;
         } catch (IOException e) {
-            // 安装目录不可写（read-only install）时，改走用户数据目录。
-            WORKING_DIR = getPlatformSpecificDataPath();
-            new File(WORKING_DIR, "logs").mkdirs();
-            // 同步 baseline 文件，保证首次启动即可拿到默认配置与节点列表。
-            forceSyncBaseline("config.cfg");
-            forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
-            debugOperation("Redirected to AppData: " + WORKING_DIR);
+            return false;
         }
     }
 
+    private static File safeDirectory(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        return new File(path).getAbsoluteFile();
+    }
+
     private static String findBasePackageDir(String programDir) {
-        // 1. IDEA / development root。
         if (new File(System.getProperty("user.dir"), NodeConfig.NODE_LIST_FILE_NAME).exists()) {
             return System.getProperty("user.dir");
         }
 
-        // 2. Windows 安装目录或打包后的 `app` 子目录。
         if (new File(programDir, NodeConfig.NODE_LIST_FILE_NAME).exists()) {
             return programDir;
         }
@@ -68,7 +107,6 @@ public final class ConfigOperator {
             return packagedAppDir.getParent();
         }
 
-        // 3. macOS Resources 目录。
         if (System.getProperty("os.name").toLowerCase().contains("mac")) {
             File macResourcesDir = new File(programDir + "/../Resources/" + NodeConfig.NODE_LIST_FILE_NAME);
             if (macResourcesDir.exists()) {
