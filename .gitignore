@@ -26,6 +26,9 @@ bin/
 # OS files
 .DS_Store
 
+# Android SDK
+local.properties
+
 # NeoLink runtime artifacts
 /logs/
 /config.cfg
