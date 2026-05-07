@@ -84,11 +84,14 @@ public final class NeoLinkCoreRunner {
 
         synchronized (LOCK) {
             NeoLinkAPI activeTunnel = tunnel;
-            if (activeTunnel == null || !activeTunnel.isActive()) {
-                debugOperation("Skipping runtime PPv2 switch because no active tunnel is running.");
+            if (activeTunnel == null) {
+                debugOperation("Skipping runtime PPv2 switch because no tunnel instance is available.");
                 return;
             }
 
+            // NeoLinkAPI 7.1.12 writes PPv2 to both cfg and runtimeCfg. Calling it while the
+            // tunnel is still starting keeps the UI switch, the pending startup config, and
+            // future TCP connection behavior aligned.
             debugOperation("Applying runtime PPv2 switch. ppv2Enabled=" + ppv2Enabled);
             activeTunnel.setPPV2Enabled(ppv2Enabled);
         }

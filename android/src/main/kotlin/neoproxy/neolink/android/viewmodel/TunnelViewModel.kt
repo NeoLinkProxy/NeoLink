@@ -307,8 +307,17 @@ class TunnelViewModel(application: Application) : AndroidViewModel(application) 
     fun updatePpv2(enabled: Boolean): String? {
         val previous = ppv2Enabled.value
         ppv2Enabled.value = enabled
+        val shouldSyncRuntime = _tunnelState.value == NeoLinkState.STARTING || _tunnelState.value == NeoLinkState.RUNNING
+        if (!shouldSyncRuntime) {
+            return null
+        }
         viewModelScope.launch(Dispatchers.IO) {
-            val error = service?.updatePpv2(enabled)
+            val activeService = service
+            val error = if (activeService == null) {
+                "运行时 PPv2 更新失败: 隧道服务未绑定"
+            } else {
+                activeService.updatePpv2(enabled)
+            }
             if (error != null) {
                 withContext(Dispatchers.Main) {
                     ppv2Enabled.value = previous

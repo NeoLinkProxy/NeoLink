@@ -226,7 +226,8 @@ class TunnelService : Service() {
     fun updatePpv2(enabled: Boolean): String? {
         return try {
             synchronized(apiLock) {
-                api?.setPPV2Enabled(enabled)
+                val activeApi = api ?: return "运行时 PPv2 更新失败: NeoLinkAPI 实例不可用"
+                activeApi.setPPV2Enabled(enabled)
             }
             null
         } catch (e: Exception) {

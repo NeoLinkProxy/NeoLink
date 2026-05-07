@@ -99,6 +99,22 @@ class NeoLinkCoreRunnerTest {
     }
 
     @Test
+    @DisplayName("testUpdateRuntimePpv2WithStartingTunnel")
+    void testUpdateRuntimePpv2WithStartingTunnel() throws Exception {
+        NeoLinkAPI api = mock(NeoLinkAPI.class);
+        when(api.isActive()).thenReturn(false);
+
+        Field tunnelField = NeoLinkCoreRunner.class.getDeclaredField("tunnel");
+        tunnelField.setAccessible(true);
+        tunnelField.set(null, api);
+
+        NeoLinkCoreRunner.updateRuntimePpv2(true);
+
+        assertTrue(FeatureState.snapshot().enableProxyProtocol());
+        verify(api).setPPV2Enabled(true);
+    }
+
+    @Test
     @DisplayName("testUpdateRuntimeProtocolFlagsWithoutActiveTunnel")
     void testUpdateRuntimeProtocolFlagsWithoutActiveTunnel() {
         assertDoesNotThrow(() -> NeoLinkCoreRunner.updateRuntimeProtocolFlags(true, false));
