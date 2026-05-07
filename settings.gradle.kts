@@ -8,4 +8,4 @@ pluginManagement {
 
 rootProject.name = "NeoLink"
 
-include(":common", ":desktop", ":android")
+include(":common")
