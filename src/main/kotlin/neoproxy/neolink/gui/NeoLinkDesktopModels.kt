@@ -41,7 +41,8 @@ data class NasNode(
     var address: String = "",
     var hookPort: Int = 44801,
     var connectPort: Int = 44802,
-    var version: String = ""
+    var version: String = "",
+    var iconSvg: String = ""
 )
 
 data class NasKey(

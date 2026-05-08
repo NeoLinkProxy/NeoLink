@@ -173,7 +173,8 @@ class NasClient(
                 address = text(map["address"]),
                 hookPort = number(map["hookPort"]).toInt().takeIf { it in 1..65535 } ?: 44801,
                 connectPort = number(map["connectPort"]).toInt().takeIf { it in 1..65535 } ?: 44802,
-                version = text(map["version"])
+                version = text(map["version"]),
+                iconSvg = text(map["iconSvg"] ?: map["icon_svg"] ?: map["svg"])
             )
         }
     }

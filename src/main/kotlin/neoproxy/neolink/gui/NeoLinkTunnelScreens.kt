@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,11 +61,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -73,8 +79,20 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
+import top.ceroxe.api.net.TcpPingUtil
+import java.io.ByteArrayInputStream
+import java.io.StringReader
+import java.util.Locale
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
 
 @Composable
 fun tunnelManagementPage(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
@@ -351,29 +369,29 @@ fun collapsibleHeaderRow(
 @Composable
 fun nodeSelectorForTunnel(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, key: NasKey) {
     var expanded by remember { mutableStateOf(false) }
+    val onlineNodes = key.onlineNodes
+    val selected = onlineNodes.firstOrNull { it.nodeId == tunnel.selectedNodeId }
+    val pingResults = rememberNodePingResults(expanded, onlineNodes)
     Column {
         labelText("节点选择")
         inlineDropdown(
             expanded = expanded,
             selectedText = tunnel.selectedNodeName.ifBlank { "选择节点" },
             emptyText = "无可用节点",
+            leadingIcon = selected?.let { node -> { nodeSvgIcon(node, 16.dp) } },
             onToggle = { expanded = !expanded }
         ) {
-            key.onlineNodes.forEach { node ->
+            onlineNodes.forEach { node ->
                 inlineDropdownItem(
                     primary = node.displayName,
                     secondary = "${node.address}:${node.hookPort}/${node.connectPort}",
-                    primaryColor = ModernTheme.success
+                    primaryColor = ModernTheme.success,
+                    leading = { nodeSvgIcon(node, 16.dp) },
+                    trailing = { nodeLatencyText(pingResults[node.pingKey()]) }
                 ) {
                     viewModel.selectTunnelNode(tunnel.id, node)
                     expanded = false
                 }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            key.availableNodes.forEach { node ->
-                Text(node.displayName, color = if (node.isOnline) ModernTheme.success else ModernTheme.error, fontSize = 11.sp)
             }
         }
     }
@@ -517,12 +535,7 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
             Text("创建隧道", color = ModernTheme.textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             keyDropdown(viewModel)
             selectedKey?.let { key ->
-                Text("密钥参数：${key.displayType} / 余额 ${"%.3f".format(key.balanceMiB)} MiB / 速率 ${key.rate} / 到期 ${key.expire}", color = ModernTheme.textSecondary, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    key.availableNodes.forEach { node ->
-                        Text(node.displayName, color = if (node.isOnline) ModernTheme.success else ModernTheme.error, fontSize = 11.sp)
-                    }
-                }
+                Text(keySummaryText(key, prefix = "密钥参数：${key.displayType} / "), color = ModernTheme.textSecondary, fontSize = 12.sp)
                 createNodeDropdown(viewModel, key)
             }
             labelText("本地端口")
@@ -561,7 +574,9 @@ fun keyDropdown(viewModel: NeoLinkViewModel) {
             viewModel.availableKeysForCreate.forEach { key ->
                 inlineDropdownItem(
                     primary = "${key.alias} · ${key.displayType}",
-                    secondary = "余额 ${"%.3f".format(key.balanceMiB)} MiB / 节点 ${key.availableNodesConsole.ifBlank { "N/A" }}"
+                    secondary = keySummaryText(key),
+                    primaryColor = keyTypeColor(key),
+                    backgroundColor = keyTypeBackground(key)
                 ) {
                     viewModel.updateCreateDraft(keyAlias = key.alias)
                     expanded = false
@@ -574,28 +589,278 @@ fun keyDropdown(viewModel: NeoLinkViewModel) {
 @Composable
 fun createNodeDropdown(viewModel: NeoLinkViewModel, key: NasKey) {
     var expanded by remember { mutableStateOf(false) }
-    val selected = key.onlineNodes.firstOrNull { it.nodeId == viewModel.uiState.createDraft.selectedNodeId } ?: key.onlineNodes.firstOrNull()
+    val onlineNodes = key.onlineNodes
+    val selected = onlineNodes.firstOrNull { it.nodeId == viewModel.uiState.createDraft.selectedNodeId } ?: onlineNodes.firstOrNull()
+    val pingResults = rememberNodePingResults(expanded, onlineNodes)
     labelText("节点选择")
     inlineDropdown(
         expanded = expanded,
         selectedText = selected?.displayName ?: "无可用节点",
         emptyText = "无可用节点",
         selectedColor = if (selected == null) ModernTheme.error else ModernTheme.textPrimary,
+        leadingIcon = selected?.let { node -> { nodeSvgIcon(node, 16.dp) } },
         onToggle = { expanded = !expanded }
     ) {
-        if (key.onlineNodes.isEmpty()) {
+        if (onlineNodes.isEmpty()) {
             inlineDropdownItem("无可用节点", "NAS 当前没有返回在线节点", enabled = false) {}
         } else {
-            key.onlineNodes.forEach { node ->
+            onlineNodes.forEach { node ->
                 inlineDropdownItem(
                     primary = node.displayName,
                     secondary = "${node.address}:${node.hookPort}/${node.connectPort}",
-                    primaryColor = ModernTheme.success
+                    primaryColor = ModernTheme.success,
+                    leading = { nodeSvgIcon(node, 16.dp) },
+                    trailing = { nodeLatencyText(pingResults[node.pingKey()]) }
                 ) {
                     viewModel.updateCreateDraft(nodeId = node.nodeId)
                     expanded = false
                 }
             }
         }
+    }
+}
+
+private const val NodePingTimeoutMs = 1_000
+private const val MaxInlineSvgLength = 16_384
+private val FormalKeyPurple = Color(0xFF7C3AED)
+private val LatencyWarning = Color(0xFFFACC15)
+
+private fun keySummaryText(key: NasKey, prefix: String = ""): String {
+    val flow = String.format(Locale.ROOT, "%.3f", key.balanceMiB)
+    val expire = key.expire.ifBlank { "N/A" }
+    val bandwidth = key.rate.ifBlank { "N/A" }
+    return "${prefix}流量 $flow MiB / 到期 $expire / 带宽 $bandwidth"
+}
+
+private fun keyTypeBackground(key: NasKey): Color {
+    return if (key.isTrial) ModernTheme.success.copy(alpha = 0.16f) else FormalKeyPurple.copy(alpha = 0.18f)
+}
+
+private fun keyTypeColor(key: NasKey): Color {
+    return if (key.isTrial) ModernTheme.success else FormalKeyPurple
+}
+
+@Composable
+private fun rememberNodePingResults(expanded: Boolean, nodes: List<NasNode>): Map<String, String> {
+    val pingResults = remember { mutableStateMapOf<String, String>() }
+    val nodeKeys = nodes.map { it.pingKey() }
+    LaunchedEffect(expanded, nodeKeys) {
+        if (!expanded) {
+            return@LaunchedEffect
+        }
+        pingResults.keys.retainAll(nodeKeys.toSet())
+        nodes.forEach { node ->
+            val pingKey = node.pingKey()
+            if (node.address.isBlank() || node.hookPort !in 1..65535) {
+                pingResults[pingKey] = "超时"
+                return@forEach
+            }
+            pingResults[pingKey] = "测速中"
+            launch(Dispatchers.IO) {
+                val result = try {
+                    val latency = TcpPingUtil.ping(node.address, node.hookPort, NodePingTimeoutMs)
+                    if (latency == -1 || latency >= NodePingTimeoutMs) "超时" else "${latency}ms"
+                } catch (_: Exception) {
+                    "超时"
+                }
+                withContext(Dispatchers.Main) {
+                    pingResults[pingKey] = result
+                }
+            }
+        }
+    }
+    return pingResults
+}
+
+private fun NasNode.pingKey(): String {
+    return nodeId.ifBlank { "${address}:${hookPort}:${connectPort}:${displayName}" }
+}
+
+@Composable
+private fun nodeSvgIcon(node: NasNode, size: Dp) {
+    svgIcon(node.iconSvg, size)
+}
+
+@Composable
+private fun nodeLatencyText(result: String?) {
+    if (result.isNullOrBlank()) {
+        return
+    }
+    Text(
+        text = result,
+        color = nodeLatencyColor(result),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+private fun nodeLatencyColor(result: String): Color {
+    if (result == "测速中") {
+        return ModernTheme.textSecondary
+    }
+    if (result == "超时") {
+        return ModernTheme.error
+    }
+    val latencyMs = result.removeSuffix("ms").toIntOrNull() ?: return ModernTheme.error
+    return when {
+        latencyMs <= 99 -> ModernTheme.success
+        latencyMs <= 200 -> LatencyWarning
+        else -> ModernTheme.error
+    }
+}
+
+@Composable
+private fun svgIcon(svgContent: String?, iconSize: Dp) {
+    if (svgContent.isNullOrBlank() || svgContent.length > MaxInlineSvgLength) {
+        Canvas(modifier = Modifier.size(iconSize)) {
+            drawCircle(Color(0xFF3B82F6), style = Stroke(width = 2f))
+        }
+        return
+    }
+
+    val drawInstructions = remember(svgContent) {
+        try {
+            val factory = DocumentBuilderFactory.newInstance()
+            configureSecureXmlFactory(factory)
+            val builder = factory.newDocumentBuilder()
+            builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
+            val document = builder.parse(ByteArrayInputStream(svgContent.toByteArray(Charsets.UTF_8)))
+            val root = document.documentElement
+            val viewBoxParts = root.getAttribute("viewBox").split(Regex("[\\s,]+")).filter { it.isNotBlank() }
+            val viewBox = if (viewBoxParts.size == 4) {
+                val minX = viewBoxParts[0].toFloat()
+                val minY = viewBoxParts[1].toFloat()
+                val width = viewBoxParts[2].toFloat()
+                val height = viewBoxParts[3].toFloat()
+                Rect(
+                    minX,
+                    minY,
+                    minX + width,
+                    minY + height
+                )
+            } else {
+                Rect(
+                    0f,
+                    0f,
+                    root.getAttribute("width").toFloatOrNull() ?: 900f,
+                    root.getAttribute("height").toFloatOrNull() ?: 600f
+                )
+            }
+            val operations = mutableListOf<SvgDrawOp>()
+            parseSvgLayer(root, operations)
+            if (viewBox.width > 0f && viewBox.height > 0f && operations.isNotEmpty()) {
+                viewBox to operations
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    if (drawInstructions == null) {
+        Canvas(modifier = Modifier.size(iconSize)) {
+            drawCircle(Color(0xFF3B82F6), style = Stroke(width = 2f))
+        }
+        return
+    }
+
+    val (viewBox, operations) = drawInstructions
+    Canvas(modifier = Modifier.size(iconSize)) {
+        val scaleX = size.width / viewBox.width
+        val scaleY = size.height / viewBox.height
+        val finalScale = minOf(scaleX, scaleY)
+        val drawWidth = viewBox.width * finalScale
+        val drawHeight = viewBox.height * finalScale
+        val offsetX = (size.width - drawWidth) / 2f
+        val offsetY = (size.height - drawHeight) / 2f
+        translate(left = offsetX, top = offsetY) {
+            scale(scale = finalScale, pivot = Offset.Zero) {
+                translate(left = -viewBox.left, top = -viewBox.top) {
+                    operations.forEach { operation ->
+                        when (operation) {
+                            is SvgDrawOp.PathOp -> drawPath(operation.path, operation.color)
+                            is SvgDrawOp.RectOp -> drawRect(operation.color, operation.topLeft, operation.size)
+                            is SvgDrawOp.CircleOp -> drawCircle(operation.color, operation.radius, operation.center)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun configureSecureXmlFactory(factory: DocumentBuilderFactory) {
+    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+    factory.isXIncludeAware = false
+    factory.isExpandEntityReferences = false
+}
+
+private sealed class SvgDrawOp {
+    data class PathOp(val path: Path, val color: Color) : SvgDrawOp()
+    data class RectOp(val topLeft: Offset, val size: Size, val color: Color) : SvgDrawOp()
+    data class CircleOp(val center: Offset, val radius: Float, val color: Color) : SvgDrawOp()
+}
+
+private fun parseSvgLayer(element: Element, operations: MutableList<SvgDrawOp>) {
+    val children = element.childNodes
+    for (index in 0 until children.length) {
+        val child = children.item(index)
+        if (child.nodeType != org.w3c.dom.Node.ELEMENT_NODE) {
+            continue
+        }
+        val childElement = child as Element
+        val color = parseSvgFillColor(childElement.getAttribute("fill"))
+        when (childElement.tagName.lowercase(Locale.ROOT)) {
+            "path" -> {
+                val data = childElement.getAttribute("d")
+                if (data.isNotBlank()) {
+                    operations.add(SvgDrawOp.PathOp(PathParser().parsePathString(data).toPath(), color))
+                }
+            }
+
+            "rect" -> operations.add(
+                SvgDrawOp.RectOp(
+                    Offset(
+                        childElement.getAttribute("x").toFloatOrNull() ?: 0f,
+                        childElement.getAttribute("y").toFloatOrNull() ?: 0f
+                    ),
+                    Size(
+                        childElement.getAttribute("width").toFloatOrNull() ?: 0f,
+                        childElement.getAttribute("height").toFloatOrNull() ?: 0f
+                    ),
+                    color
+                )
+            )
+
+            "circle" -> operations.add(
+                SvgDrawOp.CircleOp(
+                    Offset(
+                        childElement.getAttribute("cx").toFloatOrNull() ?: 0f,
+                        childElement.getAttribute("cy").toFloatOrNull() ?: 0f
+                    ),
+                    childElement.getAttribute("r").toFloatOrNull() ?: 0f,
+                    color
+                )
+            )
+        }
+        parseSvgLayer(childElement, operations)
+    }
+}
+
+private fun parseSvgFillColor(rawFill: String): Color {
+    val normalizedFill = rawFill.trim().replace("'", "")
+    if (normalizedFill.isBlank() || normalizedFill.equals("none", ignoreCase = true)) {
+        return ModernTheme.textPrimary
+    }
+    return try {
+        val parsed = Color(java.awt.Color.decode(normalizedFill).rgb).copy(alpha = 1f)
+        if (parsed == Color.Black) ModernTheme.textPrimary else parsed
+    } catch (_: Exception) {
+        ModernTheme.textPrimary
     }
 }

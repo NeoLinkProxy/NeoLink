@@ -113,18 +113,33 @@ fun inlineDropdownItem(
     primary: String,
     secondary: String = "",
     primaryColor: Color = ModernTheme.textPrimary,
+    backgroundColor: Color = Color.Transparent,
     enabled: Boolean = true,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     Column(
         Modifier.fillMaxWidth()
-            .background(if (isHovered && enabled) ModernTheme.surfaceHover else Color.Transparent)
+            .background(if (isHovered && enabled) ModernTheme.surfaceHover else backgroundColor)
             .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
-        Text(primary, color = if (enabled) primaryColor else ModernTheme.textSecondary, fontSize = 13.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            leading?.invoke()
+            if (leading != null) {
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                primary,
+                color = if (enabled) primaryColor else ModernTheme.textSecondary,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f)
+            )
+            trailing?.invoke()
+        }
         if (secondary.isNotBlank()) {
             Text(secondary, color = ModernTheme.textSecondary, fontSize = 11.sp)
         }
