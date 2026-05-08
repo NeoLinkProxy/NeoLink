@@ -1,198 +1,62 @@
 package neoproxy.neolink.gui
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.window.WindowDraggableArea
-import androidx.compose.material.*
+import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
+import androidx.compose.material.darkColors
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.PathParser
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isCtrlPressed
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
-import kotlinx.coroutines.launch
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
-import java.io.ByteArrayInputStream
-import java.io.StringReader
-import javax.xml.XMLConstants
-import javax.xml.parsers.DocumentBuilderFactory
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 
-/**
- * NeoLink 现代感主题配置
- *
- * 核心职责：
- * 1. 定义应用程序的视觉主题和配色方案
- * 2. 根据图形界面渲染决策动态调整界面表现
- * 3. 提供统一的样式配置（颜色、字体、尺寸等）
- *
- * 设计特点：
- * - 支持透明背景（DirectX + 亚克力模式）
- * - 支持不透明背景（Software 或运行时特效失败）
- * - 暗色主题，保护视力
- * - 统一的圆角和间距设计
- *
- * 动态调整：
- * - 基于 RenderState.isOpaqueFallback 判断是否使用透明背景
- * - 基于 WindowsEffects.isEffectApplied 调整材质效果
- *
- * @author NeoProxy Team
- * @since 5.11.0
- */
-object ModernTheme {
-    // 不透明安全态检测：Software、用户禁用特效或真实窗口注入失败时，都不能继续绘制半透明根背景。
-    val background: Color
-        get() = if (RenderState.isOpaqueFallback) {
-            Color(0xFF121214) // 100% 不透明，防止透明窗口残态导致内容消失或点击穿透
-        } else if (WindowsEffects.isEffectApplied) {
-            Color(0xCC121214)
-        } else {
-            Color(0xFF121214)
-        }
-
-    val surface: Color
-        get() = if (RenderState.isOpaqueFallback || !WindowsEffects.isEffectApplied)
-            Color(0xFF1E1E20)
-        else
-            Color(0xCC1E1E20)
-
-    val surfaceHover = Color(0xFF252528)
-    val border = Color(0xFF2C2C2E)
-    val primary = Color(0xFF3B82F6)
-    val textPrimary = Color(0xFFE4E4E7)
-    val textSecondary = Color(0xFFA1A1AA)
-    val success = Color(0xFF10B981)
-    val warning = Color(0xFFFACC15)
-    val error = Color(0xFFEF4444)
-    val inputBackground = Color(0xFF18181B)
-    val terminalBg = Color(0xFF0F0F10)
-    val divider = Color(0xFF27272A)
-
-    val shapeWindow = RoundedCornerShape(8.dp)
-    val shapeMedium = RoundedCornerShape(10.dp)
-    val shapeSmall = RoundedCornerShape(6.dp)
-}
-
-/**
- * 自定义深色圆角右键菜单实现
- */
-@OptIn(ExperimentalFoundationApi::class)
-val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
-    @Composable
-    override fun Representation(state: ContextMenuState, items: () -> List<ContextMenuItem>) {
-        val status = state.status
-        if (status is ContextMenuState.Status.Open) {
-            Popup(
-                offset = IntOffset(status.rect.left.toInt(), status.rect.top.toInt()),
-                onDismissRequest = { state.status = ContextMenuState.Status.Closed }
-            ) {
-                Surface(
-                    shape = ModernTheme.shapeMedium,
-                    color = Color(0xFF1E1E20),
-                    elevation = 8.dp,
-                    border = BorderStroke(1.dp, ModernTheme.border),
-                    modifier = Modifier.width(IntrinsicSize.Max)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        items().forEach { item ->
-                            val interactionSource = remember { MutableInteractionSource() }
-                            val isHovered by interactionSource.collectIsHoveredAsState()
-                            val displayLabel = when (item.label) {
-                                "Copy" -> "复制"
-                                "Cut" -> "剪切"
-                                "Paste" -> "粘贴"
-                                "Select All" -> "全选"
-                                else -> item.label
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(
-                                        interactionSource = interactionSource,
-                                        indication = null,
-                                        onClick = { item.onClick(); state.status = ContextMenuState.Status.Closed }
-                                    )
-                                    .background(if (isHovered) ModernTheme.surfaceHover else Color.Transparent)
-                                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = displayLabel, color = ModernTheme.textPrimary, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * NeoLink 主屏幕可组合函数
- *
- * 核心职责：
- * 1. 构建 NeoLink 图形界面的主界面布局
- * 2. 整合标题栏、连接配置区、日志控制台、底部操作栏
- * 3. 处理窗口拖拽、最小化、最大化、关闭等操作
- * 4. 应用 Windows 亚克力特效
- *
- * 界面结构：
- * - 自定义标题栏（包含窗口控制按钮）
- * - 连接配置区（节点选择、端口设置、高级选项）
- * - 日志控制台（实时显示连接日志）
- * - 底部操作栏（启动/停止按钮）
- *
- * @param windowState 窗口状态（位置、大小、最大化等）
- * @param viewModel 视图模型，管理界面状态和业务逻辑
- * @param appIcon 应用程序图标
- * @param onExit 退出应用程序的回调
- * @author NeoProxy Team
- * @since 5.11.0
- */
 @Composable
 fun WindowScope.neoLinkMainScreen(
     windowState: WindowState,
@@ -201,23 +65,12 @@ fun WindowScope.neoLinkMainScreen(
     onExit: () -> Unit
 ) {
     val customTextSelectionColors = TextSelectionColors(
-        handleColor = Color(0xFFBD93F9),
-        backgroundColor = ModernTheme.primary.copy(alpha = 0.5f)
+        handleColor = ModernTheme.primary,
+        backgroundColor = ModernTheme.primary.copy(alpha = 0.35f)
     )
-
-    var showValidationError by remember { mutableStateOf(false) }
-    var validationMessage by remember { mutableStateOf("") }
-    var isCustomAddressMode by remember { mutableStateOf(false) }
-
+    var alertMessage by remember { mutableStateOf<String?>(null) }
     val isMaximized = windowState.placement == WindowPlacement.Maximized
-
-    // 核心逻辑：如果处于不透明安全态，或者窗口已最大化，则强制使用直角 (RectangleShape)。
-    // 只有在真实亚克力背板可用且非最大化时，才应用 ModernTheme.shapeWindow (8.dp 圆角)。
-    val currentShape = if (isMaximized || RenderState.isOpaqueFallback) {
-        RectangleShape
-    } else {
-        ModernTheme.shapeWindow
-    }
+    val currentShape = if (isMaximized || RenderState.isOpaqueFallback) RectangleShape else ModernTheme.shapeWindow
 
     MaterialTheme(
         colors = darkColors(
@@ -229,59 +82,24 @@ fun WindowScope.neoLinkMainScreen(
         )
     ) {
         CompositionLocalProvider(LocalTextSelectionColors provides customTextSelectionColors) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(currentShape) // 裁剪根容器形状
-            ) {
+            Box(modifier = Modifier.fillMaxSize().clip(currentShape)) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    // 颜色逻辑在 ModernTheme 中已处理：安全态为不透明，真实亚克力可用时带 Alpha
                     color = ModernTheme.background,
                     shape = currentShape,
-                    // 不透明安全态下禁用半透明高亮边框，避免透明残留和窗口边缘伪影。
-                    border = if (!isMaximized && !RenderState.isOpaqueFallback) {
-                        BorderStroke(1.dp, Color(0x1AFFFFFF))
-                    } else null
+                    border = if (!isMaximized && !RenderState.isOpaqueFallback) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             customTitleBar(windowState, appIcon, onExit)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .widthIn(max = 1000.dp)
-                                        .align(Alignment.CenterHorizontally)
-                                ) {
-                                    sectionCard {
-                                        connectionSection(
-                                            viewModel,
-                                            isCustomAddressMode,
-                                            onModeChange = { isCustomAddressMode = it })
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    advancedSettingsSection(viewModel)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    logConsoleSection(viewModel)
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    bottomBar(viewModel, isCustomAddressMode) { msg ->
-                                        validationMessage = msg
-                                        showValidationError = true
-                                    }
-                                }
+                            if (!viewModel.authState.isAuthenticated || !viewModel.authState.isVerified) {
+                                authScreen(viewModel)
+                            } else {
+                                workspaceScreen(viewModel, onAlert = { alertMessage = it })
                             }
                         }
-                        if (showValidationError) {
-                            modernAlertDialog(
-                                title = "参数验证未通过",
-                                message = validationMessage,
-                                onDismiss = { showValidationError = false }
-                            )
+                        alertMessage?.let { message ->
+                            modernAlertDialog("参数验证未通过", message, onDismiss = { alertMessage = null })
                         }
                     }
                 }
@@ -290,53 +108,24 @@ fun WindowScope.neoLinkMainScreen(
     }
 }
 
-
 @Composable
 fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable(enabled = false) {},
-        contentAlignment = Alignment.Center
-    ) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier
-                .width(360.dp)
-                .background(Color(0xFF1E1E20), ModernTheme.shapeMedium) // 弹窗背景保持不透明
-                .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium)
-                .padding(24.dp)
+            modifier = Modifier.width(360.dp).background(Color(0xFF1E1E20), ModernTheme.shapeMedium)
+                .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = ModernTheme.error,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+                Icon(Icons.Default.Warning, null, tint = ModernTheme.error, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
                 Text(title, color = ModernTheme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
             Text(message, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(38.dp),
-                shape = RoundedCornerShape(19.dp),
-                colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.primary),
-                elevation = ButtonDefaults.elevation(0.dp, 0.dp)
-            ) {
-                Text("返回修改", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
+            Spacer(Modifier.height(24.dp))
+            primaryButton("返回修改", false, onDismiss)
         }
     }
-}
-
-@Composable
-fun sectionCard(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
-            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(12.dp),
-        content = content
-    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -346,902 +135,72 @@ fun WindowScope.customTitleBar(windowState: WindowState, appIcon: Painter, onExi
     val toggleMaximize = {
         windowState.placement = if (isMaximized) WindowPlacement.Floating else WindowPlacement.Maximized
     }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(32.dp)
-            .background(Color.Transparent)
-    ) {
-        WindowDraggableArea(
-            modifier = Modifier.fillMaxSize().combinedClickable(
-                onClick = {},
-                onDoubleClick = toggleMaximize,
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            )
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(start = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = appIcon,
-                    contentDescription = "Logo",
-                    modifier = Modifier.size(23.dp).offset(y = (3).dp),
-                    contentScale = ContentScale.Fit,
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    "NeoLink 内网穿透客户端",
-                    color = ModernTheme.textSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal,
-                    fontFamily = FontFamily.SansSerif
-                )
+    DisposableEffect(window, isMaximized) {
+        val listener = object : MouseAdapter() {
+            override fun mouseClicked(event: MouseEvent) {
+                if (
+                    event.button == MouseEvent.BUTTON1 &&
+                    event.clickCount == 2 &&
+                    event.y in 0 until TitleBarHeightPx &&
+                    event.x < window.width - WindowControlButtonsWidthPx
+                ) {
+                    toggleMaximize()
+                }
             }
         }
 
-        Row(
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            windowControlButton(onClick = { windowState.isMinimized = true }) { color ->
-                drawLine(
-                    color,
-                    Offset(18.dp.toPx(), 16.dp.toPx()),
-                    Offset(28.dp.toPx(), 16.dp.toPx()),
-                    strokeWidth = 1.dp.toPx()
-                )
-            }
+        window.addMouseListener(listener)
+        onDispose { window.removeMouseListener(listener) }
+    }
 
+    Box(Modifier.fillMaxWidth().height(32.dp).background(Color.Transparent)) {
+        WindowDraggableArea(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = WindowControlButtonWidth * WindowControlButtonCount)
+        ) {
+            Row(Modifier.fillMaxSize().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Image(appIcon, "Logo", Modifier.size(23.dp).offset(y = 3.dp), contentScale = ContentScale.Fit)
+                Spacer(Modifier.width(10.dp))
+                Text("NeoLink 内网穿透客户端", color = ModernTheme.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+            }
+        }
+        Row(Modifier.align(Alignment.CenterEnd).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            windowControlButton(onClick = { windowState.isMinimized = true }) { color ->
+                drawLine(color, Offset(18.dp.toPx(), 16.dp.toPx()), Offset(28.dp.toPx(), 16.dp.toPx()), strokeWidth = 1.dp.toPx())
+            }
             windowControlButton(onClick = toggleMaximize) { color ->
                 if (isMaximized) {
-                    drawRect(
-                        color,
-                        topLeft = Offset(20.dp.toPx(), 12.dp.toPx()),
-                        size = Size(8.dp.toPx(), 8.dp.toPx()),
-                        style = Stroke(1.dp.toPx())
-                    )
-                    drawRect(
-                        ModernTheme.background, // 使用当前背景色遮挡
-                        topLeft = Offset(17.dp.toPx(), 15.dp.toPx()),
-                        size = Size(9.dp.toPx(), 9.dp.toPx())
-                    )
-                    drawRect(
-                        color,
-                        topLeft = Offset(18.dp.toPx(), 16.dp.toPx()),
-                        size = Size(8.dp.toPx(), 8.dp.toPx()),
-                        style = Stroke(1.dp.toPx())
-                    )
+                    drawRect(color, Offset(20.dp.toPx(), 11.dp.toPx()), Size(9.dp.toPx(), 9.dp.toPx()), style = Stroke(1.dp.toPx()))
+                    drawRect(color, Offset(17.dp.toPx(), 14.dp.toPx()), Size(9.dp.toPx(), 9.dp.toPx()), style = Stroke(1.dp.toPx()))
                 } else {
-                    drawRect(
-                        color,
-                        topLeft = Offset(18.dp.toPx(), 12.dp.toPx()),
-                        size = Size(10.dp.toPx(), 10.dp.toPx()),
-                        style = Stroke(1.dp.toPx())
-                    )
+                    drawRect(color, Offset(18.dp.toPx(), 12.dp.toPx()), Size(10.dp.toPx(), 10.dp.toPx()), style = Stroke(1.dp.toPx()))
                 }
             }
-
-            windowControlButton(isClose = true, onClick = { onExit() }) { color ->
-                drawLine(
-                    color,
-                    Offset(18.dp.toPx(), 11.dp.toPx()),
-                    Offset(28.dp.toPx(), 21.dp.toPx()),
-                    strokeWidth = 1.dp.toPx()
-                )
-                drawLine(
-                    color,
-                    Offset(18.dp.toPx(), 21.dp.toPx()),
-                    Offset(28.dp.toPx(), 11.dp.toPx()),
-                    strokeWidth = 1.dp.toPx()
-                )
+            windowControlButton(isClose = true, onClick = onExit) { color ->
+                drawLine(color, Offset(18.dp.toPx(), 11.dp.toPx()), Offset(28.dp.toPx(), 21.dp.toPx()), strokeWidth = 1.dp.toPx())
+                drawLine(color, Offset(18.dp.toPx(), 21.dp.toPx()), Offset(28.dp.toPx(), 11.dp.toPx()), strokeWidth = 1.dp.toPx())
             }
         }
     }
 }
 
+private val WindowControlButtonWidth = 46.dp
+private const val WindowControlButtonCount = 3
+private const val TitleBarHeightPx = 32
+private const val WindowControlButtonsWidthPx = 46 * WindowControlButtonCount
+
 @Composable
-fun windowControlButton(
-    isClose: Boolean = false,
-    onClick: () -> Unit,
-    drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit
-) {
+fun windowControlButton(isClose: Boolean = false, onClick: () -> Unit, drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
-
     val bg = when {
         isHovered && isClose -> Color(0xFFE81123)
         isHovered -> Color(0xFF333333)
         else -> Color.Transparent
     }
     val fg = if (isHovered && isClose) Color.White else ModernTheme.textSecondary
-
-    Box(
-        modifier = Modifier
-            .width(46.dp)
-            .fillMaxHeight()
-            .background(bg)
-            .clickable(onClick = onClick, interactionSource = interactionSource, indication = null),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) { drawIcon(fg) }
-    }
-}
-
-@Composable
-fun connectionSection(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChange: (Boolean) -> Unit) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
-                    .background(ModernTheme.primary, RoundedCornerShape(2.dp))
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                "连接配置",
-                color = ModernTheme.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(modifier = Modifier.weight(0.618f)) {
-                labelText("远程服务器地址")
-                Spacer(modifier = Modifier.height(4.dp))
-                nodeSelector(viewModel, isCustomMode, onModeChange)
-            }
-            Column(modifier = Modifier.weight(0.382f)) {
-                labelText("本地端口")
-                Spacer(modifier = Modifier.height(4.dp))
-                modernTextField(
-                    value = viewModel.localPort,
-                    onValueChange = { if (it.all { c -> c.isDigit() }) viewModel.localPort = it },
-                    placeholder = "8080"
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Column(modifier = Modifier.fillMaxWidth()) {
-            labelText("访问密钥 (Token)")
-            Spacer(modifier = Modifier.height(4.dp))
-            modernTextField(
-                value = viewModel.accessKey,
-                onValueChange = { viewModel.accessKey = it },
-                placeholder = "请输入连接密钥",
-                isPassword = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-@Composable
-fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChange: (Boolean) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val rotationState by animateFloatAsState(targetValue = if (expanded) 180f else 0f)
-
-    // [新增] 存储各节点的延迟结果
-    val pingResults = remember { mutableStateMapOf<String, String>() }
-    val scope = rememberCoroutineScope()
-
-    // [新增] 当菜单展开时触发异步测速
-    LaunchedEffect(expanded) {
-        if (expanded) {
-            viewModel.nodeList.forEach { node ->
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val latency = top.ceroxe.api.net.TcpPingUtil.ping(node.address, node.hookPort, 1000)
-                        pingResults[node.name] = if (latency == -1 || latency >= 1000) "超时" else "${latency}ms"
-                    } catch (e: Exception) {
-                        pingResults[node.name] = "超时"
-                    }
-                }
-            }
-        }
-    }
-
-    if (isCustomMode) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            modernTextField(
-                value = viewModel.remoteDomain,
-                onValueChange = { viewModel.remoteDomain = it },
-                placeholder = "输入 IP 或域名",
-                modifier = Modifier.fillMaxWidth()
-            )
-            IconButton(onClick = { onModeChange(false) }, modifier = Modifier.size(34.dp).padding(end = 4.dp)) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "返回",
-                    tint = ModernTheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(34.dp)
-                    .background(ModernTheme.inputBackground, ModernTheme.shapeSmall)
-                    .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall).clip(ModernTheme.shapeSmall)
-                    .clickable { expanded = true }.padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                viewModel.selectedNode?.let { node ->
-                    Box(
-                        modifier = Modifier.size(18.dp).offset(y = 1.dp),
-                        contentAlignment = Alignment.Center
-                    ) { svgIcon(node.iconSvg, size = 16.dp) }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        node.name,
-                        color = ModernTheme.textPrimary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.weight(1f).offset(y = (-2).dp)
-                    )
-                } ?: Text(
-                    "选择节点",
-                    color = ModernTheme.textSecondary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = ModernTheme.textSecondary,
-                    modifier = Modifier.rotate(rotationState)
-                )
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(Color(0xFF1E1E20))
-                    .border(1.dp, ModernTheme.border, RoundedCornerShape(4.dp)).width(300.dp)
-            ) {
-                viewModel.nodeList.forEach { node ->
-                    DropdownMenuItem(
-                        onClick = { viewModel.selectNode(node); expanded = false },
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier.size(20.dp),
-                                contentAlignment = Alignment.Center
-                            ) { svgIcon(node.iconSvg, size = 16.dp) }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                node.name,
-                                color = ModernTheme.textPrimary,
-                                fontSize = 13.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            // [新增] 延迟显示逻辑
-                            pingResults[node.name]?.let { result ->
-                                val colorWarning = Color(0xFFFACC15) // 黄色
-                                val displayColor = when {
-                                    result == "超时" -> ModernTheme.error
-                                    else -> {
-                                        val ms = result.replace("ms", "").toIntOrNull() ?: 0
-                                        when {
-                                            ms <= 99 -> ModernTheme.success
-                                            ms <= 200 -> colorWarning
-                                            else -> ModernTheme.error
-                                        }
-                                    }
-                                }
-                                Text(
-                                    text = result,
-                                    color = displayColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-                Divider(color = ModernTheme.divider, thickness = 1.dp)
-                DropdownMenuItem(
-                    onClick = { onModeChange(true); expanded = false },
-                    modifier = Modifier.height(40.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = null,
-                            tint = ModernTheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            "自定义地址...",
-                            color = ModernTheme.primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
-    var isExpanded by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
-            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).clip(ModernTheme.shapeMedium)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = ModernTheme.textSecondary,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "高级设置",
-                color = ModernTheme.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.offset(x = (-3).dp, y = (-2).dp)
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                if (isExpanded) "收起" else "展开",
-                color = ModernTheme.textSecondary,
-                fontSize = 12.sp,
-                modifier = Modifier.offset(x = (-1).dp, y = (-2).dp)
-            )
-        }
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                Divider(color = ModernTheme.divider, thickness = 1.dp)
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f)) {
-                        labelText("本地域名"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
-                        viewModel.localDomain,
-                        { viewModel.localDomain = it },
-                        placeholder = "localhost"
-                    )
-                    }
-                    Column(Modifier.weight(1f)) {
-                        labelText("Hook端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
-                        viewModel.hostHookPort,
-                        { if (it.all { c -> c.isDigit() }) viewModel.hostHookPort = it })
-                    }
-                    Column(Modifier.weight(1f)) {
-                        labelText("连接端口"); Spacer(modifier = Modifier.height(4.dp)); modernTextField(
-                        viewModel.hostConnectPort,
-                        { if (it.all { c -> c.isDigit() }) viewModel.hostConnectPort = it })
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)) {
-                        labelText("传输协议"); Spacer(modifier = Modifier.height(6.dp))
-                        // 传输协议运行时即时同步；其它开关同步到独立 FeatureState。
-                        modernCheckbox("启用 TCP", viewModel.isTcpEnabled) {
-                            viewModel.updateTransportProtocols(it, viewModel.isUdpEnabled)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        modernCheckbox("启用 UDP", viewModel.isUdpEnabled) {
-                            viewModel.updateTransportProtocols(viewModel.isTcpEnabled, it)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        modernCheckbox("真实IP (PPv2)", viewModel.isPpv2Enabled) {
-                            viewModel.isPpv2Enabled = it
-                        }
-                    }
-                    Column(Modifier.weight(1f)) {
-                        labelText("其他"); Spacer(modifier = Modifier.height(6.dp))
-                        modernCheckbox("自动重连", viewModel.isAutoReconnect) {
-                            viewModel.isAutoReconnect = it
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        modernCheckbox("调试模式", viewModel.isDebugMode) {
-                            viewModel.isDebugMode = it
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        modernCheckbox("显示详情", viewModel.isShowConnection) {
-                            viewModel.isShowConnection = it
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
-@Composable
-fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
-    val statusColor by animateColorAsState(
-        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.error,
-        animationSpec = tween(durationMillis = 500)
-    )
-
-    Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
-                    .background(statusColor, RoundedCornerShape(2.dp))
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                "运行日志",
-                color = ModernTheme.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            // 提示用户可以缩放
-            Text(
-                "Ctrl+滚轮调节字号",
-                color = ModernTheme.textSecondary.copy(alpha = 0.5f),
-                fontSize = 10.sp
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val listState = rememberLazyListState()
-
-        LaunchedEffect(viewModel.logMessages.size) {
-            if (viewModel.logMessages.isNotEmpty()) {
-                listState.scrollToItem(viewModel.logMessages.size - 1)
-            }
-        }
-
-        CompositionLocalProvider(
-            LocalContextMenuRepresentation provides ModernContextMenuRepresentation,
-            LocalTextSelectionColors provides LocalTextSelectionColors.current
-        ) {
-            SelectionContainer {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(ModernTheme.terminalBg, ModernTheme.shapeMedium)
-                        .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)
-                        .clip(ModernTheme.shapeMedium)
-                        // 🔴 核心功能：监听鼠标滚轮实现缩放
-                        .onPointerEvent(PointerEventType.Scroll) { event ->
-                            if (event.keyboardModifiers.isCtrlPressed) {
-                                val delta = event.changes.first().scrollDelta.y
-                                // 向上滚动量为负，向下滚动量为正
-                                val newSize = if (delta < 0) {
-                                    (viewModel.logFontSize.value + 1f).coerceAtMost(30f)
-                                } else {
-                                    (viewModel.logFontSize.value - 1f).coerceAtLeast(8f)
-                                }
-                                viewModel.logFontSize = newSize.sp
-                            }
-                        }
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(10.dp)
-                    ) {
-                        items(viewModel.logMessages) { msg ->
-                            val highlightedText = remember(msg, viewModel.logFontSize) {
-                                highlightLogMessage(msg)
-                            }
-
-                            androidx.compose.material.Text(
-                                text = highlightedText,
-                                color = ModernTheme.textPrimary,
-                                // 🔴 核心功能：使用动态字号
-                                fontSize = viewModel.logFontSize,
-                                fontFamily = FontFamily.Monospace,
-                                style = TextStyle(
-                                    // 自动计算行高，保持视觉比例
-                                    lineHeight = (viewModel.logFontSize.value * 1.35f).sp,
-                                    letterSpacing = 0.sp
-                                ),
-                                modifier = Modifier.padding(bottom = 1.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * 完整高亮逻辑函数（包含异常红色、MB/日期蓝色、IP域名紫色、缩进修复）
- */
-private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.AnnotatedString {
-    val newText = original.text.replace("\t", "    ")
-    val builder = androidx.compose.ui.text.AnnotatedString.Builder(newText)
-
-    // 保留原有 [INFO] 颜色
-    val tabIndex = original.text.indexOf('\t')
-    original.spanStyles.forEach { range ->
-        if (tabIndex == -1 || range.end < tabIndex) {
-            builder.addStyle(range.item, range.start, range.end)
-        }
-    }
-
-    val colorPurple = Color(0xFFE040FB)
-    val colorBlue = Color(0xFF40C4FF)
-    val colorRed = Color(0xFFFF5252)
-
-    // A. 红色：异常头部、堆栈、源码引用
-    val patternExHeader = "\\b[\\w\\.]+(?:Exception|Error)(?::\\s*.*)?"
-    val patternStackTrace = "\\bat\\s+[\\w\\.\\$/<> ]+(?:\\(.*?\\))?"
-    val patternSourceInfo = "\\((?:Unknown Source|[\\w\\.]+\\.java:\\d+)\\)"
-    val regexException = Regex("($patternExHeader|$patternStackTrace|$patternSourceInfo)")
-
-    // B. 蓝色：MB、日期范围
-    val patternMB = "\\d+(?:\\.\\d+)?\\s*MB"
-    val patternDateRange = "\\d{4}/\\d{1,2}/\\d{1,2}-\\d{1,2}:\\d{2}"
-    val regexBlue = Regex("($patternMB|$patternDateRange)")
-
-    // C. 紫色：IP、域名
-    val ipv6Bracketed = "\\[[a-fA-F0-9:]+\\](?::\\d+)?"
-    val ipv6Raw = "(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}"
-    val ipv4 = "\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?"
-    val domain = "(?:localhost|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,})(?::\\d+)?"
-    val regexPurple = Regex("($ipv6Bracketed|$ipv6Raw|$ipv4|$domain)")
-    val timePattern = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
-
-    // 1. 红色应用
-    for (match in regexException.findAll(newText)) {
-        builder.addStyle(
-            SpanStyle(color = colorRed, fontWeight = FontWeight.Bold),
-            match.range.first,
-            match.range.last + 1
-        )
-    }
-
-    // 2. 蓝色应用
-    for (match in regexBlue.findAll(newText)) {
-        builder.addStyle(
-            SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold),
-            match.range.first,
-            match.range.last + 1
-        )
-    }
-
-    // 3. 紫色应用（含避让逻辑）
-    for (match in regexPurple.findAll(newText)) {
-        val start = match.range.first
-        if (timePattern.matches(match.value)) continue
-
-        val lineStart = newText.lastIndexOf('\n', start).let { if (it == -1) 0 else it }
-        val lineEnd = newText.indexOf('\n', start).let { if (it == -1) newText.length else it }
-        val lineContent = newText.substring(lineStart, lineEnd)
-
-        if (lineContent.contains("Exception") || lineContent.contains("Error") || lineContent.trimStart()
-                .startsWith("at ")
-        ) {
-            continue
-        }
-        builder.addStyle(SpanStyle(color = colorPurple, fontWeight = FontWeight.Bold), start, match.range.last + 1)
-    }
-
-    return builder.toAnnotatedString()
-}
-
-@Composable
-fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationError: (String) -> Unit) {
-    val actionBtnBgColor by animateColorAsState(
-        targetValue = if (viewModel.isRunning) ModernTheme.error else ModernTheme.primary,
-        animationSpec = tween(durationMillis = 500)
-    )
-    val indicatorColor by animateColorAsState(
-        targetValue = if (viewModel.isRunning) ModernTheme.success else ModernTheme.error,
-        animationSpec = tween(durationMillis = 500)
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Box(
-                modifier = Modifier.size(6.dp).offset(y = 2.5.dp).background(
-                    indicatorColor,
-                    CircleShape
-                )
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                when {
-                    viewModel.isStopping -> "服务停止中"
-                    viewModel.isRunning -> "服务运行中"
-                    else -> "服务已停止"
-                },
-                color = ModernTheme.textSecondary,
-                fontSize = 12.sp,
-            )
-        }
-
-        Button(
-            enabled = !viewModel.isStopping,
-            onClick = {
-                if (viewModel.isRunning) {
-                    viewModel.stopService()
-                } else {
-                    val errors = mutableListOf<String>()
-                    if (isCustomMode && viewModel.remoteDomain.isBlank()) errors.add("远程服务器地址不能为空")
-                    if (!isCustomMode && viewModel.selectedNode == null) errors.add("请选择一个远程连接节点")
-                    if (viewModel.localPort.isBlank()) errors.add("本地端口不能为空")
-                    if (viewModel.localPort.isNotBlank() && !isValidPort(viewModel.localPort)) errors.add("本地端口必须在 1~65535 之间")
-                    if (!isValidPort(viewModel.hostHookPort)) errors.add("Hook端口必须在 1~65535 之间")
-                    if (!isValidPort(viewModel.hostConnectPort)) errors.add("连接端口必须在 1~65535 之间")
-                    if (viewModel.accessKey.isBlank()) errors.add("访问密钥 (Token) 不能为空")
-
-                    if (errors.isNotEmpty()) {
-                        onValidationError(errors.joinToString("\n") { "• $it" })
-                    } else {
-                        viewModel.startService()
-                    }
-                }
-            },
-            shape = ModernTheme.shapeSmall,
-            colors = ButtonDefaults.buttonColors(
-                backgroundColor = actionBtnBgColor,
-                contentColor = Color.White
-            ),
-            elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
-            modifier = Modifier.height(34.dp).width(100.dp)
-        ) {
-            Text(
-                when {
-                    viewModel.isStopping -> "停止中"
-                    viewModel.isRunning -> "停止服务"
-                    else -> "立即启动"
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            )
-        }
-    }
-}
-
-private fun isValidPort(value: String): Boolean = value.toIntOrNull()?.let { it in 1..65535 } == true
-
-@Composable
-fun labelText(text: String) {
-    Text(
-        text,
-        color = ModernTheme.textSecondary,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.offset(y = (-4).dp)
-    )
-}
-
-@Composable
-fun modernTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String = "",
-    isPassword: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    var isFocused by remember { mutableStateOf(false) }
-
-    val commonTextStyle = TextStyle(
-        color = ModernTheme.textPrimary,
-        fontSize = 13.sp,
-        lineHeight = 16.sp
-    )
-
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        textStyle = commonTextStyle,
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-        singleLine = true,
-        cursorBrush = SolidColor(ModernTheme.primary),
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .background(ModernTheme.inputBackground, ModernTheme.shapeSmall)
-                    .border(
-                        width = 1.dp,
-                        color = if (isFocused) ModernTheme.primary else ModernTheme.border,
-                        shape = ModernTheme.shapeSmall
-                    )
-                    .padding(horizontal = 10.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Box(
-                    modifier = Modifier.offset(y = (-1).dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = commonTextStyle.copy(
-                                color = Color.Gray.copy(alpha = 0.5f),
-                                fontSize = 12.sp
-                            ),
-                            modifier = Modifier.offset(y = (-0.5).dp)
-                        )
-                    }
-                    innerTextField()
-                }
-            }
-        },
-        modifier = modifier.onFocusChanged { isFocused = it.isFocused }
-    )
-}
-
-@Composable
-fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(modifier = Modifier.clip(ModernTheme.shapeSmall).clickable { onCheckedChange(!checked) }
-        .padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier.size(16.dp)
-                .background(if (checked) ModernTheme.primary else Color.Transparent, RoundedCornerShape(3.dp)).border(
-                    1.dp,
-                    if (checked) ModernTheme.primary else ModernTheme.textSecondary,
-                    RoundedCornerShape(3.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (checked) Icon(
-                Icons.Default.Check,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(12.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = (-4).dp))
-    }
-}
-
-@Composable
-fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
-    if (svgContent.isNullOrBlank() || svgContent.length > 16_384) {
-        Canvas(modifier = Modifier.size(size)) { drawCircle(Color(0xFF3B82F6), style = Stroke(width = 2f)) }; return
-    }
-    val drawInstructions = remember(svgContent) {
-        try {
-            val factory = DocumentBuilderFactory.newInstance();
-            configureSecureXmlFactory(factory)
-            val builder = factory.newDocumentBuilder();
-            builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
-            val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray(Charsets.UTF_8)));
-            val root = doc.documentElement
-            val vbAttr = root.getAttribute("viewBox").split(Regex("[\\s,]+"))
-            val viewBox = if (vbAttr.size == 4) Rect(
-                vbAttr[0].toFloat(),
-                vbAttr[1].toFloat(),
-                vbAttr[2].toFloat(),
-                vbAttr[3].toFloat()
-            ) else Rect(
-                0f,
-                0f,
-                root.getAttribute("width").toFloatOrNull() ?: 900f,
-                root.getAttribute("height").toFloatOrNull() ?: 600f
-            )
-            val ops = mutableListOf<DrawOp>(); parseSvgLayer(root, ops); Pair(viewBox, ops)
-        } catch (_: Exception) {
-            null
-        }
-    }
-    if (drawInstructions != null) {
-        val (viewBox, ops) = drawInstructions
-        Canvas(modifier = Modifier.size(size)) {
-            val scaleX = size.toPx() / viewBox.width;
-            val scaleY = size.toPx() / viewBox.height;
-            val finalScale = minOf(scaleX, scaleY)
-            val drawWidth = viewBox.width * finalScale;
-            val drawHeight = viewBox.height * finalScale
-            val offsetX = (size.toPx() - drawWidth) / 2;
-            val offsetY = (size.toPx() - drawHeight) / 2
-            translate(left = offsetX, top = offsetY) {
-                scale(
-                    finalScale,
-                    finalScale,
-                    pivot = Offset.Zero
-                ) {
-                    ops.forEach { op ->
-                        when (op) {
-                            is DrawOp.PathOp -> drawPath(op.path, op.color); is DrawOp.RectOp -> drawRect(
-                            op.color,
-                            op.topLeft,
-                            op.size
-                        ); is DrawOp.CircleOp -> drawCircle(op.color, op.radius, op.center)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun configureSecureXmlFactory(factory: DocumentBuilderFactory) {
-    factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-    factory.isXIncludeAware = false
-    factory.isExpandEntityReferences = false
-}
-
-sealed class DrawOp {
-    data class PathOp(val path: Path, val color: Color) : DrawOp();
-    data class RectOp(val topLeft: Offset, val size: Size, val color: Color) : DrawOp();
-    data class CircleOp(val center: Offset, val radius: Float, val color: Color) : DrawOp()
-}
-
-fun parseSvgLayer(element: Element, ops: MutableList<DrawOp>) {
-    val children = element.childNodes
-    for (i in 0 until children.length) {
-        val node = children.item(i)
-        if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
-            val el = node as Element;
-            val colorStr = el.getAttribute("fill").ifBlank { "#000000" }
-            val color = try {
-                val c = Color(
-                    java.awt.Color.decode(
-                        colorStr.replace(
-                            "'",
-                            ""
-                        )
-                    ).rgb
-                ).copy(alpha = 1f); if (c == Color.Black) ModernTheme.textPrimary else c
-            } catch (_: Exception) {
-                ModernTheme.textPrimary
-            }
-            when (el.tagName.lowercase()) {
-                "path" -> {
-                    val d = el.getAttribute("d"); if (d.isNotBlank()) ops.add(
-                        DrawOp.PathOp(
-                            PathParser().parsePathString(d).toPath(), color
-                        )
-                    )
-                }
-
-                "rect" -> ops.add(
-                    DrawOp.RectOp(
-                        Offset(
-                            el.getAttribute("x").toFloatOrNull() ?: 0f,
-                            el.getAttribute("y").toFloatOrNull() ?: 0f
-                        ),
-                        Size(
-                            el.getAttribute("width").toFloatOrNull() ?: 0f,
-                            el.getAttribute("height").toFloatOrNull() ?: 0f
-                        ),
-                        color
-                    )
-                )
-
-                "circle" -> ops.add(
-                    DrawOp.CircleOp(
-                        Offset(
-                            el.getAttribute("cx").toFloatOrNull() ?: 0f,
-                            el.getAttribute("cy").toFloatOrNull() ?: 0f
-                        ), el.getAttribute("r").toFloatOrNull() ?: 0f, color
-                    )
-                )
-
-                "g" -> parseSvgLayer(el, ops)
-            }
-        }
+    Box(Modifier.width(WindowControlButtonWidth).fillMaxHeight().background(bg).clickable(onClick = onClick, interactionSource = interactionSource, indication = null), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) { drawIcon(fg) }
     }
 }

@@ -228,10 +228,10 @@ class NeoLinkCoreRunnerTest {
     @Test
     @DisplayName("latestVersionFromServerResponse extracts last supported version")
     void latestVersionFromServerResponseExtractsLastSupportedVersion() throws Exception {
-        assertEquals("7.1.12", invokePrivate(
+        assertEquals("7.2.0", invokePrivate(
                 "latestVersionFromServerResponse",
                 new Class<?>[]{String.class},
-                "Unsupported version ! It should be :6.0.1|7.1.10| 7.1.12 "
+                "Unsupported version ! It should be :6.0.1|7.1.10| 7.2.0 "
         ));
         assertEquals(VersionInfo.VERSION, invokePrivate(
                 "latestVersionFromServerResponse",

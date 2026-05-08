@@ -13,7 +13,7 @@ plugins {
     jacoco
 }
 
-val neoLinkApiVersion = "7.1.12"
+val neoLinkApiVersion = "7.2.0"
 
 group = "neoproxy"
 version = neoLinkApiVersion
@@ -78,9 +78,8 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
 
-    // Jackson 运行时：common 模块 api() 暴露了 jackson-databind，
-    // 但 shadow JAR 需要确保类路径完整。
-    runtimeOnly("com.fasterxml.jackson.core:jackson-databind:2.21.2")
+    // 桌面 UI 需要直接解析 NAS 响应与本地隧道 JSON；这里使用同一 Jackson 版本避免运行时漂移。
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
 
     // 测试
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")

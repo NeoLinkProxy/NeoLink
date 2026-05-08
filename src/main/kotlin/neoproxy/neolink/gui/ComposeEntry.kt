@@ -19,6 +19,7 @@ import java.awt.Dimension
 import java.io.PrintStream
 import java.util.Locale
 import javax.swing.UIManager
+import javax.swing.JOptionPane
 import javax.swing.plaf.ColorUIResource
 import kotlin.system.exitProcess
 
@@ -45,6 +46,17 @@ fun main(args: Array<String>) {
     }
 
     ConfigOperator.initEnvironment()
+    val singleInstanceGuard = try {
+        NeoLinkSingleInstanceGuard.acquire()
+    } catch (e: Exception) {
+        showStartupNotice("NeoLink 启动失败", "无法创建单实例锁：${e.message ?: e.javaClass.simpleName}")
+        return
+    }
+    if (singleInstanceGuard == null) {
+        showStartupNotice("NeoLink 已在运行", "新版桌面 UI 采用单实例模型，请先关闭正在运行的 NeoLink。")
+        return
+    }
+
     RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
     ClientConsole.initializeLogger(false)
 
@@ -66,7 +78,8 @@ fun main(args: Array<String>) {
     Locale.setDefault(Locale.SIMPLIFIED_CHINESE)
     customizeSwingLook()
 
-    application {
+    try {
+        application {
         val viewModel = remember { NeoLinkViewModel() }
         val appIcon = painterResource("logo.png")
         val windowState = rememberWindowState(
@@ -78,6 +91,7 @@ fun main(args: Array<String>) {
 
         val closeApp = {
             viewModel.dispose()
+            singleInstanceGuard.close()
             exitApplication()
             exitProcess(0)
         }
@@ -128,6 +142,9 @@ fun main(args: Array<String>) {
             )
         }
     }
+    } finally {
+        singleInstanceGuard.close()
+    }
 }
 
 fun customizeSwingLook() {
@@ -150,4 +167,9 @@ fun customizeSwingLook() {
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+fun showStartupNotice(title: String, message: String) {
+    customizeSwingLook()
+    JOptionPane.showMessageDialog(null, message, title, JOptionPane.WARNING_MESSAGE)
 }

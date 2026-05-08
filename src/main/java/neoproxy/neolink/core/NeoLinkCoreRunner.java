@@ -89,7 +89,7 @@ public final class NeoLinkCoreRunner {
                 return;
             }
 
-            // NeoLinkAPI 7.1.12 writes PPv2 to both cfg and runtimeCfg. Calling it while the
+            // NeoLinkAPI 7.2.0 writes PPv2 to both cfg and runtimeCfg. Calling it while the
             // tunnel is still starting keeps the UI switch, the pending startup config, and
             // future TCP connection behavior aligned.
             debugOperation("Applying runtime PPv2 switch. ppv2Enabled=" + ppv2Enabled);
