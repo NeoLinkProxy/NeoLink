@@ -1,10 +1,10 @@
 package neoproxy.neolink.util;
 
 /**
- * 用户可见消息输出抽象（message sink abstraction）。
+ * 用户可见消息输出抽象。
  * <p>
  * 将 CLI 专有的 {@code ClientConsole.say()} 解耦为平台无关接口。
- * Desktop CLI 实现输出到终端；GUI 实现推送到 ViewModel；Android 实现可选 Toast/Snackbar。
+ * Desktop CLI 实现输出到终端；GUI 实现推送到 ViewModel；Android 实现可选提示组件。
  * <p>
  * 与 {@link LogSink} 的区别：LogSink 面向开发者日志，MessageSink 面向终端用户可见消息。
  */

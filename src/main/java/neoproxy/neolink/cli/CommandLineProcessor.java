@@ -8,10 +8,10 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * 命令行解析器（command-line processor）。
+ * 命令行解析器。
  *
- * <p>负责把 CLI arguments 解释为显式状态变更，而不是让入口类直接拼装大量 setter 逻辑。
- * 这样既能保持参数语义稳定，也能让 CLI 与 GUI 共用同一份 state model。</p>
+ * <p>负责把 CLI 参数解释为显式状态变更，而不是让入口类直接拼装大量 setter 逻辑。
+ * 这样既能保持参数语义稳定，也能让 CLI 与 GUI 共用同一份状态模型。</p>
  */
 public final class CommandLineProcessor {
 

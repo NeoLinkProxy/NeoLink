@@ -40,3 +40,12 @@ local.properties
 all_code.txt
 *.log
 *.temp
+*.tmp
+*.bak
+*.orig
+*.corrupt
+
+# JVM crash dumps
+hs_err_pid*
+replay_pid*
+*.hprof

@@ -35,6 +35,7 @@ class ConfigOperatorTest {
     void tearDown() {
         ConfigOperator.WORKING_DIR = originalWorkingDir;
         ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
+        ConfigOperator.setWorkingDirectoryProvider(null);
     }
 
     @Test
@@ -120,6 +121,23 @@ class ConfigOperatorTest {
         method.setAccessible(true);
 
         assertDoesNotThrow(() -> method.invoke(null, "non-existent.txt"));
+    }
+
+    @Test
+    @DisplayName("initEnvironment with provider bootstraps desktop config from packaged template")
+    void initEnvironmentWithProviderBootstrapsConfigTemplate() {
+        ConfigOperator.setWorkingDirectoryProvider(() -> tempDir.toPath());
+
+        ConfigOperator.initEnvironment();
+
+        File configFile = new File(tempDir, "config.cfg");
+        assertTrue(configFile.isFile());
+        assertDoesNotThrow(() -> {
+            LineConfigParser parser = new LineConfigParser(configFile);
+            parser.load();
+            assertTrue(parser.getOptional("NAS_URL").isPresent());
+            assertTrue(parser.getOptional("NKM_NODELIST_URL").isPresent());
+        });
     }
 
     @Test

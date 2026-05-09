@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.state
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -9,6 +8,10 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.gui.app.NeoLinkSingleInstanceGuard
+import neoproxy.neolink.gui.model.NasKey
+import neoproxy.neolink.gui.model.TunnelCardState
+import neoproxy.neolink.gui.model.TunnelRuntimeUiState
 import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.LogSink
 import org.junit.jupiter.api.AfterEach
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import top.ceroxe.api.print.log.LogType
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -99,6 +103,85 @@ class NeoLinkViewModelTest {
     }
 
     @Test
+    @DisplayName("tunnel option changes append CMP system messages into tunnel log")
+    fun tunnelOptionChangesAppendCmpSystemMessagesIntoTunnelLog() = runTest(mainDispatcher) {
+        val viewModel = NeoLinkViewModel()
+        val tunnelId = "tunnel-system-options"
+        viewModel.tunnels.add(TunnelCardState(id = tunnelId, autoReconnect = true, debugMode = false, showConnection = true))
+        viewModel.tunnelRuntime[tunnelId] = TunnelRuntimeUiState()
+
+        viewModel.updateTunnelAutoReconnect(tunnelId, false)
+        viewModel.updateTunnelDebug(tunnelId, true)
+        viewModel.updateTunnelShowConnection(tunnelId, false)
+        viewModel.updateTunnelPpv2(tunnelId, true)
+        viewModel.updateTunnelTcp(tunnelId, false)
+        advanceUntilIdle()
+
+        val logText = viewModel.tunnelRuntime[tunnelId]?.logs.orEmpty().joinToString("\n") { it.text }
+        assertTrue(logText.contains("[System] 自动重连已关闭。"))
+        assertTrue(logText.contains("[System] 调试模式已开启。"))
+        assertTrue(logText.contains("[System] 详细连接日志已关闭。"))
+        assertTrue(logText.contains("[System] 真实 IP 透传已开启。"))
+        assertTrue(logText.contains("[System] TCP 已关闭，UDP 已开启。"))
+    }
+
+    @Test
+    @DisplayName("startTunnel validation failure appends CMP system message into tunnel log")
+    fun startTunnelValidationFailureAppendsCmpSystemMessageIntoTunnelLog() = runTest(mainDispatcher) {
+        val viewModel = NeoLinkViewModel()
+        val tunnelId = "tunnel-invalid-start"
+        viewModel.tunnels.add(TunnelCardState(id = tunnelId, keyAlias = "key-a", localPort = "", remoteDomain = "p.ceroxe.top"))
+        viewModel.tunnelRuntime[tunnelId] = TunnelRuntimeUiState()
+
+        val error = viewModel.startTunnel(tunnelId)
+        advanceUntilIdle()
+
+        assertEquals("本地端口必须在 1~65535 之间。", error)
+        assertEquals("[System] 本地端口必须在 1~65535 之间。\n", viewModel.tunnelRuntime[tunnelId]?.logs?.single()?.text)
+    }
+
+    @Test
+    @DisplayName("tunnel validation follows NeoLinkAPI protocol flags and allows both protocols disabled")
+    fun tunnelValidationAllowsBothProtocolsDisabled() {
+        val viewModel = NeoLinkViewModel()
+        val tunnel = TunnelCardState(
+            keyAlias = "key-a",
+            localPort = "25565",
+            remoteDomain = "p.ceroxe.top",
+            localDomain = "localhost",
+            hookPort = "44801",
+            connectPort = "44802",
+            tcpEnabled = false,
+            udpEnabled = false
+        )
+
+        assertNull(validateTunnel(viewModel, tunnel))
+    }
+
+    @Test
+    @DisplayName("key balance log updates remaining balance against the first observed full balance")
+    fun keyBalanceLogUpdatesRemainingBalanceAgainstInitialBalance() = runTest(mainDispatcher) {
+        val viewModel = NeoLinkViewModel()
+        val tunnelId = "tunnel-key-balance-log"
+        viewModel.tunnels.add(
+            TunnelCardState(
+                id = tunnelId,
+                keyAlias = "key-a",
+                keyBalanceMiB = 100.0,
+                keyInitialBalanceMiB = 100.0
+            )
+        )
+        viewModel.tunnelRuntime[tunnelId] = TunnelRuntimeUiState(trafficSinceBalanceSyncBytes = 5L * 1024L * 1024L)
+
+        invokePrivate(viewModel, "appendTunnelLog", tunnelId, "这个密钥有 80.5 MB 流量可以消耗。", LogType.INFO)
+        advanceUntilIdle()
+
+        assertEquals(80.5, viewModel.tunnels.single().keyBalanceMiB)
+        assertEquals(100.0, viewModel.tunnels.single().keyInitialBalanceMiB)
+        assertEquals(0L, viewModel.tunnelRuntime[tunnelId]?.trafficSinceBalanceSyncBytes)
+    }
+
+    @Test
     @DisplayName("balance reconciliation subtracts only traffic not already reflected by NAS")
     fun balanceReconciliationKeepsOnlyUnaccountedLocalTraffic() {
         val viewModel = NeoLinkViewModel()
@@ -114,6 +197,7 @@ class NeoLinkViewModelTest {
         invokePrivate(viewModel, "reconcileTunnelsWithKeys")
 
         assertEquals(95.0, viewModel.tunnels.single().keyBalanceMiB)
+        assertEquals(100.0, viewModel.tunnels.single().keyInitialBalanceMiB)
         assertEquals(5L * 1024L * 1024L, viewModel.tunnelRuntime[tunnelId]?.trafficSinceBalanceSyncBytes)
 
         viewModel.keys.clear()
@@ -121,6 +205,7 @@ class NeoLinkViewModelTest {
         invokePrivate(viewModel, "reconcileTunnelsWithKeys")
 
         assertEquals(90.0, viewModel.tunnels.single().keyBalanceMiB)
+        assertEquals(100.0, viewModel.tunnels.single().keyInitialBalanceMiB)
         assertEquals(0L, viewModel.tunnelRuntime[tunnelId]?.trafficSinceBalanceSyncBytes)
     }
 
@@ -201,5 +286,11 @@ class NeoLinkViewModelTest {
         val method = target.javaClass.getDeclaredMethod(methodName, *parameterTypes)
         method.isAccessible = true
         method.invoke(target, *args)
+    }
+
+    private fun validateTunnel(viewModel: NeoLinkViewModel, tunnel: TunnelCardState): String? {
+        val method = viewModel.javaClass.getDeclaredMethod("validateTunnel", TunnelCardState::class.java)
+        method.isAccessible = true
+        return method.invoke(viewModel, tunnel) as String?
     }
 }

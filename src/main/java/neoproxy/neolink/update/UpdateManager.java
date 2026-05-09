@@ -12,6 +12,7 @@ import top.ceroxe.api.print.log.LogType;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
@@ -28,7 +29,7 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * 更新下载与交接流程（update download & handoff workflow）。
+ * 更新下载与交接流程。
  *
  * <p>本类保留更新链路的全部 I/O 细节：下载、重定向、安装器拉起、JAR 自替换。按用户要求，
  * 这里继续信任上游返回的任意 HTTP / HTTPS 源，不回退这部分行为。</p>
@@ -158,7 +159,7 @@ public class UpdateManager {
                 return null;
             }
 
-            URL initialUrl = new URL(urlString.trim());
+            URL initialUrl = URI.create(urlString.trim()).toURL();
             if (!isSupportedHttpUrl(initialUrl)) {
                 ClientConsole.say(messages().UNSUPPORTED_DOWNLOAD_PROTOCOL + initialUrl.getProtocol(), LogType.ERROR);
                 return null;
@@ -210,7 +211,7 @@ public class UpdateManager {
                         return null;
                     }
 
-                    URL redirectedUrl = new URL(currentUrl, location.trim());
+                    URL redirectedUrl = URI.create(currentUrl.toString()).resolve(location.trim()).toURL();
                     if (!isSupportedHttpUrl(redirectedUrl)) {
                         ClientConsole.say(messages().UNSUPPORTED_DOWNLOAD_PROTOCOL + redirectedUrl.getProtocol(), LogType.ERROR);
                         return null;
@@ -479,7 +480,7 @@ public class UpdateManager {
 
     private static String inferUpdateExtension(String responseUrl) {
         try {
-            String extension = extractExtension(extractFileNameFromUrl(new URL(responseUrl)));
+            String extension = extractExtension(extractFileNameFromUrl(URI.create(responseUrl).toURL()));
             if (EXECUTABLE_EXTENSION.equalsIgnoreCase(extension) || JAR_EXTENSION.equalsIgnoreCase(extension)) {
                 return extension.toLowerCase(Locale.ROOT);
             }

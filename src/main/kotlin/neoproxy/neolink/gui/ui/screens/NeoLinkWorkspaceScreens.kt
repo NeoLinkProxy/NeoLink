@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -43,6 +42,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import neoproxy.neolink.gui.model.MainPage
+import neoproxy.neolink.gui.state.NeoLinkViewModel
+import neoproxy.neolink.gui.ui.components.labelText
+import neoproxy.neolink.gui.ui.components.modernTextField
+import neoproxy.neolink.gui.ui.components.sectionCard
+import neoproxy.neolink.gui.ui.components.sectionTitle
+import neoproxy.neolink.gui.ui.theme.ModernTheme
+
+private val SidebarTextIconBaselineOffset = (-1).dp
 
 @Composable
 fun workspaceScreen(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
@@ -83,7 +91,7 @@ fun sidebar(viewModel: NeoLinkViewModel) {
 fun sidebarItem(viewModel: NeoLinkViewModel, page: MainPage, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
     val selected = viewModel.uiState.currentPage == page
     val bg by animateColorAsState(
-        if (selected) ModernTheme.primary.copy(alpha = 0.16f) else Color.Transparent,
+        if (selected) ModernTheme.accent.copy(alpha = 0.18f) else Color.Transparent,
         tween(180)
     )
     Box(
@@ -92,17 +100,25 @@ fun sidebarItem(viewModel: NeoLinkViewModel, page: MainPage, icon: androidx.comp
             .clickable { viewModel.setPage(page) }
     ) {
         if (selected) {
-            Box(Modifier.align(Alignment.CenterStart).width(3.dp).height(20.dp).background(ModernTheme.primary, RoundedCornerShape(2.dp)))
+            Box(Modifier.align(Alignment.CenterStart).width(4.dp).height(24.dp).background(ModernTheme.accent, RoundedCornerShape(2.dp)))
         }
         Row(
             modifier = Modifier.fillMaxSize().padding(start = 10.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, tint = if (selected) ModernTheme.primary else ModernTheme.textSecondary, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = if (selected) ModernTheme.accent else ModernTheme.textSecondary, modifier = Modifier.size(18.dp))
             AnimatedVisibility(viewModel.uiState.sidebarExpanded) {
                 Row {
                     Spacer(Modifier.width(10.dp))
-                    Text(label, color = if (selected) ModernTheme.textPrimary else ModernTheme.textSecondary, fontSize = 13.sp)
+                    Text(
+                        label,
+                        color = if (selected) ModernTheme.textPrimary else ModernTheme.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        // Compose Desktop 在 Windows 上的字体边界会让文本看起来低于矢量图标。
+                        // 侧边栏图标行保留 7.x 的视觉基线补偿。
+                        modifier = Modifier.offset(y = SidebarTextIconBaselineOffset)
+                    )
                 }
             }
         }

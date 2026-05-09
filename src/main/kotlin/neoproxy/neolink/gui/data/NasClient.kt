@@ -1,5 +1,6 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.data
+import neoproxy.neolink.gui.model.NasKey
+import neoproxy.neolink.gui.model.NasNode
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URI
@@ -151,7 +152,6 @@ class NasClient(
             rate = text(source["rate"]),
             port = text(source["port"]),
             availableNodes = parseNodes(source["availableNodes"]),
-            availableNodesConsole = text(source["availableNodesConsole"]),
             refreshCount = number(source["refreshCount"]).toInt(),
             refreshMaxPerDay = number(source["refreshMaxPerDay"]).toInt(),
             refreshRemainingToday = number(source["refreshRemainingToday"]).toInt()
@@ -172,9 +172,7 @@ class NasClient(
                 isOnline = map["isOnline"] == true,
                 address = text(map["address"]),
                 hookPort = number(map["hookPort"]).toInt().takeIf { it in 1..65535 } ?: 44801,
-                connectPort = number(map["connectPort"]).toInt().takeIf { it in 1..65535 } ?: 44802,
-                version = text(map["version"]),
-                iconSvg = text(map["iconSvg"] ?: map["icon_svg"] ?: map["svg"])
+                connectPort = number(map["connectPort"]).toInt().takeIf { it in 1..65535 } ?: 44802
             )
         }
     }

@@ -36,7 +36,7 @@ class NodeConfigTest {
         assertTrue(nodesJson.isFile());
         String savedJson = Files.readString(nodesJson.toPath(), StandardCharsets.UTF_8);
         assertTrue(savedJson.contains("\"realId\""));
-        assertTrue(savedJson.contains("\"iconSvg\""));
+        assertTrue(savedJson.contains("\"icon\""));
 
         List<NodeConfig> loadedNodes = NodeConfig.loadAll(nodesJson);
         assertEquals(1, loadedNodes.size());
@@ -59,5 +59,21 @@ class NodeConfigTest {
         assertThrows(Exception.class, () -> NodeConfig.saveAll(nodesJson, Collections.singletonList((NeoNode) null)));
 
         assertEquals(existingJson, Files.readString(nodesJson.toPath(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("loadAll accepts legacy iconSvg node cache field")
+    void loadAllAcceptsLegacyIconSvgField() throws Exception {
+        File nodesJson = new File(tempDir, NodeConfig.NODE_LIST_FILE_NAME);
+        Files.writeString(
+                nodesJson.toPath(),
+                "[{\"realId\":\"node-legacy\",\"name\":\"legacy\",\"address\":\"legacy.example.com\",\"iconSvg\":\"<svg/>\"}]",
+                StandardCharsets.UTF_8
+        );
+
+        List<NodeConfig> loadedNodes = NodeConfig.loadAll(nodesJson);
+
+        assertEquals(1, loadedNodes.size());
+        assertEquals("<svg/>", loadedNodes.get(0).getIcon());
     }
 }

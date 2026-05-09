@@ -1,9 +1,9 @@
 package neoproxy.neolink.util;
 
 /**
- * 日志输出抽象（log sink abstraction）。
+ * 日志输出抽象。
  * <p>
- * 将 JVM-only 的 {@code top.ceroxe.api.print.log.Loggist} 解耦为平台无关接口。
+ * 将仅 JVM 的 {@code top.ceroxe.api.print.log.Loggist} 解耦为平台无关接口。
  * Desktop 实现桥接到 Loggist；Android 实现桥接到 android.util.Log。
  * <p>
  * 日志级别语义：

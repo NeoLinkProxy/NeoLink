@@ -1,7 +1,7 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.ui.components
 import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.*
 import kotlinx.coroutines.flow.map
 
@@ -37,4 +37,32 @@ fun InteractionSource.collectIsHoveredAsState(): State<Boolean> {
         }
     }
     return isHovered
+}
+
+/**
+ * 按压状态收集器
+ *
+ * 核心职责：
+ * 1. 监听 Compose 交互源的按压事件
+ * 2. 将按压状态转换为可观察状态
+ * 3. 用于实现按下效果的 UI 组件
+ *
+ * @return 按压状态，true 表示正在被按下
+ */
+@Composable
+fun InteractionSource.collectIsPressedAsState(): State<Boolean> {
+    val isPressed = remember { mutableStateOf(false) }
+    LaunchedEffect(this) {
+        interactions.map { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> true
+                is PressInteraction.Release -> false
+                is PressInteraction.Cancel -> false
+                else -> null
+            }
+        }.collect {
+            if (it != null) isPressed.value = it
+        }
+    }
+    return isPressed
 }

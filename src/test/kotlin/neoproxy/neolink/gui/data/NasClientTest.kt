@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.data
 import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue

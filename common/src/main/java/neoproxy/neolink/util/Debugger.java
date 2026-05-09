@@ -7,12 +7,12 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 /**
- * 调试输出桥（debug output bridge）。
+ * 调试输出桥。
  *
  * <p>调试信息只在 {@code debug mode} 打开时输出。若 {@link LogSink} 已注入，
  * 则统一交给日志系统做格式化与持久化；否则在非 GUI 模式下回退到标准输出。</p>
  *
- * <p>与原始实现的差异：将 JVM-only 的 {@code Loggist/LogType/State} 替换为
+ * <p>与原始实现的差异：将仅 JVM 的 {@code Loggist/LogType/State} 替换为
  * 平台无关的 {@link LogSink} 接口。</p>
  */
 public final class Debugger {
@@ -32,7 +32,7 @@ public final class Debugger {
 
         LogSink sink = RuntimeState.logSink();
         if (sink != null) {
-            // 已有日志系统（logger ready）时，统一走日志桥，CLI / GUI / Android 都能复用同一份输出。
+            // 已有日志系统就绪时，统一走日志桥，CLI / GUI / Android 都能复用同一份输出。
             sink.log(LogSink.Level.ERROR, "DEBUG", fullStackTrace);
             return;
         }

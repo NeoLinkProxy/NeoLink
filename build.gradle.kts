@@ -1,5 +1,5 @@
 // ============================================================================
-// NeoLink Desktop Client Build Script
+// NeoLink Desktop 客户端构建脚本
 // 职责：以仓库根项目作为桌面端应用本体，保留 :common 作为共享业务模块。
 // 这样 feature 分支可以独立演进 NeoAuthServer API 客户端，而不再受旧多端结构牵连。
 // ============================================================================
@@ -65,7 +65,7 @@ dependencies {
     implementation("top.ceroxe.api:ceroxe-core:2.0.0")
     implementation("top.ceroxe.api:ceroxe-detector:2.0.0")
 
-    // Compose Desktop GUI
+    // Compose Desktop 图形界面
     implementation(compose.desktop.currentOs)
     implementation(compose.material)
     implementation(compose.ui)

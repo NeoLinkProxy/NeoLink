@@ -33,10 +33,10 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 
 /**
- * NeoLink 隧道运行器（tunnel runtime coordinator）。
+ * NeoLink 隧道运行器。
  *
  * <p>本类拥有单一 `NeoLinkAPI` 实例的生命周期控制权：启动、重连、停止、运行时协议切换都在
- * 这里串行化处理。UI / CLI 只负责触发，不直接持有 tunnel 所有权。</p>
+ * 这里串行化处理。UI / CLI 只负责触发，不直接持有 隧道所有权。</p>
  */
 public final class NeoLinkCoreRunner {
     private static final Object LOCK = new Object();
@@ -89,9 +89,8 @@ public final class NeoLinkCoreRunner {
                 return;
             }
 
-            // NeoLinkAPI 7.2.0 writes PPv2 to both cfg and runtimeCfg. Calling it while the
-            // tunnel is still starting keeps the UI switch, the pending startup config, and
-            // future TCP connection behavior aligned.
+            // NeoLinkAPI 7.2.0 会同时把 PPv2 写入 cfg 与 运行时配置。在 tunnel 仍处于启动阶段时调用，
+            // 可以让 UI 开关、待生效的启动配置以及后续 TCP 连接行为保持一致。
             debugOperation("Applying runtime PPv2 switch. ppv2Enabled=" + ppv2Enabled);
             activeTunnel.setPPV2Enabled(ppv2Enabled);
         }
@@ -217,7 +216,7 @@ public final class NeoLinkCoreRunner {
                 .setUDPEnabled(selection.udpEnabled())
                 .setPPV2Enabled(featureSettings.enableProxyProtocol())
                 // 调试开关统一由 FeatureState -> NeoLinkAPI 全局 Debugger 同步，避免把一次启动时的布尔值
-                // 固化进 runtimeCfg 后，GUI 运行时切换调试模式却无法正确关闭后续调试输出。
+                // 固化进 运行时配置 后，GUI 运行时切换调试模式却无法正确关闭后续调试输出。
                 .setDebugMsg(false)
                 .setHeartBeatPacketDelay(featureSettings.heartbeatPacketDelay())
                 .setProxyIPToNeoServer(featureSettings.proxyIPToNeoServer())

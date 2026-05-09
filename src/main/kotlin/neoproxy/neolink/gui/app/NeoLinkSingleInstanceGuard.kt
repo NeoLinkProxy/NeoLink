@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.app
 import neoproxy.neolink.config.ConfigOperator
 import java.io.File
 import java.nio.channels.FileChannel

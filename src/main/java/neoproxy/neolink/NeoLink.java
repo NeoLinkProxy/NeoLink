@@ -5,7 +5,7 @@ import neoproxy.neolink.cli.CommandLineProcessor;
 import neoproxy.neolink.cli.LaunchOptions;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
-import neoproxy.neolink.gui.ComposeEntryKt;
+import neoproxy.neolink.gui.app.ComposeEntryKt;
 import neoproxy.neolink.state.ConnectionState;
 import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
@@ -18,9 +18,9 @@ import java.util.function.IntConsumer;
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * NeoLink 客户端入口（application entry point）。
+ * NeoLink 客户端入口（应用入口）。
  *
- * <p>本类现在只保留启动编排（startup orchestration）职责：初始化环境、选择 GUI / CLI、
+ * <p>本类现在只保留启动编排职责：初始化环境、选择 GUI / CLI、
  * 串联配置加载与 tunnel 启动。命令行解析、控制台输出、节点工作流等工具职责已经下沉到独立类。</p>
  */
 public final class NeoLink {

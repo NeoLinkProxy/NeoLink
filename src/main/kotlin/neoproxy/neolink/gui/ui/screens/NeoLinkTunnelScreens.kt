@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -50,6 +49,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -70,7 +71,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -88,6 +91,30 @@ import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import top.ceroxe.api.net.TcpPingUtil
+import neoproxy.neolink.gui.model.NasKey
+import neoproxy.neolink.gui.model.NasNode
+import neoproxy.neolink.gui.model.TrafficPoint
+import neoproxy.neolink.gui.model.TunnelCardState
+import neoproxy.neolink.gui.model.TunnelRuntimeUiState
+import neoproxy.neolink.gui.state.NeoLinkViewModel
+import neoproxy.neolink.gui.ui.components.TunnelTrafficChartColor
+import neoproxy.neolink.gui.ui.components.TotalTrafficChartColor
+import neoproxy.neolink.gui.ui.components.collectIsHoveredAsState
+import neoproxy.neolink.gui.ui.components.compactToggle
+import neoproxy.neolink.gui.ui.components.fieldColumn
+import neoproxy.neolink.gui.ui.components.formatBytes
+import neoproxy.neolink.gui.ui.components.inlineDropdown
+import neoproxy.neolink.gui.ui.components.inlineDropdownItem
+import neoproxy.neolink.gui.ui.components.labelText
+import neoproxy.neolink.gui.ui.components.modernCheckbox
+import neoproxy.neolink.gui.ui.components.modernTextField
+import neoproxy.neolink.gui.ui.components.inlineIconButton
+import neoproxy.neolink.gui.ui.components.primaryButton
+import neoproxy.neolink.gui.ui.components.secondaryButton
+import neoproxy.neolink.gui.ui.components.sectionCard
+import neoproxy.neolink.gui.ui.components.sectionTitle
+import neoproxy.neolink.gui.ui.components.trafficChart
+import neoproxy.neolink.gui.ui.theme.ModernTheme
 import java.io.ByteArrayInputStream
 import java.io.StringReader
 import java.util.Locale
@@ -130,7 +157,7 @@ fun metricsRow(viewModel: NeoLinkViewModel) {
 @Composable
 fun metricCard(label: String, value: String, modifier: Modifier) {
     Column(
-        modifier = modifier.height(82.dp).background(ModernTheme.surface, ModernTheme.shapeMedium)
+        modifier = modifier.height(82.dp).background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
             .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(12.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -142,7 +169,7 @@ fun metricCard(label: String, value: String, modifier: Modifier) {
 @Composable
 fun trafficCollapsible(title: String, expanded: Boolean, points: List<TrafficPoint>, totalBytes: Long, onToggle: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
+        modifier = Modifier.fillMaxWidth().background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
             .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).clip(ModernTheme.shapeMedium)
     ) {
         collapsibleHeaderRow(
@@ -165,7 +192,7 @@ fun trafficCollapsible(title: String, expanded: Boolean, points: List<TrafficPoi
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                 Divider(color = ModernTheme.divider, thickness = 1.dp)
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.terminalBg, ModernTheme.shapeSmall).border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)) {
+                Box(Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.recessedBrush, ModernTheme.shapeSmall).border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)) {
             trafficChart(points, Modifier.fillMaxSize().padding(10.dp), lineColor = TotalTrafficChartColor)
                 }
             }
@@ -180,14 +207,15 @@ fun tunnelCard(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, onAlert: (S
     val expanded = tunnel.expanded
     val nameFocusRequester = remember { FocusRequester() }
     Column(
-        modifier = Modifier.fillMaxWidth().background(ModernTheme.surface, ModernTheme.shapeMedium)
+        modifier = Modifier.fillMaxWidth().background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
+            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium)
             .clip(ModernTheme.shapeMedium)
     ) {
         val toggleExpanded = { viewModel.toggleTunnelExpanded(tunnel.id) }
         collapsibleHeaderRow(
             onToggle = toggleExpanded,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
             headerClickable = false,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -202,31 +230,38 @@ fun tunnelCard(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, onAlert: (S
             )
             Spacer(
                 Modifier.weight(1f)
-                    .height(34.dp)
+                    .height(TunnelHeaderControlHeight)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = toggleExpanded
                     )
             )
-            modernTextField(tunnel.localPort, { viewModel.updateTunnelLocalPort(tunnel.id, it) }, placeholder = "端口", modifier = Modifier.width(76.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("本地端口", color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.offset(y = TunnelTextIconBaselineOffset))
+                compactTunnelPortField(tunnel.localPort, { viewModel.updateTunnelLocalPort(tunnel.id, it) }, modifier = Modifier.width(76.dp))
+            }
             compactToggle("TCP", tunnel.tcpEnabled) { viewModel.updateTunnelTcp(tunnel.id, it) }
             compactToggle("UDP", tunnel.udpEnabled) { viewModel.updateTunnelUdp(tunnel.id, it) }
-            IconButton(onClick = {
-                val error = if (runtime.running) null else viewModel.startTunnel(tunnel.id)
-                if (runtime.running) viewModel.stopTunnel(tunnel.id)
+            inlineIconButton(
+                checked = runtime.running,
+                enabledTint = ModernTheme.success,
+                onClick = {
+                val error = viewModel.toggleTunnelRunning(tunnel.id)
                 if (error != null) onAlert(error)
-            }, modifier = Modifier.size(34.dp)) {
+            }) {
                 if (runtime.running) {
-                    Canvas(Modifier.size(15.dp)) {
-                        drawRect(ModernTheme.error, size = Size(size.width, size.height))
-                    }
+                    Icon(StopIcon, null, tint = ModernTheme.error, modifier = Modifier.size(12.dp))
                 } else {
-                    Icon(Icons.Default.PlayArrow, null, tint = ModernTheme.success)
+                    Icon(Icons.Default.PlayArrow, null, tint = ModernTheme.success, modifier = Modifier.size(14.dp))
                 }
             }
-            IconButton(onClick = { viewModel.deleteTunnel(tunnel.id) }, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Delete, null, tint = ModernTheme.error)
+            inlineIconButton(
+                checked = false,
+                enabledTint = ModernTheme.error,
+                onClick = { viewModel.deleteTunnel(tunnel.id) }
+            ) {
+                Icon(Icons.Default.Delete, null, tint = ModernTheme.error, modifier = Modifier.size(18.dp))
             }
             tunnelHeaderExpandedIndicator(expanded, toggleExpanded)
         }
@@ -235,7 +270,7 @@ fun tunnelCard(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, onAlert: (S
                 Divider(color = ModernTheme.divider)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     metricCard("本隧道连接", runtime.activeConnections.toString(), Modifier.width(120.dp))
-                    Box(Modifier.weight(1f).height(88.dp).background(ModernTheme.terminalBg, ModernTheme.shapeSmall).border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)) {
+                    Box(Modifier.weight(1f).height(88.dp).background(ModernTheme.recessedBrush, ModernTheme.shapeSmall).border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)) {
                         trafficChart(
                             if (runtime.running) runtime.trafficPoints else emptyList(),
                             Modifier.fillMaxSize().padding(8.dp),
@@ -267,7 +302,7 @@ fun tunnelCard(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, onAlert: (S
 @Composable
 fun tunnelHeaderExpandedIndicator(expanded: Boolean, onToggle: () -> Unit) {
     Box(
-        Modifier.size(34.dp)
+        Modifier.size(TunnelHeaderControlHeight)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -279,19 +314,21 @@ fun tunnelHeaderExpandedIndicator(expanded: Boolean, onToggle: () -> Unit) {
             if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
             null,
             tint = ModernTheme.textSecondary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
     }
 }
+
+private val TunnelHeaderControlHeight = 28.dp
 
 @Composable
 fun tunnelNameEditor(value: String, onValueChange: (String) -> Unit, nameFocusRequester: FocusRequester) {
     val visibleText = value.ifBlank { "隧道" }
     val fieldWidth = (visibleText.length * 14).dp.coerceIn(44.dp, 138.dp)
-    val buttonSize = 26.dp
+    val buttonSize = 24.dp
     val gap = 6.dp
     Row(
-        modifier = Modifier.width(fieldWidth + gap + buttonSize).height(34.dp),
+        modifier = Modifier.width(fieldWidth + gap + buttonSize).height(TunnelHeaderControlHeight),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -302,32 +339,61 @@ fun tunnelNameEditor(value: String, onValueChange: (String) -> Unit, nameFocusRe
             singleLine = true,
             cursorBrush = SolidColor(ModernTheme.primary),
             decorationBox = { innerTextField ->
-                Box(Modifier.width(fieldWidth).height(34.dp), contentAlignment = Alignment.CenterStart) {
-                    innerTextField()
+                Box(Modifier.width(fieldWidth).height(TunnelHeaderControlHeight), contentAlignment = Alignment.CenterStart) {
+                    // 标题文本与矢量图标按钮同排显示；上移文本以保留 7.x 视觉基线，
+                    // 不直接依赖 Windows 上按字体边界计算的居中结果。
+                    Box(modifier = Modifier.offset(y = CompactFieldBaselineOffset), contentAlignment = Alignment.CenterStart) {
+                        innerTextField()
+                    }
                 }
             },
             modifier = Modifier.width(fieldWidth).focusRequester(nameFocusRequester)
         )
-        inlineIconButton(onClick = { nameFocusRequester.requestFocus() }) {
+        inlineIconButton(
+            checked = false,
+            enabledTint = ModernTheme.accent,
+            onClick = { nameFocusRequester.requestFocus() }
+        ) {
             Icon(Icons.Default.Edit, "重命名隧道", tint = ModernTheme.textSecondary, modifier = Modifier.size(15.dp))
         }
     }
 }
 
 @Composable
-fun inlineIconButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(
-        Modifier.size(26.dp)
-            .clip(ModernTheme.shapeSmall)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
+fun compactTunnelPortField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    var isFocused by remember { mutableStateOf(false) }
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = TextStyle(color = ModernTheme.textPrimary, fontSize = 12.sp, lineHeight = 14.sp),
+        singleLine = true,
+        cursorBrush = SolidColor(ModernTheme.accent),
+        decorationBox = { innerTextField ->
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(TunnelHeaderControlHeight)
+                    .background(ModernTheme.inputBackground, ModernTheme.shapeSmall)
+                    .border(1.dp, if (isFocused) ModernTheme.accent else ModernTheme.border, ModernTheme.shapeSmall)
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                // 紧凑输入框沿用与标准输入框一致的 7.x 基线上移补偿；
+                // 否则在 Windows 字体度量下，字形会略低于相邻控件。
+                Box(modifier = Modifier.offset(y = CompactFieldBaselineOffset), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            "端口",
+                            color = Color.Gray.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
+                            modifier = Modifier.offset(y = CompactFieldPlaceholderBaselineOffset)
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        },
+        modifier = modifier.onFocusChanged { isFocused = it.isFocused }
+    )
 }
 
 @Composable
@@ -378,6 +444,7 @@ fun nodeSelectorForTunnel(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, 
             expanded = expanded,
             selectedText = tunnel.selectedNodeName.ifBlank { "选择节点" },
             emptyText = "无可用节点",
+            height = 28.dp,
             leadingIcon = selected?.let { node -> { nodeSvgIcon(node, 16.dp) } },
             onToggle = { expanded = !expanded }
         ) {
@@ -399,9 +466,13 @@ fun nodeSelectorForTunnel(viewModel: NeoLinkViewModel, tunnel: TunnelCardState, 
 
 @Composable
 fun remainingTrafficRing(tunnel: TunnelCardState, runtime: TunnelRuntimeUiState) {
-    val totalBytes = (tunnel.keyBalanceMiB * 1024.0 * 1024.0).toLong().coerceAtLeast(0L)
-    val remainingBytes = (totalBytes - runtime.trafficSinceBalanceSyncBytes).coerceAtLeast(0L)
-    val progress = if (totalBytes <= 0L) 0f else remainingBytes.toFloat() / totalBytes.toFloat()
+    val initialBalanceMiB = tunnel.keyInitialBalanceMiB.takeIf { it.isFinite() && it > 0.0 }
+        ?: tunnel.keyBalanceMiB.takeIf { it.isFinite() && it > 0.0 }
+        ?: 0.0
+    val totalBytes = (initialBalanceMiB * 1024.0 * 1024.0).toLong().coerceAtLeast(0L)
+    val latestBalanceBytes = (tunnel.keyBalanceMiB * 1024.0 * 1024.0).toLong().coerceAtLeast(0L)
+    val remainingBytes = (latestBalanceBytes - runtime.trafficSinceBalanceSyncBytes).coerceAtLeast(0L)
+    val progress = if (totalBytes <= 0L) 0f else (remainingBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
     Column(Modifier.width(120.dp).height(88.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Canvas(Modifier.size(48.dp)) {
             val stroke = 5.dp.toPx()
@@ -421,7 +492,7 @@ fun tunnelLog(runtime: TunnelRuntimeUiState, viewModel: NeoLinkViewModel) {
         if (runtime.logs.isNotEmpty()) listState.scrollToItem(runtime.logs.size - 1)
     }
     Box(
-        Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.terminalBg, ModernTheme.shapeSmall)
+        Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.recessedBrush, ModernTheme.shapeSmall)
             .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)
             .onPointerEvent(PointerEventType.Scroll) { event ->
                 if (event.keyboardModifiers.isCtrlPressed) {
@@ -507,17 +578,23 @@ private fun highlightLogMessage(original: AnnotatedString): AnnotatedString {
 
 @Composable
 fun createTunnelEntry(viewModel: NeoLinkViewModel) {
+    val enabled = viewModel.creatableTunnelCount > 0
     Box(
         modifier = Modifier.fillMaxWidth().height(76.dp)
-            .background(ModernTheme.surface.copy(alpha = 0.55f), ModernTheme.shapeMedium)
-            .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium)
-            .clickable { viewModel.showCreateTunnelDialog() },
+            .background(if (enabled) ModernTheme.surfaceRaised else ModernTheme.surfaceHover, ModernTheme.shapeMedium)
+            .border(1.dp, if (enabled) ModernTheme.success.copy(alpha = 0.45f) else ModernTheme.border, ModernTheme.shapeMedium)
+            .clickable(enabled = enabled) { viewModel.showCreateTunnelDialog() },
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Add, null, tint = ModernTheme.primary)
+            Icon(Icons.Default.Add, null, tint = if (enabled) ModernTheme.success else ModernTheme.textSecondary)
             Spacer(Modifier.width(8.dp))
-            Text("创建隧道", color = ModernTheme.primary, fontWeight = FontWeight.Bold)
+            Text(
+                "创建隧道",
+                color = if (enabled) ModernTheme.success else ModernTheme.textSecondary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.offset(y = TunnelTextIconBaselineOffset)
+            )
         }
     }
 }
@@ -526,16 +603,22 @@ fun createTunnelEntry(viewModel: NeoLinkViewModel) {
 fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
     val draft = viewModel.uiState.createDraft
     val selectedKey = viewModel.keys.firstOrNull { it.alias == draft.selectedKeyAlias }
+    val canCreate by remember(draft, selectedKey) {
+        derivedStateOf {
+            selectedKey?.onlineNodes?.isNotEmpty() == true &&
+                draft.localPort.toIntOrNull()?.let { it in 1..65535 } == true
+        }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.62f)), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.width(460.dp).background(Color(0xFF1E1E20), ModernTheme.shapeMedium)
-                .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(18.dp),
+            Modifier.width(460.dp).background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
+                .border(1.dp, ModernTheme.borderStrong, ModernTheme.shapeMedium).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("创建隧道", color = ModernTheme.textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             keyDropdown(viewModel)
             selectedKey?.let { key ->
-                Text(keySummaryText(key, prefix = "密钥参数：${key.displayType} / "), color = ModernTheme.textSecondary, fontSize = 12.sp)
+                keyDetailsPanel(key)
                 createNodeDropdown(viewModel, key)
             }
             labelText("本地端口")
@@ -545,11 +628,22 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
                     Text("取消", color = ModernTheme.textPrimary)
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = {
+                Button(
+                    onClick = {
                     val error = viewModel.createTunnelFromDraft()
                     if (error != null) onAlert(error)
-                }, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.primary), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-                    Text("创建隧道", color = Color.White)
+                    },
+                    enabled = canCreate,
+                    shape = ModernTheme.shapeSmall,
+                    colors = ButtonDefaults.buttonColors(
+                        backgroundColor = ModernTheme.surfaceHover,
+                        disabledBackgroundColor = ModernTheme.surfaceHover,
+                        contentColor = ModernTheme.success,
+                        disabledContentColor = ModernTheme.textSecondary
+                    ),
+                    elevation = ButtonDefaults.elevation(0.dp, 0.dp)
+                ) {
+                    Text("创建隧道", color = if (canCreate) ModernTheme.success else ModernTheme.textSecondary)
                 }
             }
         }
@@ -573,10 +667,10 @@ fun keyDropdown(viewModel: NeoLinkViewModel) {
         } else {
             viewModel.availableKeysForCreate.forEach { key ->
                 inlineDropdownItem(
-                    primary = "${key.alias} · ${key.displayType}",
+                    primary = key.alias,
                     secondary = keySummaryText(key),
                     primaryColor = keyTypeColor(key),
-                    backgroundColor = keyTypeBackground(key)
+                    trailing = { keyTypeBadge(key) }
                 ) {
                     viewModel.updateCreateDraft(keyAlias = key.alias)
                     expanded = false
@@ -624,12 +718,85 @@ private const val NodePingTimeoutMs = 1_000
 private const val MaxInlineSvgLength = 16_384
 private val FormalKeyPurple = Color(0xFF7C3AED)
 private val LatencyWarning = Color(0xFFFACC15)
+private val TunnelTextIconBaselineOffset = (-1).dp
+private val CompactFieldBaselineOffset = (-1).dp
+private val CompactFieldPlaceholderBaselineOffset = (-0.5).dp
+private val StopIcon: ImageVector = ImageVector.Builder(
+    name = "Stop",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(6f, 6f)
+        horizontalLineTo(18f)
+        verticalLineTo(18f)
+        horizontalLineTo(6f)
+        close()
+    }
+}.build()
+
+@Composable
+private fun keyDetailsPanel(key: NasKey) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .background(ModernTheme.recessedBrush, ModernTheme.shapeSmall)
+            .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("密钥参数", color = ModernTheme.textPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Spacer(Modifier.width(8.dp))
+            keyTypeBadge(key)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            keyMetric("流量", "${formatTrafficMiB(key.balanceMiB)} MiB", Modifier.weight(1f), ModernTheme.success)
+            keyMetric("到期时间", key.expire.ifBlank { "N/A" }, Modifier.weight(1.35f), ModernTheme.primary)
+            keyMetric("带宽", formatBandwidth(key.rate), Modifier.weight(0.85f), keyTypeColor(key))
+        }
+    }
+}
+
+@Composable
+private fun keyMetric(label: String, value: String, modifier: Modifier, valueColor: Color) {
+    Column(modifier) {
+        Text(label, color = ModernTheme.textSecondary, fontSize = 11.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(value, color = valueColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun keyTypeBadge(key: NasKey) {
+    Box(
+        modifier = Modifier
+            .background(keyTypeBackground(key), RoundedCornerShape(4.dp))
+            .border(1.dp, keyTypeColor(key).copy(alpha = 0.55f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 7.dp, vertical = 3.dp)
+    ) {
+        Text(key.displayType, color = keyTypeColor(key), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
 
 private fun keySummaryText(key: NasKey, prefix: String = ""): String {
-    val flow = String.format(Locale.ROOT, "%.3f", key.balanceMiB)
+    val flow = formatTrafficMiB(key.balanceMiB)
     val expire = key.expire.ifBlank { "N/A" }
-    val bandwidth = key.rate.ifBlank { "N/A" }
+    val bandwidth = formatBandwidth(key.rate)
     return "${prefix}流量 $flow MiB / 到期 $expire / 带宽 $bandwidth"
+}
+
+private fun formatTrafficMiB(value: Double): String {
+    return String.format(Locale.ROOT, "%.3f", value)
+}
+
+private fun formatBandwidth(value: String): String {
+    val normalized = value.trim()
+    if (normalized.isBlank() || normalized == "N/A" || normalized == "-") {
+        return "N/A"
+    }
+    return if (normalized.contains("bps", ignoreCase = true)) normalized else "$normalized Mbps"
 }
 
 private fun keyTypeBackground(key: NasKey): Color {
@@ -678,7 +845,7 @@ private fun NasNode.pingKey(): String {
 
 @Composable
 private fun nodeSvgIcon(node: NasNode, size: Dp) {
-    svgIcon(node.iconSvg, size)
+    svgIcon(node.icon, size)
 }
 
 @Composable

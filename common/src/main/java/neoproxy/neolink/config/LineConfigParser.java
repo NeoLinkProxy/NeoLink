@@ -10,13 +10,13 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 轻量级行配置解析器（line config parser）。
+ * 轻量级行配置解析器。
  * <p>
- * 替代 JVM-only 的 {@code top.ceroxe.api.utils.config.LineConfigReader}，
- * 使 common 模块不依赖 ceroxe-core。
+ * 替代仅 JVM 的 {@code top.ceroxe.api.utils.config.LineConfigReader}，
+ * 使 common 模块不依赖该核心库。
  * <p>
  * 文件格式：每行 {@code KEY=VALUE}，忽略空行和 {@code #} 开头的注释行。
- * 等号左侧 trim 作为 key，右侧 trim 作为 value。
+ * 等号左侧去空白作为 key，右侧去空白作为 value。
  */
 public final class LineConfigParser {
 
@@ -58,7 +58,7 @@ public final class LineConfigParser {
      * 获取配置值（可选）。
      *
      * @param key 配置键
-     * @return 非空 / 非 blank 值包装在 Optional 中；不存在或空白时返回 empty
+     * @return 非空/非空白值包装在 Optional 中；不存在或空白时返回 empty
      */
     public Optional<String> getOptional(String key) {
         String value = entries.get(key);

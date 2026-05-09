@@ -25,10 +25,10 @@ import java.util.Map;
 import static neoproxy.neolink.util.Debugger.debugOperation;
 
 /**
- * 节点工作流（node workflow）。
+ * 节点工作流。
  *
- * <p>集中处理 public node list 拉取、nodes.json 落盘、指定节点加载（selected node loading）与
- * tunnel config 构建，避免入口类混杂 I/O、解析和业务分支。</p>
+ * <p>集中处理公共节点列表拉取、nodes.json 落盘、指定节点加载与
+ * 隧道配置构建，避免入口类混杂 I/O、解析和业务分支。</p>
  *
  * <p>跨平台适配：消息输出通过 {@link MessageSink} 接口注入，不再直接依赖 CLI 的 ClientConsole。</p>
  */
@@ -37,7 +37,7 @@ public final class NodeWorkflow {
 
     /**
      * 消息输出目标。必须在使用 fetchAndSaveNodes 前通过 {@link #setMessageSink} 注入。
-     * 默认为 no-op，避免 NPE。
+     * 默认为空操作，避免 NPE。
      */
     private static volatile MessageSink messageSink = (msg, level) -> { };
 

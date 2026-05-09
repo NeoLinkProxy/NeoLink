@@ -18,10 +18,10 @@ import java.io.File;
 import java.util.Scanner;
 
 /**
- * 客户端控制台 / 日志桥（client console & logger bridge）。
+ * 客户端控制台 / 日志桥。
  *
- * <p>这里统一处理 CLI prompt、日志初始化、用户可见输出（user-facing output）与基础启动横幅。
- * 入口类不再直接关心 logger fallback、ANSI color 或版本展示细节。</p>
+ * <p>这里统一处理 CLI 提示、日志初始化、用户可见输出与基础启动横幅。
+ * 入口类不再直接关心日志回退、ANSI 颜色或版本展示细节。</p>
  */
 public final class ClientConsole {
     private static final Scanner INPUT_SCANNER = new Scanner(System.in);

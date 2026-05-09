@@ -1,8 +1,8 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.model
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
 import java.util.UUID
 
 enum class AuthMode {
@@ -41,8 +41,16 @@ data class NasNode(
     var address: String = "",
     var hookPort: Int = 44801,
     var connectPort: Int = 44802,
-    var version: String = "",
-    var iconSvg: String = ""
+    var icon: String = ""
+)
+
+data class NkmNode(
+    val realId: String,
+    val name: String,
+    val address: String,
+    val icon: String,
+    val hookPort: Int,
+    val connectPort: Int
 )
 
 data class NasKey(
@@ -55,7 +63,6 @@ data class NasKey(
     var rate: String = "",
     var port: String = "",
     var availableNodes: List<NasNode> = emptyList(),
-    var availableNodesConsole: String = "",
     var refreshCount: Int = 0,
     var refreshMaxPerDay: Int = 0,
     var refreshRemainingToday: Int = 0
@@ -95,6 +102,7 @@ data class TunnelCardState(
     var keyAlias: String = "",
     var keyType: String = "",
     var keyBalanceMiB: Double = 0.0,
+    var keyInitialBalanceMiB: Double = 0.0,
     var localPort: String = "",
     var selectedNodeId: String = "",
     var selectedNodeName: String = "",

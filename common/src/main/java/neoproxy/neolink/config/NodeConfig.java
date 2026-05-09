@@ -138,7 +138,7 @@ public final class NodeConfig {
             serializedNode.put("realId", node.getRealId());
             serializedNode.put("name", node.getName());
             serializedNode.put("address", node.getAddress());
-            serializedNode.put("iconSvg", node.getIconSvg());
+            serializedNode.put("icon", node.getIconSvg());
             serializedNode.put("hookPort", node.getHookPort());
             serializedNode.put("connectPort", node.getConnectPort());
             serializedNodes.add(serializedNode);

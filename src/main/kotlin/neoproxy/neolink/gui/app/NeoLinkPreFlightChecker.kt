@@ -1,7 +1,7 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.app
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
+import neoproxy.neolink.gui.platform.WindowsDwm
 
 /**
  * NeoLink 全链路环境预检器
@@ -18,7 +18,7 @@ import com.sun.jna.platform.win32.WinDef
  *
  * 检测结果：
  * - allowsAcrylicDirectX = true: 允许使用 DirectX + 透明亚克力窗口
- * - allowsAcrylicDirectX = false: 使用 Software + 不透明窗口
+ * - allowsAcrylicDirectX = false: 使用 软件渲染 + 不透明窗口
  *
  * @author NeoProxy Team
  * @since 5.11.0
@@ -50,7 +50,7 @@ object NeoLinkPreFlightChecker {
                 // 如果创建窗口都失败了，保险起见走 Software
                 CheckResult(false, "无法创建测试窗口")
             } else {
-                // 实测申请桌面亚克力对应的系统背板。只要 DWM 拒绝，就走不透明 Software 模式。
+                // 实测申请桌面亚克力对应的系统背板。只要 DWM 拒绝，就走不透明 软件渲染模式。
                 val hrAcrylic = WindowsDwm.setIntAttribute(
                     dwm,
                     probeHwnd,

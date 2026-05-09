@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -24,18 +23,37 @@ import neoproxy.neolink.cli.CommandLineProcessor
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.core.VersionInfo
+import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
+import neoproxy.neolink.gui.data.NasClient
+import neoproxy.neolink.gui.data.NeoLinkLocalStore
+import neoproxy.neolink.gui.data.NkmNodeClient
+import neoproxy.neolink.gui.data.NkmNodeSource
+import neoproxy.neolink.gui.model.AuthMode
+import neoproxy.neolink.gui.model.AuthUiState
+import neoproxy.neolink.gui.model.CreateTunnelDraft
+import neoproxy.neolink.gui.model.MainPage
+import neoproxy.neolink.gui.model.NasKey
+import neoproxy.neolink.gui.model.NasNode
+import neoproxy.neolink.gui.model.NkmNode
+import neoproxy.neolink.gui.model.RuntimeUiState
+import neoproxy.neolink.gui.model.SessionStoreDocument
+import neoproxy.neolink.gui.model.TrafficPoint
+import neoproxy.neolink.gui.model.TunnelCardState
+import neoproxy.neolink.gui.model.TunnelRuntimeUiState
+import neoproxy.neolink.gui.model.UiState
 import neoproxy.neolink.state.ConnectionState
 import neoproxy.neolink.state.FeatureState
 import neoproxy.neolink.state.RuntimeState
+import neoproxy.neolink.util.Debugger.debugOperation
 import neoproxy.neolink.util.LogSink
 import top.ceroxe.api.neolink.NeoLinkAPI
 import top.ceroxe.api.neolink.NeoLinkCfg
 import top.ceroxe.api.neolink.NeoLinkState
+import top.ceroxe.api.print.log.Loggist
 import top.ceroxe.api.print.log.LogType
+import top.ceroxe.api.print.log.State
 import java.io.File
 import java.time.Instant
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
@@ -53,7 +71,7 @@ class NeoLinkViewModel {
         const val MAX_LOG_LINES = 1000
         const val TRAFFIC_WINDOW_SECONDS = 10
         const val BYTES_PER_MIB = 1024.0 * 1024.0
-        val LOG_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        val KeyBalanceMessagePattern: Regex = Regex("这个密钥有\\s+(\\d+(?:\\.\\d+)?)\\s+M(?:i)?B\\s+流量可以消耗")
     }
 
     var authState by mutableStateOf(AuthUiState())
@@ -135,7 +153,7 @@ class NeoLinkViewModel {
         ClientConsole.initializeLogger(false)
         setupLogRedirector()
         startTrafficFlusher()
-        NeoLinkLocalStore.ensureNasUrlInConfig()
+        NeoLinkLocalStore.ensureDesktopConfigDefaults()
 
         val session = NeoLinkLocalStore.loadSession()
         val configNasUrl = NeoLinkLocalStore.loadNasUrlFromConfig()
@@ -234,6 +252,7 @@ class NeoLinkViewModel {
             keyAlias = key.alias,
             keyType = key.type,
             keyBalanceMiB = key.balanceMiB,
+            keyInitialBalanceMiB = key.balanceMiB,
             localPort = port.toString(),
             selectedNodeId = node.nodeId,
             selectedNodeName = node.displayName,
@@ -254,12 +273,53 @@ class NeoLinkViewModel {
     fun updateTunnelLocalDomain(id: String, value: String) = updateTunnel(id) { it.localDomain = value }
     fun updateTunnelHookPort(id: String, value: String) = updateTunnel(id) { it.hookPort = value.filter(Char::isDigit) }
     fun updateTunnelConnectPort(id: String, value: String) = updateTunnel(id) { it.connectPort = value.filter(Char::isDigit) }
-    fun updateTunnelTcp(id: String, enabled: Boolean) = updateTunnel(id) { it.tcpEnabled = enabled }
-    fun updateTunnelUdp(id: String, enabled: Boolean) = updateTunnel(id) { it.udpEnabled = enabled }
-    fun updateTunnelPpv2(id: String, enabled: Boolean) = updateTunnel(id) { it.ppv2Enabled = enabled }
-    fun updateTunnelAutoReconnect(id: String, enabled: Boolean) = updateTunnel(id) { it.autoReconnect = enabled }
-    fun updateTunnelDebug(id: String, enabled: Boolean) = updateTunnel(id) { it.debugMode = enabled }
-    fun updateTunnelShowConnection(id: String, enabled: Boolean) = updateTunnel(id) { it.showConnection = enabled }
+    fun updateTunnelTcp(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.tcpEnabled
+        updateTunnel(id) { it.tcpEnabled = enabled }
+        if (previous != null && previous != enabled) {
+            syncRuntimeProtocolFlags(id)
+        }
+    }
+
+    fun updateTunnelUdp(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.udpEnabled
+        updateTunnel(id) { it.udpEnabled = enabled }
+        if (previous != null && previous != enabled) {
+            syncRuntimeProtocolFlags(id)
+        }
+    }
+
+    fun updateTunnelPpv2(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.ppv2Enabled
+        updateTunnel(id) { it.ppv2Enabled = enabled }
+        if (previous != null && previous != enabled) {
+            syncRuntimePpv2Flag(id, enabled)
+        }
+    }
+
+    fun updateTunnelAutoReconnect(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.autoReconnect
+        updateTunnel(id) { it.autoReconnect = enabled }
+        if (previous != null && previous != enabled) {
+            appendTunnelSystemLog(id, "自动重连已${if (enabled) "开启" else "关闭"}。")
+        }
+    }
+
+    fun updateTunnelDebug(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.debugMode
+        updateTunnel(id) { it.debugMode = enabled }
+        if (previous != null && previous != enabled) {
+            appendTunnelSystemLog(id, "调试模式已${if (enabled) "开启" else "关闭"}。")
+        }
+    }
+
+    fun updateTunnelShowConnection(id: String, enabled: Boolean) {
+        val previous = tunnels.firstOrNull { it.id == id }?.showConnection
+        updateTunnel(id) { it.showConnection = enabled }
+        if (previous != null && previous != enabled) {
+            appendTunnelSystemLog(id, "详细连接日志已${if (enabled) "开启" else "关闭"}。")
+        }
+    }
 
     fun toggleTunnelExpanded(id: String) {
         val index = tunnels.indexOfFirst { it.id == id }
@@ -287,9 +347,21 @@ class NeoLinkViewModel {
         }
     }
 
+    fun toggleTunnelRunning(id: String): String? {
+        return if (tunnelRuntime[id]?.running == true) {
+            stopTunnel(id)
+            null
+        } else {
+            startTunnel(id)
+        }
+    }
+
     fun startTunnel(id: String): String? {
         val tunnel = tunnels.firstOrNull { it.id == id } ?: return "隧道不存在。"
-        validateTunnel(tunnel)?.let { return it }
+        validateTunnel(tunnel)?.let {
+            appendTunnelSystemLog(id, it, surroundWithBlankLines = true)
+            return it
+        }
         if (tunnelRuntime[id]?.running == true) {
             return null
         }
@@ -315,15 +387,15 @@ class NeoLinkViewModel {
                     setTunnelRuntimeOnMain(id) { it.copy(activeConnections = 0) }
                 }
 
-                if (runRequested[id]?.get() == true && tunnel.autoReconnect) {
+                if (runRequested[id]?.get() == true && isTunnelAutoReconnectEnabled(id)) {
                     appendTunnelLog(id, "自动重连将在 30 秒后执行。")
                     delay(30_000)
                 }
-            } while (runRequested[id]?.get() == true && tunnel.autoReconnect)
+            } while (runRequested[id]?.get() == true && isTunnelAutoReconnectEnabled(id))
 
             withContext(Dispatchers.Main) {
                 setTunnelRuntime(id) { it.copy(running = false, stopping = false, activeConnections = 0) }
-                appendTunnelLog(id, "隧道已停止。")
+                appendTunnelSystemLog(id, "服务已停止。", surroundWithBlankLines = true)
             }
         }
         persistTunnels()
@@ -331,6 +403,10 @@ class NeoLinkViewModel {
     }
 
     fun stopTunnel(id: String) {
+        val runtime = tunnelRuntime[id]
+        if (runtime?.running == true && !runtime.stopping) {
+            appendTunnelLog(id, "正在停止 NeoLink 服务...")
+        }
         runRequested[id]?.set(false)
         pendingTrafficBytes.remove(id)
         setTunnelRuntime(id) { it.copy(stopping = it.running) }
@@ -471,7 +547,7 @@ class NeoLinkViewModel {
         val requestState = authState
         scope.launch(Dispatchers.IO) {
             try {
-                val loaded = nasClient(requestState).myKeys()
+                val loaded = loadKeysWithAvailableNkmNodes(nasClient(requestState))
                 withContext(Dispatchers.Main) {
                     keys.clear()
                     keys.addAll(loaded)
@@ -534,13 +610,13 @@ class NeoLinkViewModel {
             }
             .setOnConnect { protocol, source, target ->
                 setTunnelRuntimeOnMain(tunnelId) { it.copy(activeConnections = it.activeConnections + 1) }
-                if (tunnel.showConnection) {
+                if (isTunnelShowConnectionEnabled(tunnelId)) {
                     appendTunnelLog(tunnelId, "$protocol ${source.hostString}:${source.port} -> ${target.hostString}:${target.port} 已建立")
                 }
             }
             .setOnDisconnect { protocol, source, target ->
                 setTunnelRuntimeOnMain(tunnelId) { it.copy(activeConnections = (it.activeConnections - 1).coerceAtLeast(0)) }
-                if (tunnel.showConnection) {
+                if (isTunnelShowConnectionEnabled(tunnelId)) {
                     appendTunnelLog(tunnelId, "$protocol ${source.hostString}:${source.port} -> ${target.hostString}:${target.port} 已断开")
                 }
             }
@@ -548,8 +624,8 @@ class NeoLinkViewModel {
             .setOnConnectNeoFailure { appendTunnelLog(tunnelId, "连接 NeoProxyServer 传输端口失败。", LogType.ERROR) }
             .setOnConnectLocalFailure { appendTunnelLog(tunnelId, "连接本地下游服务失败：${tunnel.localPort}", LogType.ERROR) }
             .setDebugSink { message, cause ->
-                if (tunnel.debugMode && message != null) appendTunnelLog(tunnelId, message)
-                if (tunnel.debugMode && cause != null) appendTunnelLog(tunnelId, cause.message ?: cause.javaClass.simpleName, LogType.ERROR)
+                if (isTunnelDebugEnabled(tunnelId) && message != null) appendTunnelLog(tunnelId, message)
+                if (isTunnelDebugEnabled(tunnelId) && cause != null) appendTunnelLog(tunnelId, cause.message ?: cause.javaClass.simpleName, LogType.ERROR)
             }
     }
 
@@ -560,7 +636,6 @@ class NeoLinkViewModel {
         if (tunnel.localPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) return "本地端口必须在 1~65535 之间。"
         if (tunnel.hookPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) return "Hook 端口必须在 1~65535 之间。"
         if (tunnel.connectPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) return "连接端口必须在 1~65535 之间。"
-        if (!tunnel.tcpEnabled && !tunnel.udpEnabled) return "TCP 和 UDP 至少启用一个。"
         return null
     }
 
@@ -568,22 +643,76 @@ class NeoLinkViewModel {
         val index = tunnels.indexOfFirst { it.id == id }
         if (index < 0) return
         val current = tunnels[index]
-        block(current)
-        tunnels[index] = current.copy()
-        persistTunnels()
+        val updated = current.copy()
+        block(updated)
+        if (updated == current) return
+        tunnels[index] = updated
+        persistTunnelsAsync()
     }
+
+    private fun syncRuntimeProtocolFlags(id: String) {
+        val tunnel = tunnels.firstOrNull { it.id == id }?.copy() ?: return
+        val api = activeApis[id]
+        if (api == null) {
+            appendTunnelSystemLog(id, buildProtocolUpdateMessage(tunnel.tcpEnabled, tunnel.udpEnabled))
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                api.updateRuntimeProtocolFlags(tunnel.tcpEnabled, tunnel.udpEnabled)
+                appendTunnelSystemLog(id, buildProtocolUpdateMessage(tunnel.tcpEnabled, tunnel.udpEnabled))
+            } catch (e: Exception) {
+                appendTunnelSystemLog(id, "运行时协议更新失败：${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun syncRuntimePpv2Flag(id: String, enabled: Boolean) {
+        val api = activeApis[id]
+        if (api == null) {
+            appendTunnelSystemLog(id, buildPpv2UpdateMessage(enabled))
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                api.setPPV2Enabled(enabled)
+                appendTunnelSystemLog(id, buildPpv2UpdateMessage(enabled))
+            } catch (e: Exception) {
+                appendTunnelSystemLog(id, "运行时 PPv2 更新失败：${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun isTunnelAutoReconnectEnabled(id: String): Boolean =
+        tunnels.firstOrNull { it.id == id }?.autoReconnect == true
+
+    private fun isTunnelShowConnectionEnabled(id: String): Boolean =
+        tunnels.firstOrNull { it.id == id }?.showConnection == true
+
+    private fun isTunnelDebugEnabled(id: String): Boolean =
+        tunnels.firstOrNull { it.id == id }?.debugMode == true
 
     private fun persistTunnels() {
         NeoLinkLocalStore.saveTunnels(tunnels)
+    }
+
+    private fun persistTunnelsAsync() {
+        val snapshot = tunnels.map { it.copy() }
+        scope.launch(Dispatchers.IO) {
+            try {
+                NeoLinkLocalStore.saveTunnels(snapshot)
+            } catch (e: Exception) {
+                debugOperation(e)
+            }
+        }
     }
 
     private fun reconcileTunnelsWithKeys() {
         val byAlias = keys.associateBy { it.alias }
         tunnels.forEachIndexed { index, tunnel ->
             val key = byAlias[tunnel.keyAlias] ?: return@forEachIndexed
-            reconcileTunnelBalance(tunnel.id, tunnel.keyBalanceMiB, key.balanceMiB)
+            applyTunnelBalanceSnapshot(tunnel, key.balanceMiB)
             tunnel.keyType = key.type
-            tunnel.keyBalanceMiB = key.balanceMiB
             if (tunnel.name.isBlank()) tunnel.name = "隧道${index + 1}"
             if (tunnel.selectedNodeId.isBlank()) {
                 key.onlineNodes.firstOrNull()?.let { node ->
@@ -656,6 +785,28 @@ class NeoLinkViewModel {
         }
     }
 
+    private fun applyTunnelBalanceSnapshot(tunnel: TunnelCardState, latestBalanceMiB: Double) {
+        if (!latestBalanceMiB.isFinite() || latestBalanceMiB < 0.0) {
+            return
+        }
+        val previousBalanceMiB = tunnel.keyBalanceMiB
+        reconcileTunnelBalance(tunnel.id, previousBalanceMiB, latestBalanceMiB)
+        tunnel.keyInitialBalanceMiB = resolveInitialKeyBalanceMiB(
+            tunnel.keyInitialBalanceMiB,
+            previousBalanceMiB,
+            latestBalanceMiB
+        )
+        tunnel.keyBalanceMiB = latestBalanceMiB
+    }
+
+    private fun resolveInitialKeyBalanceMiB(currentInitialMiB: Double, previousBalanceMiB: Double, latestBalanceMiB: Double): Double {
+        val observedInitialMiB = listOf(currentInitialMiB, previousBalanceMiB, latestBalanceMiB)
+            .filter { it.isFinite() && it > 0.0 }
+            .maxOrNull()
+            ?: 0.0
+        return observedInitialMiB.coerceAtLeast(latestBalanceMiB)
+    }
+
     private fun mibToBytes(value: Double): Long {
         if (!value.isFinite() || value <= 0.0) {
             return 0L
@@ -683,11 +834,48 @@ class NeoLinkViewModel {
     }
 
     private fun appendTunnelLog(id: String, message: String, level: LogType = LogType.INFO) {
-        val line = buildLogLine(message, level)
+        val keyBalanceMatch = KeyBalanceMessagePattern.find(message)
+        if (keyBalanceMatch != null) {
+            keyBalanceMatch.groupValues.getOrNull(1)?.toDoubleOrNull()?.let { balanceMiB ->
+                scope.launch(Dispatchers.Main) {
+                    val index = tunnels.indexOfFirst { it.id == id }
+                    if (index >= 0) {
+                        val tunnel = tunnels[index]
+                        applyTunnelBalanceSnapshot(tunnel, balanceMiB)
+                        tunnels[index] = tunnel.copy()
+                        persistTunnelsAsync()
+                    }
+                }
+            }
+            refreshKeys()
+        }
+        val line = formatGuiLog(level, "HOST-CLIENT", message)
         scope.launch(Dispatchers.Main) {
             setTunnelRuntime(id) { runtime ->
                 val updated = runtime.logs.toMutableList()
                 updated.add(parseAnsi(line))
+                if (updated.size > MAX_LOG_LINES) updated.removeAt(0)
+                runtime.copy(logs = updated)
+            }
+        }
+    }
+
+    private fun appendTunnelSystemLog(id: String, message: String, surroundWithBlankLines: Boolean = false) {
+        val normalizedMessage = buildString {
+            if (surroundWithBlankLines && (tunnelRuntime[id]?.logs?.isNotEmpty() == true)) {
+                append('\n')
+            }
+            append(GUI_SYSTEM_PREFIX)
+            append(' ')
+            append(message)
+            if (surroundWithBlankLines) {
+                append('\n')
+            }
+        }
+        scope.launch(Dispatchers.Main) {
+            setTunnelRuntime(id) { runtime ->
+                val updated = runtime.logs.toMutableList()
+                updated.add(parseAnsi(normalizedMessage))
                 if (updated.size > MAX_LOG_LINES) updated.removeAt(0)
                 runtime.copy(logs = updated)
             }
@@ -716,18 +904,38 @@ class NeoLinkViewModel {
 
     private fun appendSystemLog(message: String, surroundWithBlankLines: Boolean = false) {
         val normalizedMessage = buildString {
-            if (surroundWithBlankLines) append('\n')
+            if (surroundWithBlankLines && runtimeState.logMessages.isNotEmpty()) {
+                append('\n')
+            }
             append(GUI_SYSTEM_PREFIX)
             append(' ')
             append(message)
             if (surroundWithBlankLines) append('\n')
         }
-        RuntimeState.logSink()?.log(LogSink.Level.INFO, "GUI", normalizedMessage) ?: addLogSafe(normalizedMessage)
+        RuntimeState.logSink()?.log(LogSink.Level.INFO, "GUI", normalizedMessage)
+            ?: addLogSafe(normalizedMessage)
     }
 
-    private fun buildLogLine(message: String, level: LogType): String {
-        val levelText = if (level == LogType.ERROR) "ERROR" else "INFO"
-        return "[${LocalTime.now().format(LOG_TIME_FORMATTER)}] [$levelText] $message"
+    private fun buildProtocolUpdateMessage(tcpEnabled: Boolean, udpEnabled: Boolean): String {
+        val tcpStatus = if (tcpEnabled) "已开启" else "已关闭"
+        val udpStatus = if (udpEnabled) "已开启" else "已关闭"
+        return "TCP $tcpStatus，UDP $udpStatus。"
+    }
+
+    private fun buildPpv2UpdateMessage(enabled: Boolean): String {
+        return "真实 IP 透传已${if (enabled) "开启" else "关闭"}。"
+    }
+
+    private fun formatGuiLog(level: LogType, subject: String, message: String): String {
+        return guiLoggist().getLogString(State(level, subject, message))
+    }
+
+    private fun guiLoggist(): Loggist {
+        val logsDirectory = File(ConfigOperator.resolveWritableRuntimeDirectory(), "logs")
+        if (!logsDirectory.exists() && !logsDirectory.mkdirs()) {
+            debugOperation("Unable to create GUI log directory: ${logsDirectory.absolutePath}")
+        }
+        return Loggist(File(logsDirectory, "gui_internal.log"))
     }
 
     private fun parseAnsi(text: String): AnnotatedString {
@@ -771,7 +979,7 @@ class NeoLinkViewModel {
         val client = NasClient(nasUrl, sessionToken)
         val status = client.identityStatus()
         if (status == "VERIFIED") {
-            val loaded = client.myKeys()
+            val loaded = loadKeysWithAvailableNkmNodes(client)
             withContext(Dispatchers.Main) {
                 authState = authState.copy(
                     nasUrl = nasUrl,
@@ -815,6 +1023,54 @@ class NeoLinkViewModel {
     }
 
     private fun nasClient(state: AuthUiState): NasClient = NasClient(state.nasUrl, state.sessionToken)
+
+    private fun loadKeysWithAvailableNkmNodes(client: NasClient): List<NasKey> {
+        val loadedKeys = client.myKeys()
+        val nkmNodeLoadResult = NkmNodeClient.loadOnlineNodes(NeoLinkLocalStore.loadNkmNodeListUrlFromConfig())
+        nkmNodeLoadResult.warning?.let { appendSystemLog(it) }
+        if (nkmNodeLoadResult.source == NkmNodeSource.NETWORK) {
+            appendSystemLog("NKM 可用节点列表已刷新并缓存，共 ${nkmNodeLoadResult.nodes.size} 个。")
+        }
+        return intersectNasAuthorizedNodesWithNkmAvailability(loadedKeys, nkmNodeLoadResult.nodes)
+    }
+
+    private fun intersectNasAuthorizedNodesWithNkmAvailability(keysFromNas: List<NasKey>, onlineNodesFromNkm: List<NkmNode>): List<NasKey> {
+        if (onlineNodesFromNkm.isEmpty()) {
+            return keysFromNas.map { key -> key.copy(availableNodes = emptyList()) }
+        }
+
+        val nkmById = onlineNodesFromNkm.associateBy { normalizeNodeIdentity(it.realId) }
+        val nkmByEndpoint = onlineNodesFromNkm.associateBy { endpointKey(it.address, it.hookPort, it.connectPort) }
+        val nkmByName = onlineNodesFromNkm.associateBy { normalizeNodeIdentity(it.name) }
+
+        return keysFromNas.map { key ->
+            val intersectedNodes = key.availableNodes.mapNotNull { nasNode ->
+                val nkmNode = nkmById[normalizeNodeIdentity(nasNode.nodeId)]
+                    ?: nkmByEndpoint[endpointKey(nasNode.address, nasNode.hookPort, nasNode.connectPort)]
+                    ?: nkmByName[normalizeNodeIdentity(nasNode.displayName)]
+                    ?: return@mapNotNull null
+
+                nasNode.copy(
+                    nodeId = nkmNode.realId,
+                    displayName = nkmNode.name,
+                    isOnline = true,
+                    address = nkmNode.address,
+                    hookPort = nkmNode.hookPort,
+                    connectPort = nkmNode.connectPort,
+                    icon = nkmNode.icon
+                )
+            }
+            key.copy(availableNodes = intersectedNodes)
+        }
+    }
+
+    private fun normalizeNodeIdentity(value: String): String {
+        return value.trim().lowercase()
+    }
+
+    private fun endpointKey(address: String, hookPort: Int, connectPort: Int): String {
+        return "${address.trim().lowercase()}:$hookPort:$connectPort"
+    }
 
     private fun validateNasAndEmail(): String? {
         if (authState.nasUrl.trim().isBlank()) return "NAS_URL 不能为空。"

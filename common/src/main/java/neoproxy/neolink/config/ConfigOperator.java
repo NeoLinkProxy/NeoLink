@@ -7,6 +7,7 @@ import neoproxy.neolink.state.FeatureState;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -56,6 +57,7 @@ public final class ConfigOperator {
                 dir.mkdirs();
             }
             new File(dir, "logs").mkdirs();
+            ensureConfigTemplateExists();
             debugOperation("WorkingDirectoryProvider resolved: " + WORKING_DIR);
             return;
         }
@@ -69,6 +71,7 @@ public final class ConfigOperator {
         File basePackageDir = safeDirectory(BASE_PACKAGE_DIR);
         if (basePackageDir != null && isWritableDirectory(basePackageDir)) {
             WORKING_DIR = basePackageDir.getAbsolutePath();
+            ensureConfigTemplateExists();
             return;
         }
 
@@ -80,6 +83,7 @@ public final class ConfigOperator {
         new File(workingDirectory, "logs").mkdirs();
         forceSyncBaseline("config.cfg");
         forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
+        ensureConfigTemplateExists();
         debugOperation("Redirected to AppData: " + WORKING_DIR);
     }
 
@@ -151,7 +155,28 @@ public final class ConfigOperator {
                     new File(WORKING_DIR, fileName).toPath(),
                     StandardCopyOption.REPLACE_EXISTING
             );
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            debugOperation(e);
+        }
+    }
+
+    private static void ensureConfigTemplateExists() {
+        File target = new File(WORKING_DIR, "config.cfg");
+        if (target.exists()) {
+            return;
+        }
+        try (InputStream template = ConfigOperator.class.getClassLoader().getResourceAsStream("templates/config.cfg")) {
+            if (template == null) {
+                debugOperation("templates/config.cfg not found on classpath; skipped desktop config bootstrap.");
+                return;
+            }
+            File parent = target.getAbsoluteFile().getParentFile();
+            if (parent != null) {
+                Files.createDirectories(parent.toPath());
+            }
+            Files.copy(template, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            debugOperation(e);
         }
     }
 

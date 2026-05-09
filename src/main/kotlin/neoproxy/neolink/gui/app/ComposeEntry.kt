@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.app
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -14,7 +13,13 @@ import kotlinx.coroutines.delay
 import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
+import neoproxy.neolink.gui.platform.GuiRenderBackend
+import neoproxy.neolink.gui.platform.RenderState
+import neoproxy.neolink.gui.platform.WindowsEffects
+import neoproxy.neolink.gui.state.NeoLinkViewModel
+import neoproxy.neolink.gui.ui.screens.neoLinkMainScreen
 import neoproxy.neolink.state.RuntimeState
+import neoproxy.neolink.util.Debugger.debugOperation
 import java.awt.Dimension
 import java.io.PrintStream
 import java.util.Locale
@@ -165,7 +170,7 @@ fun customizeSwingLook() {
             defaults[keys[i]] = keys[i + 1]
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        debugOperation(e)
     }
 }
 

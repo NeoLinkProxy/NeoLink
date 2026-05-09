@@ -4,7 +4,7 @@ import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.util.LogSink;
 
 /**
- * 运行时全局状态容器（runtime state holder）。
+ * 运行时全局状态容器。
  * <p>
  * 与原始实现的差异：
  * <ul>

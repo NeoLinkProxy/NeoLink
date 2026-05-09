@@ -1,5 +1,4 @@
-package neoproxy.neolink.gui
-
+package neoproxy.neolink.gui.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -54,6 +53,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.WindowState
+import neoproxy.neolink.gui.platform.RenderState
+import neoproxy.neolink.gui.state.NeoLinkViewModel
+import neoproxy.neolink.gui.ui.components.collectIsHoveredAsState
+import neoproxy.neolink.gui.ui.components.primaryButton
+import neoproxy.neolink.gui.ui.theme.ModernContextMenuRepresentation
+import neoproxy.neolink.gui.ui.theme.ModernTheme
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 
@@ -85,11 +90,11 @@ fun WindowScope.neoLinkMainScreen(
             Box(modifier = Modifier.fillMaxSize().clip(currentShape)) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = ModernTheme.background,
+                    color = Color.Transparent,
                     shape = currentShape,
-                    border = if (!isMaximized && !RenderState.isOpaqueFallback) BorderStroke(1.dp, Color(0x1AFFFFFF)) else null
+                    border = if (!isMaximized && !RenderState.isOpaqueFallback) BorderStroke(1.dp, ModernTheme.borderSoft) else null
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize().background(ModernTheme.backgroundBrush)) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             customTitleBar(windowState, appIcon, onExit)
                             if (!viewModel.authState.isAuthenticated || !viewModel.authState.isVerified) {
@@ -112,13 +117,21 @@ fun WindowScope.neoLinkMainScreen(
 fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier.width(360.dp).background(Color(0xFF1E1E20), ModernTheme.shapeMedium)
-                .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(24.dp)
+            modifier = Modifier.width(360.dp).background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
+                .border(1.dp, ModernTheme.borderStrong, ModernTheme.shapeMedium).padding(24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Warning, null, tint = ModernTheme.error, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
-                Text(title, color = ModernTheme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    title,
+                    color = ModernTheme.textPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    // 对话框标题与图标同排显示，因此沿用统一的视觉基线上移补偿，
+                    // 不直接依赖字体边界的原始居中结果。
+                    modifier = Modifier.offset(y = AlertTitleTextIconBaselineOffset)
+                )
             }
             Spacer(Modifier.height(16.dp))
             Text(message, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
@@ -162,7 +175,14 @@ fun WindowScope.customTitleBar(windowState: WindowState, appIcon: Painter, onExi
             Row(Modifier.fillMaxSize().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Image(appIcon, "Logo", Modifier.size(23.dp).offset(y = 3.dp), contentScale = ContentScale.Fit)
                 Spacer(Modifier.width(10.dp))
-                Text("NeoLink 内网穿透客户端", color = ModernTheme.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
+                Text(
+                    "NeoLink 内网穿透客户端",
+                    color = ModernTheme.textSecondary,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    // 文本与 Logo 的视觉盒模型不同；将文本上移以匹配既有的 7.x 视觉基线补偿。
+                    modifier = Modifier.offset(y = TitleBarTextIconBaselineOffset)
+                )
             }
         }
         Row(Modifier.align(Alignment.CenterEnd).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
@@ -189,6 +209,8 @@ private val WindowControlButtonWidth = 46.dp
 private const val WindowControlButtonCount = 3
 private const val TitleBarHeightPx = 32
 private const val WindowControlButtonsWidthPx = 46 * WindowControlButtonCount
+private val TitleBarTextIconBaselineOffset = (-1).dp
+private val AlertTitleTextIconBaselineOffset = (-1).dp
 
 @Composable
 fun windowControlButton(isClose: Boolean = false, onClick: () -> Unit, drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit) {

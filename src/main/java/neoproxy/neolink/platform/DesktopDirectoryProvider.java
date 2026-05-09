@@ -54,7 +54,7 @@ public final class DesktopDirectoryProvider implements WorkingDirectoryProvider 
         if (os.contains("mac")) {
             return home + "/Library/Application Support/NeoLink";
         }
-        // Linux / 其他 Unix
+        // Linux / 其他类 Unix 系统
         return home + File.separator + ".neolink";
     }
 }
