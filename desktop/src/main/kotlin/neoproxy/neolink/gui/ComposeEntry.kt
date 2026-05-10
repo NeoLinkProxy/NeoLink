@@ -37,8 +37,8 @@ fun main(args: Array<String>) {
         println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
     } else {
         val checkResult = NeoLinkPreFlightChecker.runFullCheck()
-        if (checkResult.allowsAcrylicDirectX) {
-            RenderState.useDirectXAcrylic(checkResult.description)
+        if (checkResult.allowsAcrylicDirect3D) {
+            RenderState.useDirect3DAcrylic(checkResult.description)
         } else {
             RenderState.useSoftwareOpaque(checkResult.description)
         }

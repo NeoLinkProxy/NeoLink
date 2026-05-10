@@ -8,7 +8,7 @@ import com.sun.jna.platform.win32.WinDef
  *
  * 核心职责：
  * 1. 检测系统是否接受 DWM（桌面窗口管理器）透明背板请求
- * 2. 用实测结果决定是否允许 DirectX + 透明亚克力组合
+ * 2. 用实测结果决定是否允许 Direct3D + 透明亚克力组合
  * 3. 防止在 RDP、旧版 Windows 或基础显卡驱动环境下出现透明窗口风险
  *
  * 检测逻辑：
@@ -17,8 +17,8 @@ import com.sun.jna.platform.win32.WinDef
  * 3. 如果实测返回 0 (成功)，说明当前系统至少接受目标 DWM 背板属性
  *
  * 检测结果：
- * - allowsAcrylicDirectX = true: 允许使用 DirectX + 透明亚克力窗口
- * - allowsAcrylicDirectX = false: 使用 Software + 不透明窗口
+ * - allowsAcrylicDirect3D = true: 允许使用 Direct3D + 透明亚克力窗口
+ * - allowsAcrylicDirect3D = false: 使用 Software + 不透明窗口
  *
  * @author NeoProxy Team
  * @since 5.11.0
@@ -26,7 +26,7 @@ import com.sun.jna.platform.win32.WinDef
 object NeoLinkPreFlightChecker {
 
     data class CheckResult(
-        val allowsAcrylicDirectX: Boolean,
+        val allowsAcrylicDirect3D: Boolean,
         val description: String
     )
 

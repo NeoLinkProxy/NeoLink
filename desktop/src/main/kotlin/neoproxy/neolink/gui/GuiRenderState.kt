@@ -12,7 +12,7 @@ import androidx.compose.runtime.setValue
  * 一个半透明窗口误认为已经安全降级。
  */
 object RenderState {
-    var decision by mutableStateOf(GuiRenderDecision.directXAcrylic("尚未完成 GUI 渲染预检"))
+    var decision by mutableStateOf(GuiRenderDecision.direct3DAcrylic("尚未完成 GUI 渲染预检"))
         private set
 
     val isSoftwareFallback: Boolean
@@ -30,9 +30,9 @@ object RenderState {
     val fallbackReason: String
         get() = decision.reason
 
-    fun useDirectXAcrylic(reason: String) {
-        decision = GuiRenderDecision.directXAcrylic(reason)
-        System.setProperty("skiko.renderApi", GuiRenderBackend.DIRECTX.skikoValue)
+    fun useDirect3DAcrylic(reason: String) {
+        decision = GuiRenderDecision.direct3DAcrylic(reason)
+        System.setProperty("skiko.renderApi", GuiRenderBackend.DIRECT3D.skikoValue)
     }
 
     fun useSoftwareOpaque(reason: String, forcedByUser: Boolean = false) {
@@ -56,7 +56,7 @@ object RenderState {
 }
 
 enum class GuiRenderBackend(val skikoValue: String) {
-    DIRECTX("DIRECTX"),
+    DIRECT3D("DIRECT3D"),
     SOFTWARE("SOFTWARE")
 }
 
@@ -72,8 +72,8 @@ data class GuiRenderDecision(
     val forcedByUser: Boolean = false
 ) {
     companion object {
-        fun directXAcrylic(reason: String) = GuiRenderDecision(
-            backend = GuiRenderBackend.DIRECTX,
+        fun direct3DAcrylic(reason: String) = GuiRenderDecision(
+            backend = GuiRenderBackend.DIRECT3D,
             backdrop = GuiWindowBackdrop.ACRYLIC,
             reason = reason
         )

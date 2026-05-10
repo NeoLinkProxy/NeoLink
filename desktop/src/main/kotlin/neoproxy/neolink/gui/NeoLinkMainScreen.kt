@@ -72,7 +72,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * 3. 提供统一的样式配置（颜色、字体、尺寸等）
  *
  * 设计特点：
- * - 支持透明背景（DirectX + 亚克力模式）
+ * - 支持透明背景（Direct3D + 亚克力模式）
  * - 支持不透明背景（Software 或运行时特效失败）
  * - 暗色主题，保护视力
  * - 统一的圆角和间距设计
