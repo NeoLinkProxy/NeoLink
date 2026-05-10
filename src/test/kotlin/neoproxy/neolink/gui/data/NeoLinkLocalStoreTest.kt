@@ -39,27 +39,31 @@ class NeoLinkLocalStoreTest {
     @Test
     @DisplayName("loadSession backs up unreadable JSON before returning defaults")
     fun loadSessionBacksUpUnreadableJson() {
-        val sessionFile = tempDir.resolve("desktop-session.json")
+        val sessionDir = tempDir.resolve("state")
+        Files.createDirectories(sessionDir)
+        val sessionFile = sessionDir.resolve("desktop-session.json")
         Files.writeString(sessionFile, "{not-json")
 
         val session = NeoLinkLocalStore.loadSession()
 
         assertEquals(SessionStoreDocument(), session)
         assertFalse(Files.exists(sessionFile))
-        assertTrue(Files.exists(tempDir.resolve("desktop-session.json.corrupt")))
+        assertTrue(Files.exists(sessionDir.resolve("desktop-session.json.corrupt")))
     }
 
     @Test
     @DisplayName("loadTunnels backs up unreadable JSON before returning an empty list")
     fun loadTunnelsBacksUpUnreadableJson() {
-        val tunnelsFile = tempDir.resolve("tunnels.json")
+        val stateDir = tempDir.resolve("state")
+        Files.createDirectories(stateDir)
+        val tunnelsFile = stateDir.resolve("tunnels.json")
         Files.writeString(tunnelsFile, "{not-json")
 
         val tunnels = NeoLinkLocalStore.loadTunnels()
 
         assertTrue(tunnels.isEmpty())
         assertFalse(Files.exists(tunnelsFile))
-        assertTrue(Files.exists(tempDir.resolve("tunnels.json.corrupt")))
+        assertTrue(Files.exists(stateDir.resolve("tunnels.json.corrupt")))
     }
 
     @Test
@@ -67,9 +71,10 @@ class NeoLinkLocalStoreTest {
     fun saveTunnelsWritesCompleteJsonWithoutTempResidue() {
         NeoLinkLocalStore.saveTunnels(listOf(TunnelCardState(id = "tunnel-a", keyAlias = "key-a")))
 
-        val saved = Files.readString(tempDir.resolve("tunnels.json"))
+        val stateDir = tempDir.resolve("state")
+        val saved = Files.readString(stateDir.resolve("tunnels.json"))
 
         assertTrue(saved.contains("\"tunnel-a\""), saved)
-        assertFalse(Files.exists(tempDir.resolve("tunnels.json.tmp")))
+        assertFalse(Files.exists(stateDir.resolve("tunnels.json.tmp")))
     }
 }

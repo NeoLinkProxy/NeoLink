@@ -41,6 +41,7 @@ import neoproxy.neolink.gui.model.TrafficPoint
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelRuntimeUiState
 import neoproxy.neolink.gui.model.UiState
+import neoproxy.neolink.platform.DesktopLogManager
 import neoproxy.neolink.state.ConnectionState
 import neoproxy.neolink.state.FeatureState
 import neoproxy.neolink.state.RuntimeState
@@ -49,11 +50,9 @@ import neoproxy.neolink.util.LogSink
 import top.ceroxe.api.neolink.NeoLinkAPI
 import top.ceroxe.api.neolink.NeoLinkCfg
 import top.ceroxe.api.neolink.NeoLinkState
-import top.ceroxe.api.print.log.Loggist
 import top.ceroxe.api.print.log.LogType
-import top.ceroxe.api.print.log.State
-import java.io.File
 import java.time.Instant
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.LongAdder
@@ -68,6 +67,7 @@ import java.util.concurrent.atomic.LongAdder
 class NeoLinkViewModel {
     private companion object {
         const val GUI_SYSTEM_PREFIX = "[System]"
+        const val TUNNEL_LOG_SUBJECT = "HOST-CLIENT"
         const val MAX_LOG_LINES = 1000
         const val TRAFFIC_WINDOW_SECONDS = 10
         const val BYTES_PER_MIB = 1024.0 * 1024.0
@@ -134,7 +134,6 @@ class NeoLinkViewModel {
         isInitialized = true
 
         ConfigOperator.initEnvironment()
-        File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
 
         val originalConnectionState = ConnectionState.snapshot()
         val originalFeatureState = FeatureState.snapshot()
@@ -268,7 +267,15 @@ class NeoLinkViewModel {
         return null
     }
 
-    fun updateTunnelName(id: String, name: String) = updateTunnel(id) { it.name = name }
+    fun updateTunnelName(id: String, name: String) {
+        if (!DesktopLogManager.isValidTunnelLogFileName(name)) {
+            return
+        }
+        if (hasDuplicateTunnelLogFileName(id, name)) {
+            return
+        }
+        updateTunnel(id) { it.name = name }
+    }
     fun updateTunnelLocalPort(id: String, value: String) = updateTunnel(id) { it.localPort = value.filter(Char::isDigit) }
     fun updateTunnelLocalDomain(id: String, value: String) = updateTunnel(id) { it.localDomain = value }
     fun updateTunnelHookPort(id: String, value: String) = updateTunnel(id) { it.hookPort = value.filter(Char::isDigit) }
@@ -368,6 +375,13 @@ class NeoLinkViewModel {
 
         pendingTrafficBytes.remove(id)
         runRequested[id] = AtomicBoolean(true)
+        try {
+            DesktopLogManager.openTunnelLog(id, tunnelLogFileName(tunnel), false)
+        } catch (e: RuntimeException) {
+            runRequested.remove(id)
+            appendTunnelSystemLog(id, "创建隧道日志文件失败：${e.message ?: e.javaClass.simpleName}", surroundWithBlankLines = true)
+            return "创建隧道日志文件失败：${e.message ?: e.javaClass.simpleName}"
+        }
         setTunnelRuntime(id) { it.copy(running = true, stopping = false, activeConnections = 0, trafficPoints = emptyList()) }
         appendTunnelLog(id, "正在连接 ${tunnel.remoteDomain}:${tunnel.hookPort} ...")
 
@@ -396,6 +410,7 @@ class NeoLinkViewModel {
             withContext(Dispatchers.Main) {
                 setTunnelRuntime(id) { it.copy(running = false, stopping = false, activeConnections = 0) }
                 appendTunnelSystemLog(id, "服务已停止。", surroundWithBlankLines = true)
+                DesktopLogManager.closeTunnelLog(id)
             }
         }
         persistTunnels()
@@ -630,6 +645,8 @@ class NeoLinkViewModel {
     }
 
     private fun validateTunnel(tunnel: TunnelCardState): String? {
+        if (!DesktopLogManager.isValidTunnelLogFileName(tunnelLogFileName(tunnel))) return "隧道名称不能包含文件系统不支持的字符。"
+        if (hasDuplicateTunnelLogFileName(tunnel.id, tunnelLogFileName(tunnel))) return "隧道名称不能重复。"
         if (tunnel.remoteDomain.trim().isBlank()) return "节点地址不能为空。"
         if (tunnel.localDomain.trim().isBlank()) return "本地域名不能为空。"
         if (tunnel.keyAlias.trim().isBlank()) return "密钥不能为空。"
@@ -637,6 +654,19 @@ class NeoLinkViewModel {
         if (tunnel.hookPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) return "Hook 端口必须在 1~65535 之间。"
         if (tunnel.connectPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } == null) return "连接端口必须在 1~65535 之间。"
         return null
+    }
+
+    private fun tunnelLogFileName(tunnel: TunnelCardState): String {
+        if (tunnel.name.isNotBlank()) {
+            return tunnel.name
+        }
+        val index = tunnels.indexOfFirst { it.id == tunnel.id }
+        return "隧道${if (index >= 0) index + 1 else 1}"
+    }
+
+    private fun hasDuplicateTunnelLogFileName(id: String, fileName: String): Boolean {
+        val normalized = fileName.lowercase(Locale.ROOT)
+        return tunnels.any { it.id != id && tunnelLogFileName(it).lowercase(Locale.ROOT) == normalized }
     }
 
     private fun updateTunnel(id: String, block: (TunnelCardState) -> Unit) {
@@ -849,7 +879,8 @@ class NeoLinkViewModel {
             }
             refreshKeys()
         }
-        val line = formatGuiLog(level, "HOST-CLIENT", message)
+        DesktopLogManager.logTunnel(id, level, message)
+        val line = formatGuiLog(level, TUNNEL_LOG_SUBJECT, message)
         scope.launch(Dispatchers.Main) {
             setTunnelRuntime(id) { runtime ->
                 val updated = runtime.logs.toMutableList()
@@ -872,6 +903,7 @@ class NeoLinkViewModel {
                 append('\n')
             }
         }
+        DesktopLogManager.logTunnel(id, LogType.INFO, normalizedMessage)
         scope.launch(Dispatchers.Main) {
             setTunnelRuntime(id) { runtime ->
                 val updated = runtime.logs.toMutableList()
@@ -886,10 +918,8 @@ class NeoLinkViewModel {
         if (isLogRedirected) return
         isLogRedirected = true
 
-        val originalLogSink = RuntimeState.logSink()
-        RuntimeState.setLogSink { level, tag, message ->
+        DesktopLogManager.attachMirror { _, tag, message ->
             addLogSafe("[$tag] $message\n")
-            originalLogSink?.log(level, tag, message)
         }
     }
 
@@ -927,15 +957,12 @@ class NeoLinkViewModel {
     }
 
     private fun formatGuiLog(level: LogType, subject: String, message: String): String {
-        return guiLoggist().getLogString(State(level, subject, message))
-    }
-
-    private fun guiLoggist(): Loggist {
-        val logsDirectory = File(ConfigOperator.resolveWritableRuntimeDirectory(), "logs")
-        if (!logsDirectory.exists() && !logsDirectory.mkdirs()) {
-            debugOperation("Unable to create GUI log directory: ${logsDirectory.absolutePath}")
+        val prefix = when (level) {
+            LogType.ERROR -> "[ERROR]"
+            LogType.WARNING -> "[WARNING]"
+            else -> "[INFO]"
         }
-        return Loggist(File(logsDirectory, "gui_internal.log"))
+        return "$prefix [$subject] $message\n"
     }
 
     private fun parseAnsi(text: String): AnnotatedString {

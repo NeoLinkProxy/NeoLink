@@ -34,7 +34,10 @@ import neoproxy.neolink.gui.ui.components.primaryButton
 import neoproxy.neolink.gui.ui.components.secondaryButton
 import neoproxy.neolink.gui.ui.theme.ModernTheme
 
-private val AuthHeaderTextIconBaselineOffset = (-1).dp
+private val AuthHeaderTextIconBaselineOffset = (-2).dp
+private val AuthBodyTextBaselineOffset = (-1.5).dp
+private val MaterialButtonTextBaselineOffset = (-1.5).dp
+private val LoginButtonTextBaselineOffset = (-2.5).dp
 
 @Composable
 fun authScreen(viewModel: NeoLinkViewModel) {
@@ -54,7 +57,7 @@ fun authScreen(viewModel: NeoLinkViewModel) {
                 Spacer(Modifier.height(6.dp))
 
                 if (state.mode == AuthMode.VERIFY_IDENTITY) {
-                    Text("用户: ${state.email}", color = ModernTheme.textSecondary, fontSize = 12.sp)
+                    Text("用户: ${state.email}", color = ModernTheme.textSecondary, fontSize = 12.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
                     labelText("真实姓名")
                     modernTextField(state.realName, viewModel::updateRealName, placeholder = "请输入真实姓名")
                     labelText("身份证号")
@@ -78,12 +81,12 @@ fun authScreen(viewModel: NeoLinkViewModel) {
                                 colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.surfaceHover, contentColor = ModernTheme.textPrimary),
                                 elevation = ButtonDefaults.elevation(0.dp, 0.dp),
                                 modifier = Modifier.height(34.dp).width(100.dp)
-                            ) { Text("发验证码", fontSize = 12.sp) }
+                            ) { Text("发验证码", fontSize = 12.sp, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset)) }
                         }
                         primaryButton("注册并登录", state.isLoading, onClick = viewModel::register)
                         secondaryButton("已有账号，去登录", onClick = { viewModel.switchAuthMode(AuthMode.LOGIN) })
                     } else {
-                        primaryButton("登录", state.isLoading, onClick = viewModel::login)
+                        primaryButton("登录", state.isLoading, onClick = viewModel::login, textBaselineOffset = LoginButtonTextBaselineOffset)
                         secondaryButton("没有账号，去注册", onClick = { viewModel.switchAuthMode(AuthMode.REGISTER) })
                     }
                 }
@@ -92,7 +95,8 @@ fun authScreen(viewModel: NeoLinkViewModel) {
                         state.message,
                         color = if (isAuthErrorMessage(state.message)) ModernTheme.error else ModernTheme.textSecondary,
                         fontSize = 12.sp,
-                        lineHeight = 18.sp
+                        lineHeight = 18.sp,
+                        modifier = Modifier.offset(y = AuthBodyTextBaselineOffset)
                     )
                 }
             }
@@ -108,7 +112,7 @@ fun sessionRestoringPanel(email: String) {
     ) {
         authHeader(AuthMode.LOGIN, titleOverride = "正在恢复会话", subtitleOverride = "正在验证本地会话，请稍候。")
         if (email.isNotBlank()) {
-            Text("用户: $email", color = ModernTheme.textSecondary, fontSize = 13.sp)
+            Text("用户: $email", color = ModernTheme.textSecondary, fontSize = 13.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
         }
     }
 }
@@ -146,11 +150,11 @@ private fun authHeader(
                 fontSize = 24.sp,
                 lineHeight = 30.sp,
                 // 大号认证标题同样与图标共用一行；按主界面一致策略上移文本，
-                // 以处理 Windows/Compose Desktop 的视觉基线不一致问题。
+                // 标题与账号图标同排显示；上移文本以处理 Windows/Compose Desktop 的视觉基线不一致问题。
                 modifier = Modifier.offset(y = AuthHeaderTextIconBaselineOffset)
             )
         }
-        Text(subtitle, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
+        Text(subtitle, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
     }
 }
 

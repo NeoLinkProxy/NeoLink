@@ -10,7 +10,6 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
-import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.gui.platform.GuiRenderBackend
@@ -63,7 +62,6 @@ fun main(args: Array<String>) {
     }
 
     RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
-    ClientConsole.initializeLogger(false)
 
     val originalErr = System.err
     System.setErr(object : PrintStream(originalErr) {

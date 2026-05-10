@@ -209,8 +209,8 @@ private val WindowControlButtonWidth = 46.dp
 private const val WindowControlButtonCount = 3
 private const val TitleBarHeightPx = 32
 private const val WindowControlButtonsWidthPx = 46 * WindowControlButtonCount
-private val TitleBarTextIconBaselineOffset = (-1).dp
-private val AlertTitleTextIconBaselineOffset = (-1).dp
+private val TitleBarTextIconBaselineOffset = (-2).dp
+private val AlertTitleTextIconBaselineOffset = (-2).dp
 
 @Composable
 fun windowControlButton(isClose: Boolean = false, onClick: () -> Unit, drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit) {

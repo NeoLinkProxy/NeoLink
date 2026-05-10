@@ -4,6 +4,7 @@ import neoproxy.neolink.state.ConnectionSettings;
 import neoproxy.neolink.state.ConnectionState;
 import neoproxy.neolink.state.FeatureSettings;
 import neoproxy.neolink.state.FeatureState;
+import neoproxy.neolink.app.ApplicationFiles;
 
 import java.io.File;
 import java.io.IOException;
@@ -56,7 +57,6 @@ public final class ConfigOperator {
             if (!dir.exists()) {
                 dir.mkdirs();
             }
-            new File(dir, "logs").mkdirs();
             ensureConfigTemplateExists();
             debugOperation("WorkingDirectoryProvider resolved: " + WORKING_DIR);
             return;
@@ -80,7 +80,6 @@ public final class ConfigOperator {
         if (!workingDirectory.exists()) {
             workingDirectory.mkdirs();
         }
-        new File(workingDirectory, "logs").mkdirs();
         forceSyncBaseline("config.cfg");
         forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
         ensureConfigTemplateExists();
@@ -150,9 +149,14 @@ public final class ConfigOperator {
             return;
         }
         try {
+            File target = baselineTarget(fileName);
+            File parent = target.getParentFile();
+            if (parent != null) {
+                Files.createDirectories(parent.toPath());
+            }
             Files.copy(
                     source.toPath(),
-                    new File(WORKING_DIR, fileName).toPath(),
+                    target.toPath(),
                     StandardCopyOption.REPLACE_EXISTING
             );
         } catch (IOException e) {
@@ -160,8 +164,18 @@ public final class ConfigOperator {
         }
     }
 
+    private static File baselineTarget(String fileName) {
+        if ("config.cfg".equals(fileName)) {
+            return ApplicationFiles.configFile();
+        }
+        if (NodeConfig.NODE_LIST_FILE_NAME.equals(fileName)) {
+            return ApplicationFiles.nodesCacheFile();
+        }
+        return new File(ApplicationFiles.runtimeRoot(), fileName).getAbsoluteFile();
+    }
+
     private static void ensureConfigTemplateExists() {
-        File target = new File(WORKING_DIR, "config.cfg");
+        File target = ApplicationFiles.configFile();
         if (target.exists()) {
             return;
         }
@@ -181,7 +195,7 @@ public final class ConfigOperator {
     }
 
     public static void readAndSetValue() {
-        File configFile = new File(WORKING_DIR, "config.cfg");
+        File configFile = ApplicationFiles.configFile();
         if (!configFile.exists()) {
             return;
         }

@@ -2,19 +2,15 @@ package neoproxy.neolink.cli;
 
 import neoproxy.neolink.NeoLink;
 import neoproxy.neolink.app.LanguageManager;
-import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.core.VersionInfo;
+import neoproxy.neolink.platform.DesktopLogManager;
 import neoproxy.neolink.state.ConnectionState;
 import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 import neoproxy.neolink.util.LogSink;
 import top.ceroxe.api.print.log.LogType;
-import top.ceroxe.api.print.log.Loggist;
-import top.ceroxe.api.print.log.State;
-import top.ceroxe.api.utils.TimeUtils;
 
-import java.io.File;
 import java.util.Scanner;
 
 /**
@@ -30,17 +26,7 @@ public final class ClientConsole {
     }
 
     public static void initializeLogger(boolean noColor) {
-        File logsDir = new File(ConfigOperator.WORKING_DIR, "logs");
-        if (!logsDir.exists() && !logsDir.mkdirs()) {
-            throw new IllegalArgumentException("Failed to create logs directory: " + logsDir.getAbsolutePath());
-        }
-        File logFile = resolveLogFile(logsDir);
-        Loggist loggist = new Loggist(logFile);
-        if (noColor) {
-            loggist.disableColor();
-        }
-        loggist.openWriteChannel();
-        RuntimeState.setLogSink((level, tag, message) -> loggist.say(new State(toLogType(level), tag, message)));
+        DesktopLogManager.initialize(noColor);
     }
 
     public static void requestAccessKeyIfMissing() {
@@ -119,14 +105,6 @@ public final class ClientConsole {
         }
     }
 
-    private static LogType toLogType(LogSink.Level level) {
-        return switch (level) {
-            case WARNING -> LogType.WARNING;
-            case ERROR -> LogType.ERROR;
-            default -> LogType.INFO;
-        };
-    }
-
     private static LogSink.Level toLogLevel(LogType logType) {
         return switch (logType) {
             case WARNING -> LogSink.Level.WARNING;
@@ -144,22 +122,5 @@ public final class ClientConsole {
         if (RuntimeState.languageData() == null) {
             LanguageManager.detectLanguage();
         }
-    }
-
-    private static File resolveLogFile(File defaultLogsDir) {
-        String configuredOutputFilePath = FeatureState.snapshot().outputFilePath();
-        if (configuredOutputFilePath == null || configuredOutputFilePath.isBlank()) {
-            return new File(defaultLogsDir, TimeUtils.getCurrentTimeAsFileName(false) + ".log");
-        }
-
-        File logFile = new File(configuredOutputFilePath);
-        if (!logFile.isAbsolute()) {
-            logFile = new File(ConfigOperator.WORKING_DIR, configuredOutputFilePath);
-        }
-        File parent = logFile.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) {
-            throw new IllegalArgumentException("Failed to create log directory: " + parent.getAbsolutePath());
-        }
-        return logFile;
     }
 }

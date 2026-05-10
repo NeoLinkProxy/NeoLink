@@ -1,5 +1,5 @@
 package neoproxy.neolink.gui.app
-import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.app.ApplicationFiles
 import java.io.File
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
@@ -22,10 +22,8 @@ class NeoLinkSingleInstanceGuard private constructor(
     }
 
     companion object {
-        private const val LOCK_FILE_NAME = "neolink-desktop.lock"
-
         fun acquire(): NeoLinkSingleInstanceGuard? {
-            return acquire(File(ConfigOperator.resolveWritableRuntimeDirectory(), LOCK_FILE_NAME))
+            return acquire(ApplicationFiles.lockFile())
         }
 
         internal fun acquire(lockFile: File): NeoLinkSingleInstanceGuard? {

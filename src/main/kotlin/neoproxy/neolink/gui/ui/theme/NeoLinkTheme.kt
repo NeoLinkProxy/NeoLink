@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import neoproxy.neolink.gui.platform.RenderState
 import neoproxy.neolink.gui.platform.WindowsEffects
+
+private val ContextMenuTextBaselineOffset = (-2).dp
 
 object ModernTheme {
     val background: Color
@@ -117,7 +120,7 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
                                     .padding(horizontal = 20.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(item.label, color = ModernTheme.textPrimary, fontSize = 13.sp)
+                                Text(item.label, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.offset(y = ContextMenuTextBaselineOffset))
                             }
                         }
                     }

@@ -1,5 +1,5 @@
 package neoproxy.neolink.gui.data
-import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.app.ApplicationFiles
 import neoproxy.neolink.config.NodeConfig
 import neoproxy.neolink.gui.config.DEFAULT_NKM_NODELIST_URL
 import neoproxy.neolink.gui.model.NkmNode
@@ -117,6 +117,6 @@ object NkmNodeClient {
     }
 
     private fun nodesFile(): File {
-        return File(ConfigOperator.resolveWritableRuntimeDirectory(), NodeConfig.NODE_LIST_FILE_NAME)
+        return ApplicationFiles.nodesCacheFile()
     }
 }

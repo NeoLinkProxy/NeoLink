@@ -2,7 +2,7 @@ package neoproxy.neolink.gui.data
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
-import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.app.ApplicationFiles
 import neoproxy.neolink.config.LineConfigParser
 import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
 import neoproxy.neolink.gui.config.DEFAULT_NKM_NODELIST_URL
@@ -16,9 +16,6 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-private const val TUNNELS_FILE = "tunnels.json"
-private const val SESSION_FILE = "desktop-session.json"
-
 object NeoLinkJson {
     val mapper: ObjectMapper = ObjectMapper()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -27,7 +24,7 @@ object NeoLinkJson {
 
 object NeoLinkLocalStore {
     fun loadNasUrlFromConfig(): String {
-        val configFile = File(ConfigOperator.WORKING_DIR, "config.cfg")
+        val configFile = ApplicationFiles.configFile()
         if (!configFile.isFile) {
             return DEFAULT_NAS_URL
         }
@@ -42,7 +39,7 @@ object NeoLinkLocalStore {
     }
 
     fun loadNkmNodeListUrlFromConfig(): String {
-        val configFile = File(ConfigOperator.WORKING_DIR, "config.cfg")
+        val configFile = ApplicationFiles.configFile()
         if (!configFile.isFile) {
             return DEFAULT_NKM_NODELIST_URL
         }
@@ -57,7 +54,7 @@ object NeoLinkLocalStore {
     }
 
     fun ensureDesktopConfigDefaults() {
-        val configFile = File(ConfigOperator.WORKING_DIR, "config.cfg")
+        val configFile = ApplicationFiles.configFile()
         val missingDefaults = if (!configFile.isFile) {
             true
         } else {
@@ -81,7 +78,7 @@ object NeoLinkLocalStore {
     }
 
     private fun saveDesktopConfigDefaults(nasUrl: String, nkmNodeListUrl: String) {
-        val configFile = File(ConfigOperator.WORKING_DIR, "config.cfg")
+        val configFile = ApplicationFiles.configFile()
         Files.createDirectories(configFile.toPath().parent)
         val normalizedNasUrl = nasUrl.trim().ifBlank { DEFAULT_NAS_URL }
         val normalizedNkmNodeListUrl = nkmNodeListUrl.trim().ifBlank { DEFAULT_NKM_NODELIST_URL }
@@ -127,7 +124,7 @@ object NeoLinkLocalStore {
     }
 
     fun loadSession(): SessionStoreDocument {
-        val file = runtimeFile(SESSION_FILE)
+        val file = ApplicationFiles.sessionFile()
         if (!file.isFile) {
             return SessionStoreDocument()
         }
@@ -141,15 +138,15 @@ object NeoLinkLocalStore {
     }
 
     fun saveSession(session: SessionStoreDocument) {
-        writeJson(runtimeFile(SESSION_FILE), session)
+        writeJson(ApplicationFiles.sessionFile(), session)
     }
 
     fun clearSession() {
-        Files.deleteIfExists(runtimeFile(SESSION_FILE).toPath())
+        Files.deleteIfExists(ApplicationFiles.sessionFile().toPath())
     }
 
     fun loadTunnels(): MutableList<TunnelCardState> {
-        val file = runtimeFile(TUNNELS_FILE)
+        val file = ApplicationFiles.tunnelsFile()
         if (!file.isFile) {
             return mutableListOf()
         }
@@ -163,13 +160,7 @@ object NeoLinkLocalStore {
     }
 
     fun saveTunnels(tunnels: List<TunnelCardState>) {
-        writeJson(runtimeFile(TUNNELS_FILE), TunnelStoreDocument(tunnels.toMutableList()))
-    }
-
-    private fun runtimeFile(name: String): File {
-        val dir = ConfigOperator.resolveWritableRuntimeDirectory()
-        Files.createDirectories(dir.toPath())
-        return File(dir, name)
+        writeJson(ApplicationFiles.tunnelsFile(), TunnelStoreDocument(tunnels.toMutableList()))
     }
 
     private fun writeJson(file: File, value: Any) {

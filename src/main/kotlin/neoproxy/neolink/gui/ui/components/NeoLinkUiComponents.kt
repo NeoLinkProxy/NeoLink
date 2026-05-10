@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -73,9 +75,21 @@ import java.time.format.DateTimeFormatter
 private val TrafficChartTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 val TotalTrafficChartColor = Color(0xFF7C3AED)
 val TunnelTrafficChartColor = Color(0xFF22D3EE)
-private val TextIconBaselineOffset = (-1).dp
-private val TextFieldBaselineOffset = (-1).dp
-private val TextFieldPlaceholderBaselineOffset = (-0.5).dp
+// Compose Desktop centers text by font bounds. On Windows, CJK and mixed Latin/CJK glyphs
+// look slightly lower than icons, borders, and compact controls, so these offsets preserve
+// the optical baseline established by the 7.x UI.
+private val CenteredButtonTextBaselineOffset = (-2).dp
+private val DropdownSelectedTextBaselineOffset = (-3).dp
+private val DropdownPrimaryTextBaselineOffset = (-2).dp
+private val DropdownSecondaryTextBaselineOffset = (-2).dp
+private val CheckboxTextBaselineOffset = (-3).dp
+private val CompactToggleTextBaselineOffset = (-3).dp
+private val ChartAxisLabelBaselineOffset = (-2).dp
+private val SectionMarkerBaselineOffset = 2.5.dp
+private val SectionTitleTextBaselineOffset = (-2).dp
+private val FieldLabelTextBaselineOffset = (-4).dp
+private val TextFieldBaselineOffset = (-2).dp
+private val TextFieldPlaceholderBaselineOffset = (-1.5).dp
 
 @Composable
 fun inlineDropdown(
@@ -85,6 +99,7 @@ fun inlineDropdown(
     selectedColor: Color = ModernTheme.textPrimary,
     height: androidx.compose.ui.unit.Dp = 32.dp,
     leadingIcon: (@Composable () -> Unit)? = null,
+    selectedTrailing: (@Composable () -> Unit)? = null,
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -103,7 +118,16 @@ fun inlineDropdown(
         ) {
             leadingIcon?.invoke()
             if (leadingIcon != null) Spacer(Modifier.width(8.dp))
-            Text(selectedText.ifBlank { emptyText }, color = selectedColor, fontSize = 13.sp, modifier = Modifier.weight(1f).offset(y = TextIconBaselineOffset))
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(selectedText.ifBlank { emptyText }, color = selectedColor, fontSize = 13.sp, modifier = Modifier.offset(y = DropdownSelectedTextBaselineOffset))
+                if (selectedTrailing != null) {
+                    Spacer(Modifier.width(8.dp))
+                    selectedTrailing()
+                }
+            }
             Icon(
                 Icons.Default.KeyboardArrowDown,
                 null,
@@ -153,12 +177,12 @@ fun inlineDropdownItem(
                 primary,
                 color = if (enabled) primaryColor else ModernTheme.textSecondary,
                 fontSize = 13.sp,
-                modifier = Modifier.weight(1f).offset(y = TextIconBaselineOffset)
+                modifier = Modifier.weight(1f).offset(y = DropdownPrimaryTextBaselineOffset)
             )
             trailing?.invoke()
         }
         if (secondary.isNotBlank()) {
-            Text(secondary, color = ModernTheme.textSecondary, fontSize = 11.sp)
+            Text(secondary, color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.offset(y = DropdownSecondaryTextBaselineOffset))
         }
     }
 }
@@ -176,7 +200,7 @@ fun sectionCard(content: @Composable ColumnScope.() -> Unit) {
 fun sectionTitle(text: String, color: Color = ModernTheme.primary) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
+            modifier = Modifier.size(3.dp, 14.dp).offset(y = SectionMarkerBaselineOffset)
                 .background(color, RoundedCornerShape(2.dp))
         )
         Spacer(modifier = Modifier.width(6.dp))
@@ -185,7 +209,7 @@ fun sectionTitle(text: String, color: Color = ModernTheme.primary) {
             color = ModernTheme.textPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.offset(y = (-1).dp)
+            modifier = Modifier.offset(y = SectionTitleTextBaselineOffset)
         )
     }
 }
@@ -242,7 +266,10 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
             }
         }
         Column(
-            modifier = Modifier.align(Alignment.TopStart).height(72.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxHeight()
+                .padding(top = TrafficChartTopPadding, bottom = TrafficChartBottomPadding),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             trafficAxisLabel("${formatBytes(maxBytes)}/s")
@@ -259,12 +286,15 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
     }
 }
 
+private val TrafficChartTopPadding = 8.dp
+private val TrafficChartBottomPadding = 16.dp
+
 private fun formatTrafficChartSecond(second: Long): String =
     LocalDateTime.ofInstant(Instant.ofEpochSecond(second), ZoneId.systemDefault()).format(TrafficChartTimeFormatter)
 
 @Composable
 private fun trafficAxisLabel(text: String) {
-    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp)
+    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp, modifier = Modifier.offset(y = ChartAxisLabelBaselineOffset))
 }
 
 @Composable
@@ -278,7 +308,7 @@ fun fieldColumn(label: String, value: String, onValueChange: (String) -> Unit, m
 
 @Composable
 fun labelText(text: String) {
-    Text(text, color = ModernTheme.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.offset(y = (-3).dp))
+    Text(text, color = ModernTheme.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.offset(y = FieldLabelTextBaselineOffset))
 }
 
 @Composable
@@ -383,7 +413,7 @@ fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) ->
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = TextIconBaselineOffset))
+        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = CheckboxTextBaselineOffset))
     }
 }
 
@@ -430,12 +460,17 @@ fun compactToggle(text: String, checked: Boolean, onCheckedChange: (Boolean) -> 
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = if (visualChecked) ModernTheme.success else ModernTheme.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = TextIconBaselineOffset))
+        Text(text, color = if (visualChecked) ModernTheme.success else ModernTheme.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = CompactToggleTextBaselineOffset))
     }
 }
 
 @Composable
-fun primaryButton(text: String, loading: Boolean, onClick: () -> Unit) {
+fun primaryButton(
+    text: String,
+    loading: Boolean,
+    onClick: () -> Unit,
+    textBaselineOffset: Dp = CenteredButtonTextBaselineOffset
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -467,10 +502,10 @@ fun primaryButton(text: String, loading: Boolean, onClick: () -> Unit) {
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("处理中...", color = ModernTheme.textSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = TextIconBaselineOffset))
+                Text("处理中...", color = ModernTheme.textSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
             }
         } else {
-            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
         }
     }
 }
@@ -498,7 +533,7 @@ fun secondaryButton(text: String, onClick: () -> Unit) {
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = ModernTheme.textPrimary, fontSize = 13.sp)
+        Text(text, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.offset(y = CenteredButtonTextBaselineOffset))
     }
 }
 
@@ -506,6 +541,8 @@ fun secondaryButton(text: String, onClick: () -> Unit) {
 fun inlineIconButton(
     checked: Boolean = false,
     enabledTint: Color = ModernTheme.accent,
+    size: Dp = 24.dp,
+    showContainer: Boolean = true,
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -523,21 +560,23 @@ fun inlineIconButton(
         }
     }
     val backgroundColor = when {
+        !showContainer -> Color.Transparent
         checked -> enabledTint.copy(alpha = if (isPressed || clickPulseActive) 0.28f else if (isHovered) 0.20f else 0.14f)
         isPressed || clickPulseActive -> enabledTint.copy(alpha = 0.18f)
         isHovered -> ModernTheme.surfaceHover
         else -> ModernTheme.surfaceRaised
     }
     val borderColor = when {
+        !showContainer -> Color.Transparent
         checked -> enabledTint.copy(alpha = if (isPressed || clickPulseActive) 1f else 0.78f)
         isPressed || clickPulseActive -> enabledTint.copy(alpha = 0.88f)
         isHovered -> ModernTheme.borderStrong
         else -> ModernTheme.borderStrong
     }
     Box(
-        Modifier.size(24.dp)
+        Modifier.size(size)
             .background(backgroundColor, ModernTheme.shapeSmall)
-            .border(1.dp, borderColor, ModernTheme.shapeSmall)
+            .then(if (showContainer) Modifier.border(1.dp, borderColor, ModernTheme.shapeSmall) else Modifier)
             .clip(ModernTheme.shapeSmall)
             .clickable(interactionSource = interactionSource, indication = null) {
                 clickPulseToken++

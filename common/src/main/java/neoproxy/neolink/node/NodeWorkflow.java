@@ -1,7 +1,7 @@
 package neoproxy.neolink.node;
 
 import neoproxy.neolink.app.LanguageManager;
-import neoproxy.neolink.config.ConfigOperator;
+import neoproxy.neolink.app.ApplicationFiles;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.config.NodeConfig;
 import neoproxy.neolink.state.ConnectionState;
@@ -82,7 +82,7 @@ public final class NodeWorkflow {
             return null;
         }
         debugOperation("Attempting to load configuration for node: " + nodeName);
-        File nodeFile = new File(ConfigOperator.WORKING_DIR, NodeConfig.NODE_LIST_FILE_NAME);
+        File nodeFile = ApplicationFiles.nodesCacheFile();
         try {
             if (!nodeFile.exists()) {
                 throw new IllegalArgumentException(NodeConfig.NODE_LIST_FILE_NAME + " file not found.");
@@ -115,9 +115,11 @@ public final class NodeWorkflow {
     }
 
     private static void saveFetchedNodes(Map<String, NeoNode> nodes) throws IOException {
-        File workingDir = new File(ConfigOperator.WORKING_DIR);
-        Files.createDirectories(workingDir.toPath());
-        File nodeFile = new File(workingDir, NodeConfig.NODE_LIST_FILE_NAME);
+        File nodeFile = ApplicationFiles.nodesCacheFile();
+        File parent = nodeFile.getParentFile();
+        if (parent != null) {
+            Files.createDirectories(parent.toPath());
+        }
         NodeConfig.saveAll(nodeFile, nodes.values());
     }
 

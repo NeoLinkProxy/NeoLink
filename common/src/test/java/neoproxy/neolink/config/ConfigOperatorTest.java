@@ -130,7 +130,7 @@ class ConfigOperatorTest {
 
         ConfigOperator.initEnvironment();
 
-        File configFile = new File(tempDir, "config.cfg");
+        File configFile = new File(new File(tempDir, "config"), "config.cfg");
         assertTrue(configFile.isFile());
         assertDoesNotThrow(() -> {
             LineConfigParser parser = new LineConfigParser(configFile);

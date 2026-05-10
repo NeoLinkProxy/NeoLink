@@ -33,7 +33,6 @@ class DesktopDirectoryProviderTest {
 
         assertEquals(home.resolve(".neolink").toAbsolutePath(), workingDirectory);
         assertTrue(Files.isDirectory(workingDirectory));
-        assertTrue(Files.isDirectory(workingDirectory.resolve("logs")));
     }
 
     @Test
@@ -47,7 +46,6 @@ class DesktopDirectoryProviderTest {
         Path expected = home.resolve("Library").resolve("Application Support").resolve("NeoLink").toAbsolutePath();
         assertEquals(expected, workingDirectory);
         assertTrue(Files.isDirectory(workingDirectory));
-        assertTrue(Files.isDirectory(workingDirectory.resolve("logs")));
     }
 
     private static void restoreProperty(String name, String value) {

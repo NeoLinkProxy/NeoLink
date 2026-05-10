@@ -1,9 +1,9 @@
 package neoproxy.neolink.update;
 
 import neoproxy.neolink.NeoLink;
+import neoproxy.neolink.app.ApplicationFiles;
 import neoproxy.neolink.app.LanguageManager;
 import neoproxy.neolink.cli.ClientConsole;
-import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.LanguageData;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.core.VersionInfo;
@@ -180,7 +180,7 @@ public class UpdateManager {
     }
 
     private static File resolveUpdateDirectory() {
-        return ConfigOperator.resolveWritableRuntimeDirectory();
+        return ApplicationFiles.updatesDir();
     }
 
     private static File createTemporaryDownloadFile(File outputFile) throws IOException {

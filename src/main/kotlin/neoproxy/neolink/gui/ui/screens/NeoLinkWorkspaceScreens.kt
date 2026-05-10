@@ -50,7 +50,9 @@ import neoproxy.neolink.gui.ui.components.sectionCard
 import neoproxy.neolink.gui.ui.components.sectionTitle
 import neoproxy.neolink.gui.ui.theme.ModernTheme
 
-private val SidebarTextIconBaselineOffset = (-1).dp
+private val SidebarPrimaryTextIconBaselineOffset = (-3).dp
+private val SidebarSettingsTextIconBaselineOffset = (-4).dp
+private val MaterialButtonTextBaselineOffset = (-2).dp
 
 @Composable
 fun workspaceScreen(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
@@ -117,13 +119,16 @@ fun sidebarItem(viewModel: NeoLinkViewModel, page: MainPage, icon: androidx.comp
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         // Compose Desktop 在 Windows 上的字体边界会让文本看起来低于矢量图标。
                         // 侧边栏图标行保留 7.x 的视觉基线补偿。
-                        modifier = Modifier.offset(y = SidebarTextIconBaselineOffset)
+                        modifier = Modifier.offset(y = sidebarTextBaselineOffset(page))
                     )
                 }
             }
         }
     }
 }
+
+private fun sidebarTextBaselineOffset(page: MainPage) =
+    if (page == MainPage.SETTINGS) SidebarSettingsTextIconBaselineOffset else SidebarPrimaryTextIconBaselineOffset
 
 @Composable
 fun userCenterPage(viewModel: NeoLinkViewModel) {
@@ -137,7 +142,7 @@ fun userCenterPage(viewModel: NeoLinkViewModel) {
             Text("密钥总数: ${viewModel.totalKeyCount}", color = ModernTheme.textSecondary, fontSize = 13.sp)
         }
         Button(onClick = viewModel::logout, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.error), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-            Text("退出登录", color = Color.White)
+            Text("退出登录", color = Color.White, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset))
         }
     }
 }
@@ -155,7 +160,7 @@ fun settingsPage(viewModel: NeoLinkViewModel) {
             Text(viewModel.appVersion, color = ModernTheme.textPrimary, fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
             Button(onClick = viewModel::saveSettings, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.primary), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-                Text("保存设置", color = Color.White)
+                Text("保存设置", color = Color.White, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset))
             }
         }
     }

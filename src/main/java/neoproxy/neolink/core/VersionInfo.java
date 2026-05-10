@@ -1,7 +1,7 @@
 package neoproxy.neolink.core;
 
 import neoproxy.neolink.NeoLink;
-import neoproxy.neolink.config.ConfigOperator;
+import neoproxy.neolink.app.ApplicationFiles;
 
 import java.io.File;
 import java.io.IOException;
@@ -96,7 +96,7 @@ public final class VersionInfo {
     }
 
     public static void outPutEula() {
-        File eulaFile = new File(resolveEulaDirectory(), "eula.txt");
+        File eulaFile = ApplicationFiles.eulaFile();
         try {
             File parent = eulaFile.getParentFile();
             if (parent != null) {
@@ -123,13 +123,6 @@ public final class VersionInfo {
 
     static String renderedEula() {
         return EULA_TEMPLATE.replace(VERSION_TOKEN, VERSION);
-    }
-
-    private static File resolveEulaDirectory() {
-        if (ConfigOperator.WORKING_DIR != null && !ConfigOperator.WORKING_DIR.isBlank()) {
-            return new File(ConfigOperator.WORKING_DIR);
-        }
-        return new File(System.getProperty("user.dir"));
     }
 
     private static String getAppVersion() {

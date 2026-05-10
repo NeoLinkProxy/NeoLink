@@ -253,14 +253,14 @@ class UpdateManagerTest {
     }
 
     @Test
-    @DisplayName("testResolveUpdateDirectoryUsesWorkingDir")
-    void testResolveUpdateDirectoryUsesWorkingDir() throws Exception {
+    @DisplayName("testResolveUpdateDirectoryUsesUpdatesDir")
+    void testResolveUpdateDirectoryUsesUpdatesDir() throws Exception {
         Method method = UpdateManager.class.getDeclaredMethod("resolveUpdateDirectory");
         method.setAccessible(true);
 
         File value = (File) method.invoke(null);
 
-        assertEquals(tempDir.resolve("working").toFile().getAbsoluteFile(), value.getAbsoluteFile());
+        assertEquals(tempDir.resolve("working").resolve("updates").toFile().getAbsoluteFile(), value.getAbsoluteFile());
     }
 
     @Test

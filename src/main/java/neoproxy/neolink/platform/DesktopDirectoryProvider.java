@@ -32,7 +32,6 @@ public final class DesktopDirectoryProvider implements WorkingDirectoryProvider 
         if (!dir.exists()) {
             dir.mkdirs();
         }
-        new File(dir, "logs").mkdirs();
         return dir.toPath().toAbsolutePath();
     }
 

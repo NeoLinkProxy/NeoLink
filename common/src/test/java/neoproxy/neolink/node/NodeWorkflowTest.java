@@ -2,6 +2,7 @@ package neoproxy.neolink.node;
 
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.config.NodeConfig;
+import neoproxy.neolink.app.ApplicationFiles;
 import neoproxy.neolink.state.ConnectionState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +45,7 @@ class NodeWorkflowTest {
     @DisplayName("可从 nodes.json 加载指定节点 / loads selected node from nodes file")
     void loadsSelectedNodeFromNodesFile() throws Exception {
         ConfigOperator.WORKING_DIR = tempDir.toString();
-        File nodeFile = tempDir.resolve(NodeConfig.NODE_LIST_FILE_NAME).toFile();
+        File nodeFile = ApplicationFiles.nodesCacheFile();
         NodeConfig.saveAll(nodeFile, List.of(new NeoNode("demo", "demo", "example.com", "", 4100, 4200)));
         ConnectionState.setSpecifiedNodeName("demo");
 

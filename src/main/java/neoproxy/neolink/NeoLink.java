@@ -75,6 +75,7 @@ public final class NeoLink {
             return;
         }
 
+        ClientConsole.initializeLogger(launchOptions.noColor());
         debugOperation("Entering main() method.");
         var features = FeatureState.snapshot();
         debugOperation("Mode: " + (features.guiMode() ? "GUI" : "CLI") + ", Debug: " + features.debugMode());
@@ -85,7 +86,6 @@ public final class NeoLink {
             return;
         }
 
-        ClientConsole.initializeLogger(launchOptions.noColor());
         LanguageManager.detectLanguage();
         NodeWorkflow.fetchAndSaveNodes();
         NeoNode selectedNode = NodeWorkflow.loadSelectedNodeConfiguration();

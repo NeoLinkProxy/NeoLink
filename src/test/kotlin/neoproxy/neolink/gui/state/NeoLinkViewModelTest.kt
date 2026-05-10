@@ -12,6 +12,7 @@ import neoproxy.neolink.gui.app.NeoLinkSingleInstanceGuard
 import neoproxy.neolink.gui.model.NasKey
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelRuntimeUiState
+import neoproxy.neolink.platform.DesktopLogManager
 import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.LogSink
 import org.junit.jupiter.api.AfterEach
@@ -159,6 +160,62 @@ class NeoLinkViewModelTest {
     }
 
     @Test
+    @DisplayName("tunnel names must be valid log file names")
+    fun tunnelNamesMustBeValidLogFileNames() {
+        val viewModel = NeoLinkViewModel()
+        val tunnel = TunnelCardState(
+            name = "bad:name",
+            keyAlias = "key-a",
+            localPort = "25565",
+            remoteDomain = "p.ceroxe.top",
+            localDomain = "localhost",
+            hookPort = "44801",
+            connectPort = "44802"
+        )
+
+        assertEquals("隧道名称不能包含文件系统不支持的字符。", validateTunnel(viewModel, tunnel))
+        assertTrue(DesktopLogManager.isValidTunnelLogFileName("生产隧道"))
+        assertEquals(false, DesktopLogManager.isValidTunnelLogFileName("生产隧道 "))
+        assertEquals(false, DesktopLogManager.isValidTunnelLogFileName("CON"))
+    }
+
+    @Test
+    @DisplayName("updateTunnelName rejects names that cannot be used as log files")
+    fun updateTunnelNameRejectsNamesThatCannotBeUsedAsLogFiles() {
+        val viewModel = NeoLinkViewModel()
+        val tunnel = TunnelCardState(id = "tunnel-name", name = "生产隧道")
+        viewModel.tunnels.add(tunnel)
+
+        viewModel.updateTunnelName(tunnel.id, "bad/name")
+
+        assertEquals("生产隧道", viewModel.tunnels.single().name)
+    }
+
+    @Test
+    @DisplayName("duplicate tunnel names are rejected because log files are name based")
+    fun duplicateTunnelNamesAreRejectedBecauseLogFilesAreNameBased() {
+        val viewModel = NeoLinkViewModel()
+        viewModel.tunnels.add(TunnelCardState(id = "tunnel-a", name = "生产隧道"))
+        viewModel.tunnels.add(
+            TunnelCardState(
+                id = "tunnel-b",
+                name = "备用隧道",
+                keyAlias = "key-a",
+                localPort = "25565",
+                remoteDomain = "p.ceroxe.top",
+                localDomain = "localhost",
+                hookPort = "44801",
+                connectPort = "44802"
+            )
+        )
+
+        viewModel.updateTunnelName("tunnel-b", "生产隧道")
+
+        assertEquals("备用隧道", viewModel.tunnels[1].name)
+        assertEquals("隧道名称不能重复。", validateTunnel(viewModel, viewModel.tunnels[1].copy(name = "生产隧道")))
+    }
+
+    @Test
     @DisplayName("key balance log updates remaining balance against the first observed full balance")
     fun keyBalanceLogUpdatesRemainingBalanceAgainstInitialBalance() = runTest(mainDispatcher) {
         val viewModel = NeoLinkViewModel()
@@ -244,7 +301,7 @@ class NeoLinkViewModelTest {
     @Test
     @DisplayName("initialize collapses persisted tunnels to avoid expensive first-resize rendering")
     fun initializeCollapsesPersistedTunnels() = runTest(mainDispatcher) {
-        val runtimeDir = tempDir
+        val runtimeDir = tempDir.resolve("state")
         Files.createDirectories(runtimeDir)
         Files.writeString(
             runtimeDir.resolve("tunnels.json"),
