@@ -4,6 +4,12 @@
 // ============================================================================
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.attributes.Bundling
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.LibraryElements
+import org.gradle.api.attributes.Usage
+import org.gradle.api.attributes.java.TargetJvmVersion
 
 plugins {
     kotlin("jvm")
@@ -32,6 +38,36 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 }
 
 // ============================================================================
+// Shadow Runtime Classpaths
+// ============================================================================
+
+fun createShadowRuntimeClasspath(name: String): Configuration =
+    configurations.create(name) {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+
+        // Shadow 打包必须从生产运行时依赖出发，而不能继承 test/runtimeOnly 以外的临时依赖；
+        // 同时不使用 compose.desktop.currentOs，避免在 Windows 上构建出的 universal 只携带 Windows 原生库。
+        extendsFrom(
+            configurations.implementation.get(),
+            configurations.runtimeOnly.get()
+        )
+
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+            attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+            attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+        }
+    }
+
+val universalShadowRuntimeClasspath = createShadowRuntimeClasspath("universalShadowRuntimeClasspath")
+val windowsShadowRuntimeClasspath = createShadowRuntimeClasspath("windowsShadowRuntimeClasspath")
+val macosShadowRuntimeClasspath = createShadowRuntimeClasspath("macosShadowRuntimeClasspath")
+val linuxShadowRuntimeClasspath = createShadowRuntimeClasspath("linuxShadowRuntimeClasspath")
+
+// ============================================================================
 // 依赖声明
 // ============================================================================
 dependencies {
@@ -45,11 +81,23 @@ dependencies {
     implementation("top.ceroxe.api:ceroxe-detector:2.0.0")
 
     // Compose Desktop GUI
-    implementation(compose.desktop.currentOs)
+    implementation(compose.desktop.common)
     implementation(compose.material)
     implementation(compose.ui)
     implementation(compose.foundation)
     implementation(compose.runtime)
+
+    // Shadow JAR 的平台原生库边界在独立 classpath 中声明：
+    // universal 明确包含四套 Compose Desktop runtime；平台包只解析自己的 runtime。
+    add(universalShadowRuntimeClasspath.name, compose.desktop.windows_x64)
+    add(universalShadowRuntimeClasspath.name, compose.desktop.macos_x64)
+    add(universalShadowRuntimeClasspath.name, compose.desktop.macos_arm64)
+    add(universalShadowRuntimeClasspath.name, compose.desktop.linux_x64)
+    add(windowsShadowRuntimeClasspath.name, compose.desktop.windows_x64)
+    add(macosShadowRuntimeClasspath.name, compose.desktop.macos_x64)
+    add(macosShadowRuntimeClasspath.name, compose.desktop.macos_arm64)
+    add(linuxShadowRuntimeClasspath.name, compose.desktop.linux_x64)
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
 
@@ -102,7 +150,6 @@ val verifyNeoLinkApiVersionBinding by tasks.registering {
 
 // 公共 shadow 配置抽取，避免重复
 fun ShadowJar.configureCommonShadow() {
-    archiveClassifier.set("")
     mergeServiceFiles()
     manifest {
         attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
@@ -116,6 +163,7 @@ tasks.named<ShadowJar>("shadowJar") {
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("universal")
+    configurations = listOf(universalShadowRuntimeClasspath)
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -125,12 +173,9 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
-    archiveClassifier.set("windows-x64")
-    from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    // 排除非 Windows 平台的 Skiko 原生库
-    exclude("**/skiko-macos-*.jar")
-    exclude("**/skiko-linux-*.jar")
+    archiveClassifier.set("windows")
+    from(sourceSets.main.get().output)
+    configurations = listOf(windowsShadowRuntimeClasspath)
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -139,10 +184,8 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("macos")
-    from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    exclude("**/skiko-windows-*.jar")
-    exclude("**/skiko-linux-*.jar")
+    from(sourceSets.main.get().output)
+    configurations = listOf(macosShadowRuntimeClasspath)
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -150,11 +193,9 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
-    archiveClassifier.set("linux-x64")
-    from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    exclude("**/skiko-windows-*.jar")
-    exclude("**/skiko-macos-*.jar")
+    archiveClassifier.set("linux")
+    from(sourceSets.main.get().output)
+    configurations = listOf(linuxShadowRuntimeClasspath)
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 

@@ -16,7 +16,7 @@ plugins {
 group = "neoproxy"
 
 // 统一版本管理：所有子模块通过 rootProject.extra["neoLinkApiVersion"] 引用
-extra["neoLinkApiVersion"] = "7.1.12"
+extra["neoLinkApiVersion"] = "7.2.0"
 
 version = extra["neoLinkApiVersion"] as String
 
