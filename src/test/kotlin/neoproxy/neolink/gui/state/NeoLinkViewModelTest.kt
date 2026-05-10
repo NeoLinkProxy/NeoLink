@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.gui.app.NeoLinkSingleInstanceGuard
+import neoproxy.neolink.gui.model.AuthUiState
 import neoproxy.neolink.gui.model.NasKey
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelRuntimeUiState
@@ -25,8 +26,13 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import top.ceroxe.api.print.log.LogType
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.time.Duration
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("NeoLinkViewModelTest")
@@ -329,6 +335,57 @@ class NeoLinkViewModelTest {
         }
     }
 
+    @Test
+    @DisplayName("acknowledged announcements are not shown again during dashboard refresh")
+    fun acknowledgedAnnouncementsAreNotShownAgainDuringDashboardRefresh() = runTest(mainDispatcher) {
+        val readBodies = CopyOnWriteArrayList<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/config") { exchange ->
+            json(exchange, """{"success":true,"data":{}}""")
+        }
+        server.createContext("/api/my-announcements") { exchange ->
+            json(
+                exchange,
+                """{"success":true,"data":[{"id":7,"title":"维护公告","content":"今晚维护","content_type":"text","allow_dismiss":true}]}"""
+            )
+        }
+        server.createContext("/api/announcement/read") { exchange ->
+            readBodies += exchange.requestBody.use { String(it.readAllBytes(), StandardCharsets.UTF_8) }
+            json(exchange, """{"success":true}""")
+        }
+        server.start()
+        try {
+            val viewModel = NeoLinkViewModel()
+            setPrivateProperty(
+                viewModel,
+                "AuthState",
+                AuthUiState(
+                    nasUrl = "http://127.0.0.1:${server.address.port}",
+                    sessionToken = "session-token",
+                    isAuthenticated = true
+                )
+            )
+
+            viewModel.refreshNasDashboard()
+            waitUntil(Duration.ofSeconds(2)) { viewModel.nasState.announcements.map { it.id } == listOf(7) }
+
+            assertEquals(listOf(7), viewModel.nasState.announcements.map { it.id })
+            assertTrue(viewModel.nasState.announcementDialogVisible)
+
+            viewModel.closeCurrentAnnouncement(dismissed = false)
+            advanceUntilIdle()
+            viewModel.refreshNasDashboard()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.nasState.announcements.isEmpty())
+            assertEquals(false, viewModel.nasState.announcementDialogVisible)
+            waitUntil(Duration.ofSeconds(2)) { readBodies.isNotEmpty() }
+            assertTrue(Regex(""""dismissed"\s*:\s*false""").containsMatchIn(readBodies.single()), readBodies.single())
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun invokePrivate(target: Any, methodName: String, vararg args: Any) {
         val parameterTypes = args.map {
             when (it) {
@@ -345,9 +402,33 @@ class NeoLinkViewModelTest {
         method.invoke(target, *args)
     }
 
+    private fun setPrivateProperty(target: Any, propertyName: String, value: Any) {
+        val setter = target.javaClass.getDeclaredMethod("set$propertyName", value.javaClass)
+        setter.isAccessible = true
+        setter.invoke(target, value)
+    }
+
+    private fun json(exchange: com.sun.net.httpserver.HttpExchange, body: String) {
+        val response = body.toByteArray(StandardCharsets.UTF_8)
+        exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
+        exchange.sendResponseHeaders(200, response.size.toLong())
+        exchange.responseBody.use { it.write(response) }
+    }
+
     private fun validateTunnel(viewModel: NeoLinkViewModel, tunnel: TunnelCardState): String? {
         val method = viewModel.javaClass.getDeclaredMethod("validateTunnel", TunnelCardState::class.java)
         method.isAccessible = true
         return method.invoke(viewModel, tunnel) as String?
+    }
+
+    private fun waitUntil(timeout: Duration, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + timeout.toNanos()
+        while (System.nanoTime() < deadline) {
+            if (condition()) {
+                return
+            }
+            Thread.sleep(10)
+        }
+        check(condition())
     }
 }

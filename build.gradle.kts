@@ -122,6 +122,7 @@ val verifyNeoLinkApiVersionBinding by tasks.registering {
 fun ShadowJar.configureCommonShadow() {
     archiveClassifier.set("")
     mergeServiceFiles()
+    from(sourceSets.main.get().output)
     manifest {
         attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }

@@ -13,8 +13,18 @@ enum class AuthMode {
 
 enum class MainPage {
     TUNNELS,
+    PURCHASE,
+    DOWNLOADS,
+    TUTORIAL,
     USER_CENTER,
     SETTINGS
+}
+
+enum class IdentityStatus {
+    UNKNOWN,
+    VERIFIED,
+    UNVERIFIED,
+    LOCKED
 }
 
 data class AuthUiState(
@@ -76,6 +86,69 @@ data class NasKey(
     val displayType: String
         get() = if (isTrial) "体验版" else "正式版"
 }
+
+data class NasPricingConfig(
+    val priceTraffic: Double = 0.05,
+    val priceDay: Double = 0.03,
+    val priceRateUnit: Double = 0.01,
+    val rateLimitWarn: Int = 30,
+    val purchaseMaxTrafficGiB: Double = 1024.0,
+    val purchaseMaxDays: Int = 365,
+    val purchaseMaxRateMbps: Int = 100,
+    val keyRefreshMaxPerDay: Int = 1
+)
+
+data class NasAnnouncement(
+    val id: Int = 0,
+    val title: String = "",
+    val content: String = "",
+    val contentType: String = "html",
+    val allowDismiss: Boolean = true
+)
+
+data class PurchaseDraft(
+    val trafficGiB: String = "10",
+    val days: String = "30",
+    val rateMbps: String = "10"
+)
+
+data class RechargeDraft(
+    val targetKey: String = "",
+    val trafficGiB: String = "0",
+    val days: String = "30"
+)
+
+data class PaymentDialogState(
+    val visible: Boolean = false,
+    val orderId: String = "",
+    val amount: Double = 0.0,
+    val status: String = "",
+    val secondsLeft: Int = 120,
+    val message: String = "",
+    val loading: Boolean = false
+)
+
+data class RefreshKeyDialogState(
+    val visible: Boolean = false,
+    val keyName: String = "",
+    val remainingToday: Int = 0,
+    val loading: Boolean = false
+)
+
+data class NasDashboardState(
+    val identityStatus: IdentityStatus = IdentityStatus.UNKNOWN,
+    val pricing: NasPricingConfig = NasPricingConfig(),
+    val purchaseDraft: PurchaseDraft = PurchaseDraft(),
+    val rechargeDraft: RechargeDraft = RechargeDraft(),
+    val rechargeDialogVisible: Boolean = false,
+    val paymentDialog: PaymentDialogState = PaymentDialogState(),
+    val refreshKeyDialog: RefreshKeyDialogState = RefreshKeyDialogState(),
+    val announcements: List<NasAnnouncement> = emptyList(),
+    val announcementIndex: Int = 0,
+    val announcementDialogVisible: Boolean = false,
+    val message: String = "",
+    val busy: Boolean = false
+)
 
 data class TrafficPoint(
     val second: Long,

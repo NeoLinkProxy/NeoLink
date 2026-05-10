@@ -28,7 +28,9 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
@@ -63,6 +65,9 @@ fun workspaceScreen(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
             Box(modifier = Modifier.fillMaxWidth().widthIn(max = 1000.dp)) {
                 when (viewModel.uiState.currentPage) {
                     MainPage.TUNNELS -> tunnelManagementPage(viewModel, onAlert)
+                    MainPage.PURCHASE -> purchasePage(viewModel)
+                    MainPage.DOWNLOADS -> downloadsPage(viewModel)
+                    MainPage.TUTORIAL -> tutorialPage(viewModel)
                     MainPage.USER_CENTER -> userCenterPage(viewModel)
                     MainPage.SETTINGS -> settingsPage(viewModel)
                 }
@@ -83,6 +88,9 @@ fun sidebar(viewModel: NeoLinkViewModel) {
                 Icon(Icons.Default.Menu, null, tint = ModernTheme.textSecondary)
             }
             sidebarItem(viewModel, MainPage.TUNNELS, Icons.Default.Share, "隧道管理")
+            sidebarItem(viewModel, MainPage.PURCHASE, Icons.Default.ShoppingCart, "购买服务")
+            sidebarItem(viewModel, MainPage.DOWNLOADS, Icons.Default.Share, "软件下载")
+            sidebarItem(viewModel, MainPage.TUTORIAL, Icons.Default.Info, "使用教程")
             sidebarItem(viewModel, MainPage.USER_CENTER, Icons.Default.AccountCircle, "用户中心")
         }
         sidebarItem(viewModel, MainPage.SETTINGS, Icons.Default.Settings, "设置")
@@ -138,7 +146,7 @@ fun userCenterPage(viewModel: NeoLinkViewModel) {
             Spacer(Modifier.height(10.dp))
             Text("用户: ${viewModel.authenticatedEmail}", color = ModernTheme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("实名认证: 已完成", color = ModernTheme.success, fontSize = 13.sp)
+            Text("实名认证: ${if (viewModel.authState.isVerified) "已完成" else "未完成"}", color = if (viewModel.authState.isVerified) ModernTheme.success else ModernTheme.error, fontSize = 13.sp)
             Text("密钥总数: ${viewModel.totalKeyCount}", color = ModernTheme.textSecondary, fontSize = 13.sp)
         }
         Button(onClick = viewModel::logout, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.error), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {

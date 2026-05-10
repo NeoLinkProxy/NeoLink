@@ -31,10 +31,16 @@ import neoproxy.neolink.gui.data.NkmNodeSource
 import neoproxy.neolink.gui.model.AuthMode
 import neoproxy.neolink.gui.model.AuthUiState
 import neoproxy.neolink.gui.model.CreateTunnelDraft
+import neoproxy.neolink.gui.model.IdentityStatus
 import neoproxy.neolink.gui.model.MainPage
+import neoproxy.neolink.gui.model.NasDashboardState
 import neoproxy.neolink.gui.model.NasKey
 import neoproxy.neolink.gui.model.NasNode
 import neoproxy.neolink.gui.model.NkmNode
+import neoproxy.neolink.gui.model.PaymentDialogState
+import neoproxy.neolink.gui.model.PurchaseDraft
+import neoproxy.neolink.gui.model.RechargeDraft
+import neoproxy.neolink.gui.model.RefreshKeyDialogState
 import neoproxy.neolink.gui.model.RuntimeUiState
 import neoproxy.neolink.gui.model.SessionStoreDocument
 import neoproxy.neolink.gui.model.TrafficPoint
@@ -70,6 +76,7 @@ class NeoLinkViewModel {
         const val TUNNEL_LOG_SUBJECT = "HOST-CLIENT"
         const val MAX_LOG_LINES = 1000
         const val TRAFFIC_WINDOW_SECONDS = 10
+        const val PAYMENT_COUNTDOWN_SECONDS = 120
         const val BYTES_PER_MIB = 1024.0 * 1024.0
         val KeyBalanceMessagePattern: Regex = Regex("这个密钥有\\s+(\\d+(?:\\.\\d+)?)\\s+M(?:i)?B\\s+流量可以消耗")
     }
@@ -79,6 +86,8 @@ class NeoLinkViewModel {
     var uiState by mutableStateOf(UiState())
         private set
     var runtimeState by mutableStateOf(RuntimeUiState())
+        private set
+    var nasState by mutableStateOf(NasDashboardState())
         private set
 
     val keys = mutableStateListOf<NasKey>()
@@ -93,6 +102,7 @@ class NeoLinkViewModel {
 
     private var isInitialized = false
     private var isLogRedirected = false
+    private val acknowledgedAnnouncementIds = ConcurrentHashMap.newKeySet<Int>()
 
     val appVersion: String
         get() = VersionInfo.VERSION
@@ -199,8 +209,16 @@ class NeoLinkViewModel {
 
     fun setPage(page: MainPage) {
         uiState = uiState.copy(currentPage = page)
-        if (page == MainPage.TUNNELS && authState.isAuthenticated) {
-            refreshKeys()
+        if (!authState.isAuthenticated) {
+            return
+        }
+        when (page) {
+            MainPage.TUNNELS -> refreshKeys()
+            MainPage.PURCHASE -> refreshNasDashboard()
+            MainPage.DOWNLOADS,
+            MainPage.TUTORIAL,
+            MainPage.USER_CENTER,
+            MainPage.SETTINGS -> Unit
         }
     }
 
@@ -487,6 +505,7 @@ class NeoLinkViewModel {
             }
             persistSession(state.nasUrl, state.email, response.sessionToken)
             checkIdentityAndRefreshKeys(state.nasUrl, response.sessionToken)
+            refreshNasDashboard(response.sessionToken)
         }
     }
 
@@ -506,8 +525,9 @@ class NeoLinkViewModel {
                 return@runAuth
             }
             persistSession(state.nasUrl, state.email, response.sessionToken)
+            refreshNasDashboard(response.sessionToken)
             updateAuthStateOnMain {
-                it.copy(mode = AuthMode.VERIFY_IDENTITY, isAuthenticated = true, message = "注册成功，请完成实名认证。")
+                it.copy(mode = AuthMode.VERIFY_IDENTITY, isAuthenticated = true, isVerified = false, message = "注册成功，请完成实名认证。")
             }
         }
     }
@@ -528,13 +548,22 @@ class NeoLinkViewModel {
             }
             updateAuthStateOnMain { it.copy(isVerified = true, mode = AuthMode.LOGIN, message = "认证通过。") }
             checkIdentityAndRefreshKeys(state.nasUrl, state.sessionToken)
+            refreshNasDashboard(state.sessionToken)
         }
     }
 
     fun logout() {
+        val requestState = authState
+        if (requestState.sessionToken.isNotBlank()) {
+            scope.launch(Dispatchers.IO) {
+                runCatching { nasClient(requestState).logout() }
+            }
+        }
         tunnels.toList().forEach { stopTunnel(it.id) }
         NeoLinkLocalStore.clearSession()
+        acknowledgedAnnouncementIds.clear()
         keys.clear()
+        nasState = NasDashboardState()
         authState = AuthUiState(nasUrl = authState.nasUrl.ifBlank { DEFAULT_NAS_URL })
         appendSystemLog("已退出登录。")
     }
@@ -546,6 +575,7 @@ class NeoLinkViewModel {
             try {
                 nasClient(requestState).heartbeat()
                 checkIdentityAndRefreshKeys(requestState.nasUrl, requestState.sessionToken)
+                refreshNasDashboard(requestState.sessionToken)
             } catch (e: Exception) {
                 NeoLinkLocalStore.clearSession()
                 updateAuthStateOnMain {
@@ -558,7 +588,7 @@ class NeoLinkViewModel {
     }
 
     fun refreshKeys() {
-        if (!authState.isAuthenticated) return
+        if (!authState.isAuthenticated || !authState.isVerified) return
         val requestState = authState
         scope.launch(Dispatchers.IO) {
             try {
@@ -572,6 +602,153 @@ class NeoLinkViewModel {
             } catch (e: Exception) {
                 appendSystemLog("密钥列表刷新失败：${e.message ?: e.javaClass.simpleName}")
             }
+        }
+    }
+
+    fun refreshNasDashboard(sessionToken: String = authState.sessionToken) {
+        if (!authState.isAuthenticated) return
+        val requestState = authState.copy(sessionToken = sessionToken.ifBlank { authState.sessionToken })
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = nasClient(requestState)
+                val pricing = runCatching { client.config() }.getOrDefault(nasState.pricing)
+                val announcements = runCatching { client.myAnnouncements() }
+                    .getOrDefault(emptyList())
+                    .filterNot { it.id in acknowledgedAnnouncementIds }
+                updateNasStateOnMain {
+                    it.copy(
+                        pricing = pricing,
+                        announcements = announcements,
+                        announcementIndex = 0,
+                        announcementDialogVisible = announcements.isNotEmpty(),
+                        message = ""
+                    )
+                }
+            } catch (e: Exception) {
+                updateNasStateOnMain { it.copy(message = e.message ?: e.javaClass.simpleName) }
+            }
+        }
+    }
+
+    fun updatePurchaseTraffic(value: String) {
+        nasState = nasState.copy(purchaseDraft = nasState.purchaseDraft.copy(trafficGiB = numericDraft(value, allowDecimal = true)))
+    }
+
+    fun updatePurchaseDays(value: String) {
+        nasState = nasState.copy(purchaseDraft = nasState.purchaseDraft.copy(days = numericDraft(value, allowDecimal = false)))
+    }
+
+    fun updatePurchaseRate(value: String) {
+        nasState = nasState.copy(purchaseDraft = nasState.purchaseDraft.copy(rateMbps = numericDraft(value, allowDecimal = false)))
+    }
+
+    fun updateRechargeTraffic(value: String) {
+        nasState = nasState.copy(rechargeDraft = nasState.rechargeDraft.copy(trafficGiB = numericDraft(value, allowDecimal = true)))
+    }
+
+    fun updateRechargeDays(value: String) {
+        nasState = nasState.copy(rechargeDraft = nasState.rechargeDraft.copy(days = numericDraft(value, allowDecimal = false)))
+    }
+
+    fun showRechargeDialog(keyAlias: String) {
+        nasState = nasState.copy(
+            rechargeDialogVisible = true,
+            rechargeDraft = RechargeDraft(targetKey = keyAlias)
+        )
+    }
+
+    fun hideRechargeDialog() {
+        nasState = nasState.copy(rechargeDialogVisible = false, rechargeDraft = RechargeDraft())
+    }
+
+    fun showRefreshKeyDialog(key: NasKey) {
+        nasState = nasState.copy(
+            refreshKeyDialog = RefreshKeyDialogState(
+                visible = true,
+                keyName = key.alias,
+                remainingToday = key.refreshRemainingToday.takeIf { it >= 0 } ?: nasState.pricing.keyRefreshMaxPerDay
+            )
+        )
+    }
+
+    fun hideRefreshKeyDialog() {
+        nasState = nasState.copy(refreshKeyDialog = RefreshKeyDialogState())
+    }
+
+    fun submitRefreshKey() {
+        val dialog = nasState.refreshKeyDialog
+        if (!dialog.visible || dialog.keyName.isBlank() || dialog.loading) return
+        val requestState = authState
+        nasState = nasState.copy(refreshKeyDialog = dialog.copy(loading = true), message = "正在重置序列号...")
+        scope.launch(Dispatchers.IO) {
+            try {
+                val response = nasClient(requestState).refreshKey(dialog.keyName)
+                if (!response.success) {
+                    updateNasStateOnMain { it.copy(refreshKeyDialog = it.refreshKeyDialog.copy(loading = false), message = response.message) }
+                    return@launch
+                }
+                refreshKeys()
+                updateNasStateOnMain { it.copy(refreshKeyDialog = RefreshKeyDialogState(), message = "刷新成功，旧设备已踢出。") }
+            } catch (e: Exception) {
+                updateNasStateOnMain { it.copy(refreshKeyDialog = it.refreshKeyDialog.copy(loading = false), message = e.message ?: e.javaClass.simpleName) }
+            }
+        }
+    }
+
+    fun createPurchaseOrder() {
+        val error = validatePurchaseDraft()
+        if (error != null) {
+            nasState = nasState.copy(message = error)
+            return
+        }
+        val draft = nasState.purchaseDraft
+        createOrder(
+            trafficGiB = draft.trafficGiB.toDoubleOrNull() ?: 0.0,
+            days = draft.days.toIntOrNull() ?: 0,
+            rateMbps = draft.rateMbps.toIntOrNull() ?: 10,
+            targetKey = ""
+        )
+    }
+
+    fun createRechargeOrder() {
+        val error = validateRechargeDraft()
+        if (error != null) {
+            nasState = nasState.copy(message = error)
+            return
+        }
+        val draft = nasState.rechargeDraft
+        createOrder(
+            trafficGiB = draft.trafficGiB.toDoubleOrNull() ?: 0.0,
+            days = draft.days.toIntOrNull() ?: 0,
+            rateMbps = 10,
+            targetKey = draft.targetKey
+        )
+    }
+
+    fun closePaymentDialog() {
+        nasState = nasState.copy(paymentDialog = PaymentDialogState())
+    }
+
+    fun closeCurrentAnnouncement(dismissed: Boolean) {
+        val announcement = nasState.announcements.getOrNull(nasState.announcementIndex) ?: return
+        val requestState = authState
+        acknowledgedAnnouncementIds += announcement.id
+        scope.launch(Dispatchers.IO) {
+            runCatching { nasClient(requestState).markAnnouncementRead(announcement.id, dismissed && announcement.allowDismiss) }
+        }
+        val nextIndex = nasState.announcementIndex + 1
+        nasState = if (nextIndex < nasState.announcements.size) {
+            nasState.copy(announcementIndex = nextIndex, announcementDialogVisible = true)
+        } else {
+            nasState.copy(announcementDialogVisible = false, announcementIndex = 0, announcements = emptyList())
+        }
+    }
+
+    fun recordDownload(platform: String) {
+        if (!authState.isAuthenticated) return
+        val requestState = authState
+        scope.launch(Dispatchers.IO) {
+            runCatching { nasClient(requestState).recordDownload(platform) }
         }
     }
 
@@ -1004,8 +1181,15 @@ class NeoLinkViewModel {
 
     private suspend fun checkIdentityAndRefreshKeys(nasUrl: String, sessionToken: String) {
         val client = NasClient(nasUrl, sessionToken)
-        val status = client.identityStatus()
-        if (status == "VERIFIED") {
+        val status = runCatching { client.identityStatus() }
+            .getOrElse { error -> if ((error.message ?: "").contains("锁定")) "LOCKED" else throw error }
+        val identityStatus = when (status) {
+            "VERIFIED" -> IdentityStatus.VERIFIED
+            "LOCKED" -> IdentityStatus.LOCKED
+            else -> IdentityStatus.UNVERIFIED
+        }
+        updateNasStateOnMain { it.copy(identityStatus = identityStatus) }
+        if (identityStatus == IdentityStatus.VERIFIED) {
             val loaded = loadKeysWithAvailableNkmNodes(client)
             withContext(Dispatchers.Main) {
                 authState = authState.copy(
@@ -1027,8 +1211,8 @@ class NeoLinkViewModel {
                     sessionToken = sessionToken,
                     isAuthenticated = true,
                     isVerified = false,
-                    mode = AuthMode.VERIFY_IDENTITY,
-                    message = "请完成实名认证。"
+                    mode = AuthMode.LOGIN,
+                    message = if (identityStatus == IdentityStatus.LOCKED) "账号已锁定，请联系管理员。" else "请完成实名认证。"
                 )
             }
         }
@@ -1046,6 +1230,12 @@ class NeoLinkViewModel {
     private suspend fun updateAuthStateOnMain(update: (AuthUiState) -> AuthUiState) {
         withContext(Dispatchers.Main) {
             authState = update(authState)
+        }
+    }
+
+    private suspend fun updateNasStateOnMain(update: (NasDashboardState) -> NasDashboardState) {
+        withContext(Dispatchers.Main) {
+            nasState = update(nasState)
         }
     }
 
@@ -1106,6 +1296,141 @@ class NeoLinkViewModel {
         }
         if (authState.email.isBlank() || !authState.email.contains("@")) return "邮箱格式无效。"
         return null
+    }
+
+    private fun createOrder(trafficGiB: Double, days: Int, rateMbps: Int, targetKey: String) {
+        if (!authState.isVerified) {
+            nasState = nasState.copy(message = "请先完成实名认证。")
+            return
+        }
+        val requestState = authState
+        nasState = nasState.copy(
+            rechargeDialogVisible = false,
+            paymentDialog = PaymentDialogState(visible = true, loading = true, message = "正在创建订单..."),
+            message = ""
+        )
+        scope.launch(Dispatchers.IO) {
+            try {
+                val order = nasClient(requestState).createOrder(trafficGiB, days, rateMbps, targetKey)
+                updateNasStateOnMain {
+                    it.copy(
+                        paymentDialog = PaymentDialogState(
+                            visible = true,
+                            orderId = order.orderId,
+                            amount = order.amount,
+                            status = "PENDING",
+                            secondsLeft = PAYMENT_COUNTDOWN_SECONDS,
+                            message = "请在 120 秒内完成支付。",
+                            loading = false
+                        )
+                    )
+                }
+                pollPayment(requestState, order.orderId)
+            } catch (e: Exception) {
+                updateNasStateOnMain {
+                    it.copy(paymentDialog = PaymentDialogState(), message = e.message ?: e.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    private suspend fun pollPayment(requestState: AuthUiState, orderId: String) {
+        var secondsLeft = PAYMENT_COUNTDOWN_SECONDS
+        while (secondsLeft >= -30) {
+            val currentDialog = nasState.paymentDialog
+            if (!currentDialog.visible || currentDialog.orderId != orderId) {
+                return
+            }
+            val status = runCatching { nasClient(requestState).payStatus(orderId) }.getOrDefault("PENDING")
+            if (status == "SUCCESS") {
+                updateNasStateOnMain {
+                    it.copy(
+                        paymentDialog = it.paymentDialog.copy(
+                            status = "SUCCESS",
+                            secondsLeft = secondsLeft.coerceAtLeast(0),
+                            message = "支付成功，正在刷新密钥列表。"
+                        )
+                    )
+                }
+                refreshKeys()
+                return
+            }
+            updateNasStateOnMain {
+                it.copy(
+                    paymentDialog = it.paymentDialog.copy(
+                        status = "PENDING",
+                        secondsLeft = secondsLeft.coerceAtLeast(0),
+                        message = if (secondsLeft <= 0) "支付已超时，如已付款请等待后台入账或联系管理员。" else "请在 120 秒内完成支付。"
+                    )
+                )
+            }
+            delay(2_000)
+            secondsLeft -= 2
+        }
+    }
+
+    private fun validatePurchaseDraft(): String? {
+        if (!authState.isVerified) return "请先完成实名认证。"
+        val pricing = nasState.pricing
+        val draft = nasState.purchaseDraft
+        val traffic = draft.trafficGiB.toDoubleOrNull() ?: return "流量必须是数字。"
+        val days = draft.days.toIntOrNull() ?: return "时长必须是整数。"
+        val rate = draft.rateMbps.toIntOrNull() ?: return "带宽必须是整数。"
+        if (traffic <= 0.0 || traffic > pricing.purchaseMaxTrafficGiB) return "流量必须在 1-${pricing.purchaseMaxTrafficGiB} GiB 之间。"
+        if (days <= 0 || days > pricing.purchaseMaxDays) return "时长必须在 1-${pricing.purchaseMaxDays} 天之间。"
+        if (rate <= 0 || rate > pricing.purchaseMaxRateMbps) return "带宽必须在 1-${pricing.purchaseMaxRateMbps} Mbps 之间。"
+        val amount = purchaseAmount()
+        if (amount < 0.01) return "订单金额异常。"
+        return null
+    }
+
+    private fun validateRechargeDraft(): String? {
+        if (!authState.isVerified) return "请先完成实名认证。"
+        val pricing = nasState.pricing
+        val draft = nasState.rechargeDraft
+        if (draft.targetKey.isBlank()) return "充值目标密钥不能为空。"
+        val traffic = draft.trafficGiB.toDoubleOrNull() ?: return "流量必须是数字。"
+        val days = draft.days.toIntOrNull() ?: return "时长必须是整数。"
+        if (traffic < 0.0 || traffic > pricing.purchaseMaxTrafficGiB) return "流量必须在 0-${pricing.purchaseMaxTrafficGiB} GiB 之间。"
+        if (days < 0 || days > pricing.purchaseMaxDays) return "时长必须在 0-${pricing.purchaseMaxDays} 天之间。"
+        if (traffic == 0.0 && days == 0) return "充值明细不能为空。"
+        if (rechargeAmount() < 0.01) return "订单金额异常。"
+        return null
+    }
+
+    fun purchaseAmount(): Double {
+        val draft = nasState.purchaseDraft
+        val pricing = nasState.pricing
+        val traffic = draft.trafficGiB.toDoubleOrNull() ?: 0.0
+        val days = draft.days.toIntOrNull() ?: 0
+        val rate = draft.rateMbps.toIntOrNull() ?: 0
+        return roundCurrency(traffic * pricing.priceTraffic + days * pricing.priceDay + rate * pricing.priceRateUnit)
+    }
+
+    fun rechargeAmount(): Double {
+        val draft = nasState.rechargeDraft
+        val pricing = nasState.pricing
+        val traffic = draft.trafficGiB.toDoubleOrNull() ?: 0.0
+        val days = draft.days.toIntOrNull() ?: 0
+        return roundCurrency(traffic * pricing.priceTraffic + days * pricing.priceDay)
+    }
+
+    private fun roundCurrency(value: Double): Double {
+        return kotlin.math.round(value * 100.0) / 100.0
+    }
+
+    private fun numericDraft(value: String, allowDecimal: Boolean): String {
+        val filtered = buildString {
+            var dotSeen = false
+            value.forEach { ch ->
+                if (ch.isDigit()) append(ch)
+                if (allowDecimal && ch == '.' && !dotSeen) {
+                    append(ch)
+                    dotSeen = true
+                }
+            }
+        }
+        return filtered.take(12)
     }
 
     private fun mergeTrafficPoints(all: List<List<TrafficPoint>>): List<TrafficPoint> {

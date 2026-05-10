@@ -1,9 +1,12 @@
 package neoproxy.neolink.gui.data
 import neoproxy.neolink.gui.model.NasKey
 import neoproxy.neolink.gui.model.NasNode
+import neoproxy.neolink.gui.model.NasAnnouncement
+import neoproxy.neolink.gui.model.NasPricingConfig
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -48,6 +51,10 @@ class NasClient(
         return post("/api/heartbeat", emptyMap())
     }
 
+    fun logout(): Response {
+        return post("/api/logout", emptyMap())
+    }
+
     fun identityStatus(): String {
         val response = post("/api/id-check", emptyMap())
         if (response.statusCode == 401) {
@@ -63,6 +70,10 @@ class NasClient(
         return post("/api/id-check", mapOf("name" to name, "idcard" to idCard))
     }
 
+    fun resetPassword(email: String, code: String, password: String): Response {
+        return post("/api/reset-password", mapOf("email" to email, "code" to code, "password" to password))
+    }
+
     fun myKeys(): List<NasKey> {
         val response = get("/api/my-keys")
         if (!response.success) {
@@ -73,6 +84,77 @@ class NasClient(
             return emptyList()
         }
         return data.mapNotNull { parseKey(it as? Map<*, *>) }
+    }
+
+    fun config(): NasPricingConfig {
+        val response = get("/api/config")
+        if (!response.success) {
+            throw IllegalStateException(response.message)
+        }
+        val data = response.body["data"] as? Map<*, *> ?: return NasPricingConfig()
+        return NasPricingConfig(
+            priceTraffic = number(data["price_traffic"]).takeIf { it > 0 } ?: 0.05,
+            priceDay = number(data["price_day"]).takeIf { it > 0 } ?: 0.03,
+            priceRateUnit = number(data["price_rate_unit"]).takeIf { it > 0 } ?: 0.01,
+            rateLimitWarn = number(data["rate_limit_warn"]).toInt().takeIf { it > 0 } ?: 30,
+            purchaseMaxTrafficGiB = number(data["purchase_max_traffic_gib"]).takeIf { it > 0 } ?: 1024.0,
+            purchaseMaxDays = number(data["purchase_max_days"]).toInt().takeIf { it > 0 } ?: 365,
+            purchaseMaxRateMbps = number(data["purchase_max_rate_mbps"]).toInt().takeIf { it > 0 } ?: 100,
+            keyRefreshMaxPerDay = number(data["key_refresh_max_per_day"]).toInt().takeIf { it > 0 } ?: 1
+        )
+    }
+
+    fun myAnnouncements(): List<NasAnnouncement> {
+        val response = get("/api/my-announcements")
+        if (!response.success) {
+            throw IllegalStateException(response.message)
+        }
+        val data = response.body["data"] as? List<*> ?: return emptyList()
+        return data.mapNotNull { parseAnnouncement(it as? Map<*, *>) }
+    }
+
+    fun markAnnouncementRead(announcementId: Int, dismissed: Boolean): Response {
+        return post("/api/announcement/read", mapOf("announcement_id" to announcementId, "dismissed" to dismissed))
+    }
+
+    fun createOrder(trafficGiB: Double, days: Int, rateMbps: Int, targetKey: String = ""): NasOrder {
+        val payload = mutableMapOf<String, Any?>(
+            "traffic" to trafficGiB,
+            "days" to days,
+            "rate" to rateMbps
+        )
+        if (targetKey.isNotBlank()) {
+            payload["targetKey"] = targetKey
+        }
+        val response = post("/api/create-order", payload)
+        if (!response.success) {
+            throw IllegalStateException(response.message)
+        }
+        val data = response.body["data"] as? Map<*, *> ?: emptyMap<Any, Any>()
+        return NasOrder(
+            orderId = text(data["orderId"]),
+            amount = number(data["amount"]),
+            status = text(data["status"])
+        )
+    }
+
+    fun payStatus(orderId: String): String {
+        val encoded = URLEncoder.encode(orderId, Charsets.UTF_8)
+        val response = get("/api/pay-poll?oid=$encoded")
+        if (!response.success) {
+            throw IllegalStateException(response.message)
+        }
+        val data = response.body["data"] as? Map<*, *> ?: return "PENDING"
+        return text(data["status"]).ifBlank { "PENDING" }
+    }
+
+    fun refreshKey(keyName: String): Response {
+        return post("/api/refresh-key", mapOf("keyName" to keyName))
+    }
+
+    fun recordDownload(platform: String): Response {
+        val encoded = URLEncoder.encode(platform, Charsets.UTF_8)
+        return get("/api/download?platform=$encoded")
     }
 
     private fun get(path: String): Response {
@@ -158,6 +240,23 @@ class NasClient(
         )
     }
 
+    private fun parseAnnouncement(source: Map<*, *>?): NasAnnouncement? {
+        if (source == null) {
+            return null
+        }
+        val id = number(source["id"]).toInt()
+        if (id <= 0) {
+            return null
+        }
+        return NasAnnouncement(
+            id = id,
+            title = text(source["title"]),
+            content = text(source["content"]),
+            contentType = text(source["content_type"]).ifBlank { "html" },
+            allowDismiss = source["allow_dismiss"] != false
+        )
+    }
+
     private fun parseNodes(value: Any?): List<NasNode> {
         if (value !is List<*>) {
             return emptyList()
@@ -186,4 +285,10 @@ class NasClient(
             else -> 0.0
         }
     }
+
+    data class NasOrder(
+        val orderId: String,
+        val amount: Double,
+        val status: String
+    )
 }
