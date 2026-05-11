@@ -22,7 +22,26 @@ public final class CommandLineProcessor {
         return parseCommandLineArgs(args);
     }
 
+    public static LaunchOptions applyStartupArgsBeforeNodeSelection(String[] args) {
+        return parseCommandLineArgs(args, false);
+    }
+
+    public static void applyNodeSelectionArgs(String[] args) {
+        if (args == null) {
+            return;
+        }
+        for (String arg : args) {
+            if (arg.startsWith("--node=")) {
+                parseKeyValueArgument(arg, true);
+            }
+        }
+    }
+
     static LaunchOptions parseCommandLineArgs(String[] args) {
+        return parseCommandLineArgs(args, true);
+    }
+
+    private static LaunchOptions parseCommandLineArgs(String[] args, boolean includeNodeSelection) {
         if (args == null) {
             return new LaunchOptions(false, false);
         }
@@ -31,7 +50,10 @@ public final class CommandLineProcessor {
         boolean noColor = false;
         for (String arg : args) {
             if (arg.contains("=")) {
-                parseKeyValueArgument(arg);
+                if (!includeNodeSelection && arg.startsWith("--node=")) {
+                    continue;
+                }
+                parseKeyValueArgument(arg, includeNodeSelection);
                 if (arg.startsWith("--key=")) {
                     hasKey = true;
                 } else if (arg.startsWith("--local-port=")) {
@@ -52,6 +74,10 @@ public final class CommandLineProcessor {
     }
 
     static void parseKeyValueArgument(String arg) {
+        parseKeyValueArgument(arg, true);
+    }
+
+    private static void parseKeyValueArgument(String arg, boolean includeNodeSelection) {
         String[] parts = arg.split("=", 2);
         if (parts.length != 2 || parts[1].isBlank()) {
             throw new IllegalArgumentException(parts[0] + " requires a value.");
@@ -60,7 +86,11 @@ public final class CommandLineProcessor {
             case "--key" -> ConnectionState.setKey(parts[1]);
             case "--local-port" -> ConnectionState.setLocalPort(parsePort(parts[1], "--local-port"));
             case "--output-file" -> FeatureState.setOutputFilePath(parts[1]);
-            case "--node" -> ConnectionState.setSpecifiedNodeName(parts[1]);
+            case "--node" -> {
+                if (includeNodeSelection) {
+                    ConnectionState.setSpecifiedNodeName(parts[1]);
+                }
+            }
             default -> {
             }
         }

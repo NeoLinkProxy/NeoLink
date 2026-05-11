@@ -7,6 +7,7 @@ import neoproxy.neolink.state.FeatureState;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -26,6 +27,9 @@ import static neoproxy.neolink.util.Debugger.debugOperation;
  * {@link #setWorkingDirectoryProvider(WorkingDirectoryProvider)} 替换为 Android 等实现。</p>
  */
 public final class ConfigOperator {
+    private static final String CONFIG_FILE_NAME = "config.cfg";
+    private static final String CONFIG_TEMPLATE_RESOURCE = "templates/" + CONFIG_FILE_NAME;
+
     public static String WORKING_DIR;
     public static String BASE_PACKAGE_DIR;
 
@@ -56,6 +60,7 @@ public final class ConfigOperator {
                 dir.mkdirs();
             }
             new File(dir, "logs").mkdirs();
+            ensureConfigFileExists();
             debugOperation("WorkingDirectoryProvider resolved: " + WORKING_DIR);
             return;
         }
@@ -69,6 +74,8 @@ public final class ConfigOperator {
         File basePackageDir = safeDirectory(BASE_PACKAGE_DIR);
         if (basePackageDir != null && isWritableDirectory(basePackageDir)) {
             WORKING_DIR = basePackageDir.getAbsolutePath();
+            new File(WORKING_DIR, "logs").mkdirs();
+            ensureConfigFileExists();
             return;
         }
 
@@ -78,7 +85,7 @@ public final class ConfigOperator {
             workingDirectory.mkdirs();
         }
         new File(workingDirectory, "logs").mkdirs();
-        forceSyncBaseline("config.cfg");
+        ensureConfigFileExists();
         forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
         debugOperation("Redirected to AppData: " + WORKING_DIR);
     }
@@ -155,8 +162,31 @@ public final class ConfigOperator {
         }
     }
 
+    private static void ensureConfigFileExists() {
+        File target = new File(WORKING_DIR, CONFIG_FILE_NAME);
+        if (target.exists()) {
+            return;
+        }
+
+        try {
+            Files.createDirectories(target.toPath().getParent());
+            // 默认配置只有一个来源：classpath 中的 templates/config.cfg。
+            // 这样 CLI、GUI、测试与最终 shadow JAR 都读取同一份模板，避免安装目录裸文件与
+            // 打包资源出现内容漂移。
+            try (InputStream template = ConfigOperator.class.getClassLoader().getResourceAsStream(CONFIG_TEMPLATE_RESOURCE)) {
+                if (template == null) {
+                    debugOperation("Default config template not found on classpath: " + CONFIG_TEMPLATE_RESOURCE);
+                    return;
+                }
+                Files.copy(template, target.toPath());
+            }
+        } catch (IOException e) {
+            debugOperation(e);
+        }
+    }
+
     public static void readAndSetValue() {
-        File configFile = new File(WORKING_DIR, "config.cfg");
+        File configFile = new File(WORKING_DIR, CONFIG_FILE_NAME);
         if (!configFile.exists()) {
             return;
         }

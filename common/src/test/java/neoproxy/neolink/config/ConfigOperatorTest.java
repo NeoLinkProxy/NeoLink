@@ -177,6 +177,44 @@ class ConfigOperatorTest {
     }
 
     @Test
+    @DisplayName("initEnvironment creates missing config from classpath template")
+    void initEnvironmentCreatesMissingConfigFromClasspathTemplate() throws Exception {
+        String originalUserDir = System.getProperty("user.dir");
+        File isolatedUserDir = tempDir.toPath().resolve("isolated-user-dir").toFile();
+        assertTrue(isolatedUserDir.mkdirs());
+        System.setProperty("user.dir", isolatedUserDir.getAbsolutePath());
+
+        try {
+            ConfigOperator.initEnvironment();
+
+            File generatedConfig = new File(ConfigOperator.WORKING_DIR, "config.cfg");
+            assertTrue(generatedConfig.exists());
+            assertTrue(Files.readString(generatedConfig.toPath()).contains("NKM_NODELIST_URL="));
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
+    @DisplayName("initEnvironment keeps existing config untouched")
+    void initEnvironmentKeepsExistingConfigUntouched() throws Exception {
+        String originalUserDir = System.getProperty("user.dir");
+        File isolatedUserDir = tempDir.toPath().resolve("existing-config-dir").toFile();
+        assertTrue(isolatedUserDir.mkdirs());
+        File existingConfig = new File(isolatedUserDir, "config.cfg");
+        Files.writeString(existingConfig.toPath(), "REMOTE_DOMAIN_NAME=existing.example\n");
+        System.setProperty("user.dir", isolatedUserDir.getAbsolutePath());
+
+        try {
+            ConfigOperator.initEnvironment();
+
+            assertEquals("REMOTE_DOMAIN_NAME=existing.example\n", Files.readString(existingConfig.toPath()));
+        } finally {
+            System.setProperty("user.dir", originalUserDir);
+        }
+    }
+
+    @Test
     @DisplayName("testDirectoryFieldTypes")
     void testDirectoryFieldTypes() throws Exception {
         Field workingDirField = ConfigOperator.class.getDeclaredField("WORKING_DIR");

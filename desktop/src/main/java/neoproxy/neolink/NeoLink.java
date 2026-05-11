@@ -11,7 +11,9 @@ import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
 import neoproxy.neolink.app.LanguageManager;
 import neoproxy.neolink.node.NodeWorkflow;
+import neoproxy.neolink.util.LogSink;
 import top.ceroxe.api.neolink.NeoNode;
+import top.ceroxe.api.print.log.LogType;
 
 import java.util.function.IntConsumer;
 
@@ -67,7 +69,7 @@ public final class NeoLink {
         ConfigOperator.initEnvironment();
         try {
             ConfigOperator.readAndSetValue();
-            launchOptions = CommandLineProcessor.applyCommandLineArgs(args);
+            launchOptions = CommandLineProcessor.applyStartupArgsBeforeNodeSelection(args);
             shouldAutoStartInGUI = launchOptions.autoStartInGui();
         } catch (IllegalArgumentException e) {
             System.err.println("[NeoLink] " + e.getMessage());
@@ -86,8 +88,10 @@ public final class NeoLink {
         }
 
         ClientConsole.initializeLogger(launchOptions.noColor());
+        NodeWorkflow.setMessageSink((message, level) -> ClientConsole.say(message, toLogType(level)));
         LanguageManager.detectLanguage();
         NodeWorkflow.fetchAndSaveNodes();
+        CommandLineProcessor.applyNodeSelectionArgs(args);
         NeoNode selectedNode = NodeWorkflow.loadSelectedNodeConfiguration();
 
         if (!RuntimeState.isReconnectedOperation()) {
@@ -103,5 +107,13 @@ public final class NeoLink {
             debugOperation(e);
             ClientConsole.exitAndFreeze(-1);
         }
+    }
+
+    private static LogType toLogType(LogSink.Level level) {
+        return switch (level) {
+            case WARNING -> LogType.WARNING;
+            case ERROR -> LogType.ERROR;
+            default -> LogType.INFO;
+        };
     }
 }

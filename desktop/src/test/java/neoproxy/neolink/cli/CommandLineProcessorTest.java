@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,6 +78,37 @@ class CommandLineProcessorTest {
         LaunchOptions launchOptions = CommandLineProcessor.applyCommandLineArgs(new String[]{"--key=test-key"});
 
         assertFalse(launchOptions.autoStartInGui());
+    }
+
+    @Test
+    @DisplayName("节点参数可延迟到 NKM 刷新后应用 / node arg can be applied after NKM refresh")
+    void nodeArgCanBeAppliedAfterNkmRefresh() {
+        LaunchOptions launchOptions = CommandLineProcessor.applyStartupArgsBeforeNodeSelection(new String[]{
+                "--key=test-key",
+                "--local-port=8080",
+                "--node=demo-node"
+        });
+
+        assertEquals("test-key", ConnectionState.snapshot().key());
+        assertEquals(8080, ConnectionState.snapshot().localPort());
+        assertEquals(null, ConnectionState.snapshot().specifiedNodeName());
+        assertFalse(launchOptions.autoStartInGui());
+
+        CommandLineProcessor.applyNodeSelectionArgs(new String[]{"--node=demo-node"});
+
+        assertEquals("demo-node", ConnectionState.snapshot().specifiedNodeName());
+    }
+
+    @Test
+    @DisplayName("第一阶段不校验节点参数 / startup phase does not validate node arg")
+    void startupPhaseDoesNotValidateNodeArg() {
+        assertDoesNotThrow(() -> CommandLineProcessor.applyStartupArgsBeforeNodeSelection(new String[]{"--node="}));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> CommandLineProcessor.applyNodeSelectionArgs(new String[]{"--node="})
+        );
+        assertTrue(exception.getMessage().contains("--node requires a value"));
     }
 
     @Test
