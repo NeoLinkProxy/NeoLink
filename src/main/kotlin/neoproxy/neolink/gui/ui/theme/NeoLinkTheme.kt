@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import neoproxy.neolink.gui.platform.RenderState
 import neoproxy.neolink.gui.platform.WindowsEffects
 
@@ -70,7 +71,7 @@ object ModernTheme {
     val warning = Color(0xFFFACC15)
     val error = Color(0xFFEF4444)
     val inputBackground = Color(0xFF12151B)
-    val terminalBg = Color(0xFF080A0F)
+    val terminalBg = Color(0xFF0F0F10)
     val divider = Color(0xFF242A35)
 
     val backgroundBrush: Color
@@ -102,7 +103,8 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
         if (status is ContextMenuState.Status.Open) {
             Popup(
                 offset = IntOffset(status.rect.left.toInt(), status.rect.top.toInt()),
-                onDismissRequest = { state.status = ContextMenuState.Status.Closed }
+                onDismissRequest = { state.status = ContextMenuState.Status.Closed },
+                properties = PopupProperties(focusable = true)
             ) {
                 Surface(
                     shape = ModernTheme.shapeMedium,

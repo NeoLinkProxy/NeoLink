@@ -10,6 +10,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
+import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.gui.platform.GuiRenderBackend
@@ -19,8 +20,12 @@ import neoproxy.neolink.gui.state.NeoLinkViewModel
 import neoproxy.neolink.gui.ui.screens.neoLinkMainScreen
 import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.Debugger.debugOperation
+import neoproxy.neolink.util.LogSink
 import java.awt.Dimension
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 import java.io.PrintStream
+import java.nio.charset.StandardCharsets
 import java.util.Locale
 import javax.swing.UIManager
 import javax.swing.JOptionPane
@@ -35,11 +40,16 @@ import kotlin.system.exitProcess
  * 初始化过程也做了包装，避免无效配置或参数把整个窗口生命周期直接打崩。</p>
  */
 fun main(args: Array<String>) {
+    ConfigOperator.initEnvironment()
+    if (RuntimeState.logSink() == null && !ClientConsole.initializeLoggerOrExit(args.contains("--no-color"), UI_LOG_SUBJECT)) {
+        return
+    }
+
     val isNoEffectMode = args.contains("--no-effect")
 
     if (isNoEffectMode) {
-        RenderState.useSoftwareOpaque("用户通过 --no-effect 显式禁用 GUI 特效", forcedByUser = true)
-        println("[启动模式] 已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
+        RenderState.useSoftwareOpaque("用户通过 --no-effect 显式禁用 UI 特效", forcedByUser = true)
+        logUiStartup("已启用 --no-effect 参数，强制使用软件渲染模式（无特效）")
     } else {
         val checkResult = NeoLinkPreFlightChecker.runFullCheck()
         if (checkResult.allowsAcrylicDirect3D) {
@@ -49,7 +59,6 @@ fun main(args: Array<String>) {
         }
     }
 
-    ConfigOperator.initEnvironment()
     val singleInstanceGuard = try {
         NeoLinkSingleInstanceGuard.acquire()
     } catch (e: Exception) {
@@ -63,20 +72,7 @@ fun main(args: Array<String>) {
 
     RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
 
-    val originalErr = System.err
-    System.setErr(object : PrintStream(originalErr) {
-        override fun write(buf: ByteArray, off: Int, len: Int) {
-            val msg = String(buf, off, len)
-            if (msg.contains("RenderException") || msg.contains("DirectX12")) {
-                if (!RenderState.isOpaqueFallback) {
-                    WindowsEffects.markEffectUnavailable()
-                    RenderState.disableEffectsForCurrentProcess("Skiko 渲染异常，当前进程关闭透明背景")
-                    System.setProperty("skiko.renderApi", GuiRenderBackend.SOFTWARE.skikoValue)
-                }
-            }
-            super.write(buf, off, len)
-        }
-    })
+    installGuiStderrFilter(System.err)
 
     Locale.setDefault(Locale.SIMPLIFIED_CHINESE)
     customizeSwingLook()
@@ -128,7 +124,7 @@ fun main(args: Array<String>) {
                 try {
                     viewModel.initialize(args)
                 } catch (e: Exception) {
-                    viewModel.appendLog("[System] GUI 初始化失败：${e.message ?: e.javaClass.simpleName}")
+                    viewModel.appendLog("[System] UI 初始化失败：${e.message ?: e.javaClass.simpleName}")
                 }
 
                 if (useTransparentWindow) {
@@ -175,4 +171,92 @@ fun customizeSwingLook() {
 fun showStartupNotice(title: String, message: String) {
     customizeSwingLook()
     JOptionPane.showMessageDialog(null, message, title, JOptionPane.WARNING_MESSAGE)
+}
+
+private const val UI_LOG_SUBJECT = "UI"
+private const val LIBPNG_INCORRECT_SRGB_PROFILE_WARNING = "libpng warning: iCCP: known incorrect sRGB profile"
+
+private fun installGuiStderrFilter(originalErr: PrintStream) {
+    System.setErr(PrintStream(GuiStderrFilter(originalErr), true, StandardCharsets.UTF_8))
+}
+
+private class GuiStderrFilter(
+    private val originalErr: PrintStream
+) : OutputStream() {
+    private val pendingLine = ByteArrayOutputStream(256)
+
+    @Synchronized
+    override fun write(value: Int) {
+        pendingLine.write(value)
+        if (value == '\n'.code) {
+            flushPendingLine()
+        } else if (pendingLine.size() > MAX_BUFFERED_STDERR_LINE_BYTES) {
+            writePendingLineToOriginal()
+        }
+    }
+
+    @Synchronized
+    override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        require(offset >= 0 && length >= 0 && offset + length <= buffer.size) {
+            "Invalid stderr buffer range: offset=$offset, length=$length, size=${buffer.size}"
+        }
+
+        for (index in offset until offset + length) {
+            write(buffer[index].toInt() and 0xFF)
+        }
+    }
+
+    @Synchronized
+    override fun flush() {
+        originalErr.flush()
+    }
+
+    @Synchronized
+    override fun close() {
+        flushPendingLine()
+        originalErr.flush()
+    }
+
+    private fun flushPendingLine() {
+        if (pendingLine.size() == 0) {
+            return
+        }
+
+        val lineBytes = pendingLine.toByteArray()
+        pendingLine.reset()
+
+        val line = String(lineBytes, StandardCharsets.UTF_8)
+        handleRenderFallbackSignal(line)
+        if (line.trimEnd('\r', '\n') == LIBPNG_INCORRECT_SRGB_PROFILE_WARNING) {
+            return
+        }
+
+        originalErr.write(lineBytes)
+        originalErr.flush()
+    }
+
+    private fun writePendingLineToOriginal() {
+        val lineBytes = pendingLine.toByteArray()
+        pendingLine.reset()
+        handleRenderFallbackSignal(String(lineBytes, StandardCharsets.UTF_8))
+        originalErr.write(lineBytes)
+        originalErr.flush()
+    }
+
+    private fun handleRenderFallbackSignal(message: String) {
+        if ((message.contains("RenderException") || message.contains("DirectX12")) && !RenderState.isOpaqueFallback) {
+            WindowsEffects.markEffectUnavailable()
+            RenderState.disableEffectsForCurrentProcess("Skiko 渲染异常，当前进程关闭透明背景")
+            System.setProperty("skiko.renderApi", GuiRenderBackend.SOFTWARE.skikoValue)
+        }
+    }
+
+    private companion object {
+        private const val MAX_BUFFERED_STDERR_LINE_BYTES = 8 * 1024
+    }
+}
+
+private fun logUiStartup(message: String) {
+    RuntimeState.logSink()?.log(LogSink.Level.INFO, UI_LOG_SUBJECT, message)
+        ?: System.out.println("[$UI_LOG_SUBJECT] $message")
 }

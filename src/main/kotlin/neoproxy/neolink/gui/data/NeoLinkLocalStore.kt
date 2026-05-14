@@ -6,6 +6,7 @@ import neoproxy.neolink.app.ApplicationFiles
 import neoproxy.neolink.config.LineConfigParser
 import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
 import neoproxy.neolink.gui.config.DEFAULT_NKM_NODELIST_URL
+import neoproxy.neolink.gui.model.DesktopConfigSettings
 import neoproxy.neolink.gui.model.SessionStoreDocument
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelStoreDocument
@@ -23,34 +24,49 @@ object NeoLinkJson {
 }
 
 object NeoLinkLocalStore {
-    fun loadNasUrlFromConfig(): String {
+    private val DesktopConfigKeys = setOf(
+        "NAS_URL",
+        "NKM_NODELIST_URL",
+        "ENABLE_AUTO_UPDATE",
+        "PROXY_IP_TO_LOCAL_SERVER",
+        "PROXY_IP_TO_NEO_SERVER",
+        "HEARTBEAT_PACKET_DELAY",
+        "RECONNECTION_INTERVAL"
+    )
+
+    fun loadDesktopConfig(): DesktopConfigSettings {
         val configFile = ApplicationFiles.configFile()
         if (!configFile.isFile) {
-            return DEFAULT_NAS_URL
+            return defaultDesktopConfig()
         }
         return try {
             val parser = LineConfigParser(configFile)
             parser.load()
-            parser.getOptional("NAS_URL").orElse("").ifBlank { DEFAULT_NAS_URL }
+            DesktopConfigSettings(
+                nasUrl = parser.getOptional("NAS_URL").orElse("").ifBlank { DEFAULT_NAS_URL },
+                nkmNodeListUrl = parser.getOptional("NKM_NODELIST_URL").orElse("").ifBlank { DEFAULT_NKM_NODELIST_URL },
+                enableAutoUpdate = parser.getOptional("ENABLE_AUTO_UPDATE").map { it.toBooleanStrictOrNull() }.orElse(null) ?: true,
+                proxyIPToLocalServer = parser.getOptional("PROXY_IP_TO_LOCAL_SERVER").orElse(""),
+                proxyIPToNeoServer = parser.getOptional("PROXY_IP_TO_NEO_SERVER").orElse(""),
+                heartbeatPacketDelay = parser.getOptional("HEARTBEAT_PACKET_DELAY")
+                    .map { it.toIntOrNull()?.takeIf { value -> value > 0 } }
+                    .orElse(null) ?: 1000,
+                reconnectionIntervalSeconds = parser.getOptional("RECONNECTION_INTERVAL")
+                    .map { it.toIntOrNull()?.takeIf { value -> value > 0 } }
+                    .orElse(null) ?: 30
+            )
         } catch (e: Exception) {
             debugOperation(e)
-            DEFAULT_NAS_URL
+            defaultDesktopConfig()
         }
     }
 
+    fun loadNasUrlFromConfig(): String {
+        return loadDesktopConfig().nasUrl
+    }
+
     fun loadNkmNodeListUrlFromConfig(): String {
-        val configFile = ApplicationFiles.configFile()
-        if (!configFile.isFile) {
-            return DEFAULT_NKM_NODELIST_URL
-        }
-        return try {
-            val parser = LineConfigParser(configFile)
-            parser.load()
-            parser.getOptional("NKM_NODELIST_URL").orElse("").ifBlank { DEFAULT_NKM_NODELIST_URL }
-        } catch (e: Exception) {
-            debugOperation(e)
-            DEFAULT_NKM_NODELIST_URL
-        }
+        return loadDesktopConfig().nkmNodeListUrl
     }
 
     fun ensureDesktopConfigDefaults() {
@@ -61,66 +77,73 @@ object NeoLinkLocalStore {
             try {
                 val parser = LineConfigParser(configFile)
                 parser.load()
-                parser.getOptional("NAS_URL").orElse("").isBlank() ||
-                    parser.getOptional("NKM_NODELIST_URL").orElse("").isBlank()
+                DesktopConfigKeys.any { parser.getOptional(it).orElse("").isBlank() }
             } catch (e: Exception) {
                 debugOperation(e)
                 true
             }
         }
         if (missingDefaults) {
-            saveDesktopConfigDefaults(DEFAULT_NAS_URL, DEFAULT_NKM_NODELIST_URL)
+            saveDesktopConfig(loadDesktopConfig())
         }
     }
 
     fun saveNasUrlToConfig(nasUrl: String) {
-        saveDesktopConfigDefaults(nasUrl, loadNkmNodeListUrlFromConfig())
+        saveDesktopConfig(loadDesktopConfig().copy(nasUrl = nasUrl))
     }
 
-    private fun saveDesktopConfigDefaults(nasUrl: String, nkmNodeListUrl: String) {
+    fun saveDesktopConfig(config: DesktopConfigSettings) {
         val configFile = ApplicationFiles.configFile()
         Files.createDirectories(configFile.toPath().parent)
-        val normalizedNasUrl = nasUrl.trim().ifBlank { DEFAULT_NAS_URL }
-        val normalizedNkmNodeListUrl = nkmNodeListUrl.trim().ifBlank { DEFAULT_NKM_NODELIST_URL }
-        val lines = if (configFile.isFile) {
-            Files.readAllLines(configFile.toPath(), StandardCharsets.UTF_8).toMutableList()
-        } else {
-            mutableListOf(
-                "# NeoAuthServer / NAS 地址。新版桌面 UI 使用它登录、注册、实名认证并拉取密钥列表。",
-                "NAS_URL=$DEFAULT_NAS_URL",
-                "",
-                "# 向 NKM 获取当前在线节点列表。GUI 会与 NAS 授权节点取交集后显示。",
-                "NKM_NODELIST_URL=$DEFAULT_NKM_NODELIST_URL"
-            )
-        }
-
-        var nasReplaced = false
-        var nkmReplaced = false
-        for (i in lines.indices) {
-            val trimmed = lines[i].trimStart()
-            if (trimmed.startsWith("NAS_URL=")) {
-                lines[i] = "NAS_URL=$normalizedNasUrl"
-                nasReplaced = true
-            } else if (trimmed.startsWith("NKM_NODELIST_URL=")) {
-                lines[i] = "NKM_NODELIST_URL=$normalizedNkmNodeListUrl"
-                nkmReplaced = true
+        val normalized = normalizeDesktopConfig(config)
+        val replacements = linkedMapOf(
+            "NAS_URL" to normalized.nasUrl,
+            "NKM_NODELIST_URL" to normalized.nkmNodeListUrl,
+            "ENABLE_AUTO_UPDATE" to normalized.enableAutoUpdate.toString(),
+            "PROXY_IP_TO_LOCAL_SERVER" to normalized.proxyIPToLocalServer,
+            "PROXY_IP_TO_NEO_SERVER" to normalized.proxyIPToNeoServer,
+            "HEARTBEAT_PACKET_DELAY" to normalized.heartbeatPacketDelay.toString(),
+            "RECONNECTION_INTERVAL" to normalized.reconnectionIntervalSeconds.toString()
+        )
+        val lines = mutableListOf<String>()
+        val replaced = mutableSetOf<String>()
+        if (configFile.isFile) {
+            Files.readAllLines(configFile.toPath(), StandardCharsets.UTF_8).forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isBlank() || trimmed.startsWith("#") || !trimmed.contains("=")) {
+                    lines.add(line)
+                    return@forEach
+                }
+                val key = trimmed.substringBefore("=").trim()
+                val replacement = replacements[key]
+                if (replacement == null) {
+                    lines.add(line)
+                } else if (replaced.add(key)) {
+                    lines.add("$key=$replacement")
+                }
             }
         }
-        if (!nasReplaced) {
-            if (lines.isNotEmpty() && lines.last().isNotBlank()) {
-                lines.add("")
+        replacements.forEach { (key, value) ->
+            if (key !in replaced) {
+                lines.add("$key=$value")
             }
-            lines.add("# NeoAuthServer / NAS 地址。")
-            lines.add("NAS_URL=$normalizedNasUrl")
-        }
-        if (!nkmReplaced) {
-            if (lines.isNotEmpty() && lines.last().isNotBlank()) {
-                lines.add("")
-            }
-            lines.add("# 向 NKM 获取当前在线节点列表。GUI 会与 NAS 授权节点取交集后显示。")
-            lines.add("NKM_NODELIST_URL=$normalizedNkmNodeListUrl")
         }
         writeAtomically(configFile, lines.joinToString(System.lineSeparator()) + System.lineSeparator())
+    }
+
+    private fun defaultDesktopConfig(): DesktopConfigSettings {
+        return DesktopConfigSettings(DEFAULT_NAS_URL, DEFAULT_NKM_NODELIST_URL)
+    }
+
+    private fun normalizeDesktopConfig(config: DesktopConfigSettings): DesktopConfigSettings {
+        return config.copy(
+            nasUrl = config.nasUrl.trim().ifBlank { DEFAULT_NAS_URL },
+            nkmNodeListUrl = config.nkmNodeListUrl.trim().ifBlank { DEFAULT_NKM_NODELIST_URL },
+            proxyIPToLocalServer = config.proxyIPToLocalServer.trim(),
+            proxyIPToNeoServer = config.proxyIPToNeoServer.trim(),
+            heartbeatPacketDelay = config.heartbeatPacketDelay.takeIf { it > 0 } ?: 1000,
+            reconnectionIntervalSeconds = config.reconnectionIntervalSeconds.takeIf { it > 0 } ?: 30
+        )
     }
 
     fun loadSession(): SessionStoreDocument {

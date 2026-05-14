@@ -29,6 +29,19 @@ public final class ClientConsole {
         DesktopLogManager.initialize(noColor);
     }
 
+    public static boolean initializeLoggerOrExit(boolean noColor, String startupSubject) {
+        try {
+            initializeLogger(noColor);
+            return true;
+        } catch (RuntimeException e) {
+            String subject = startupSubject == null || startupSubject.isBlank() ? "NeoLink" : startupSubject.trim();
+            System.out.println("[" + subject + "] 日志系统初始化失败，无法继续启动。");
+            System.out.println("[" + subject + "] 原因：" + describeRootCause(e));
+            exitAndFreezeWithoutLogger(-1);
+            return false;
+        }
+    }
+
     public static void requestAccessKeyIfMissing() {
         ensureLanguageDetected();
         if (ConnectionState.snapshot().key() == null) {
@@ -53,6 +66,12 @@ public final class ClientConsole {
 
     public static void exitAndFreeze(int exitCode) {
         say("按回车键退出 / Press Enter to exit...");
+        INPUT_SCANNER.nextLine();
+        NeoLink.requestExit(exitCode);
+    }
+
+    public static void exitAndFreezeWithoutLogger(int exitCode) {
+        System.out.println("按回车键退出 / Press Enter to exit...");
         INPUT_SCANNER.nextLine();
         NeoLink.requestExit(exitCode);
     }
@@ -111,6 +130,15 @@ public final class ClientConsole {
             case ERROR -> LogSink.Level.ERROR;
             default -> LogSink.Level.INFO;
         };
+    }
+
+    private static String describeRootCause(Throwable throwable) {
+        Throwable cursor = throwable;
+        while (cursor.getCause() != null) {
+            cursor = cursor.getCause();
+        }
+        String message = cursor.getMessage();
+        return message == null || message.isBlank() ? cursor.getClass().getName() : message;
     }
 
     private static void speakAnnouncement() {

@@ -12,6 +12,8 @@ import top.ceroxe.api.print.log.LogType;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,10 +36,31 @@ class DesktopLogManagerTest {
 
     @AfterEach
     void tearDown() {
-        DesktopLogManager.closeTunnelLog("tunnel-id");
+        DesktopLogManager.shutdown();
         RuntimeState.setLogSink(originalLogSink);
         ConfigOperator.setWorkingDirectoryProvider(null);
         ConfigOperator.WORKING_DIR = originalWorkingDir;
+    }
+
+    @Test
+    @DisplayName("global UI log writes one Loggist file and mirrors Loggist-formatted text")
+    void globalUiLogWritesFileAndMirrorsFormattedText() throws Exception {
+        List<String> mirrored = new ArrayList<>();
+
+        DesktopLogManager.initialize(true);
+        DesktopLogManager.attachMirror((level, tag, message) -> mirrored.add(message));
+        RuntimeState.logSink().log(LogSink.Level.INFO, "UI", "桌面日志");
+        DesktopLogManager.shutdown();
+
+        Path uiLogsDir = tempDir.resolve("logs").resolve("ui");
+        Path logFile = Files.list(uiLogsDir).findFirst().orElseThrow();
+        String content = Files.readString(logFile);
+
+        assertTrue(logFile.getFileName().toString().startsWith("UI-"));
+        assertTrue(logFile.getFileName().toString().endsWith(".log"));
+        assertTrue(content.contains("[INFO] [UI] 桌面日志"));
+        assertEquals(1, mirrored.size());
+        assertTrue(mirrored.get(0).contains("[INFO] [UI] 桌面日志"));
     }
 
     @Test

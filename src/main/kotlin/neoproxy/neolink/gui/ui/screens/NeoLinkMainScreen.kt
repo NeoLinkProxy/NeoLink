@@ -56,6 +56,7 @@ import androidx.compose.ui.window.WindowState
 import neoproxy.neolink.gui.platform.RenderState
 import neoproxy.neolink.gui.state.NeoLinkViewModel
 import neoproxy.neolink.gui.ui.components.collectIsHoveredAsState
+import neoproxy.neolink.gui.ui.components.modalInputBarrier
 import neoproxy.neolink.gui.ui.components.primaryButton
 import neoproxy.neolink.gui.ui.theme.ModernContextMenuRepresentation
 import neoproxy.neolink.gui.ui.theme.ModernTheme
@@ -118,7 +119,12 @@ fun WindowScope.neoLinkMainScreen(
 
 @Composable
 fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.fillMaxSize()
+            .modalInputBarrier()
+            .background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
             modifier = Modifier.width(360.dp).background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
                 .border(1.dp, ModernTheme.borderStrong, ModernTheme.shapeMedium).padding(24.dp)

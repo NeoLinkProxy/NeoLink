@@ -152,11 +152,6 @@ class NasClient(
         return post("/api/refresh-key", mapOf("keyName" to keyName))
     }
 
-    fun recordDownload(platform: String): Response {
-        val encoded = URLEncoder.encode(platform, Charsets.UTF_8)
-        return get("/api/download?platform=$encoded")
-    }
-
     private fun get(path: String): Response {
         val request = baseRequest(path).GET().build()
         return send(request)

@@ -10,7 +10,10 @@ import kotlinx.coroutines.test.setMain
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.gui.app.NeoLinkSingleInstanceGuard
 import neoproxy.neolink.gui.model.AuthUiState
+import neoproxy.neolink.gui.model.MainPage
 import neoproxy.neolink.gui.model.NasKey
+import neoproxy.neolink.gui.model.NasDashboardState
+import neoproxy.neolink.gui.model.PaymentDialogState
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelRuntimeUiState
 import neoproxy.neolink.platform.DesktopLogManager
@@ -79,12 +82,33 @@ class NeoLinkViewModelTest {
         val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
         assertEquals(2, guiMessages.size)
         assertEquals("前置日志", guiMessages[0])
-        assertEquals("[GUI] \n[System] 服务已停止。\n\n", guiMessages[1])
+        assertTrue(
+            Regex("""\[\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}]  \[INFO] \[UI] \n服务已停止。\n\n""")
+                .matches(guiMessages[1]),
+            guiMessages[1]
+        )
 
         assertTrue(
-            capturedMessages.contains("\n[System] 服务已停止。\n"),
-            "LogSink 必须接收到和 GUI 中同源的 [System] 消息文本"
+            capturedMessages.contains("\n服务已停止。\n"),
+            "LogSink 必须接收到和 GUI 中同源且不再重复标注 [System] 的消息文本"
         )
+    }
+
+    @Test
+    @DisplayName("GUI startup banner logs ASCII logo before UI announcements")
+    fun guiStartupBannerLogsAsciiLogoBeforeUiAnnouncements() = runTest(mainDispatcher) {
+        val capturedMessages = mutableListOf<String>()
+        val viewModel = NeoLinkViewModel()
+
+        RuntimeState.setLogSink { _, tag, message -> capturedMessages.add("[$tag] $message") }
+        invokePrivate(viewModel, "setupLogRedirector")
+
+        invokePrivate(viewModel, "logUiStartupBanner")
+        advanceUntilIdle()
+
+        assertTrue(capturedMessages.first().contains("_____"), capturedMessages.first())
+        assertTrue(capturedMessages.first().startsWith("[UI]"), capturedMessages.first())
+        assertTrue(capturedMessages.drop(1).none { it.contains("[System]") })
     }
 
     @Test
@@ -144,7 +168,11 @@ class NeoLinkViewModelTest {
         advanceUntilIdle()
 
         assertEquals("本地端口必须在 1~65535 之间。", error)
-        assertEquals("[System] 本地端口必须在 1~65535 之间。\n", viewModel.tunnelRuntime[tunnelId]?.logs?.single()?.text)
+        assertTrue(
+            Regex(""".*\[INFO] \[HOST-CLIENT] \[System] 本地端口必须在 1~65535 之间。\n\n""", RegexOption.DOT_MATCHES_ALL)
+                .matches(viewModel.tunnelRuntime[tunnelId]?.logs?.single()?.text.orEmpty()),
+            viewModel.tunnelRuntime[tunnelId]?.logs?.single()?.text
+        )
     }
 
     @Test
@@ -163,6 +191,40 @@ class NeoLinkViewModelTest {
         )
 
         assertNull(validateTunnel(viewModel, tunnel))
+    }
+
+    @Test
+    @DisplayName("NAS validation rejects malformed URLs and emails before network calls")
+    fun nasValidationRejectsMalformedUrlsAndEmails() {
+        val viewModel = NeoLinkViewModel()
+
+        setPrivateProperty(
+            viewModel,
+            "AuthState",
+            AuthUiState(nasUrl = "ftp://nas.example.com", email = "user@example.com")
+        )
+        assertEquals("NAS_URL 必须以 http:// 或 https:// 开头。", validateNasAndEmail(viewModel))
+
+        setPrivateProperty(
+            viewModel,
+            "AuthState",
+            AuthUiState(nasUrl = "http:///missing-host", email = "user@example.com")
+        )
+        assertEquals("NAS_URL 必须包含有效主机名。", validateNasAndEmail(viewModel))
+
+        setPrivateProperty(
+            viewModel,
+            "AuthState",
+            AuthUiState(nasUrl = "https://nas.example.com", email = "not-an-email")
+        )
+        assertEquals("邮箱格式无效。", validateNasAndEmail(viewModel))
+
+        setPrivateProperty(
+            viewModel,
+            "AuthState",
+            AuthUiState(nasUrl = "https://nas.example.com", email = "user@example.com")
+        )
+        assertNull(validateNasAndEmail(viewModel))
     }
 
     @Test
@@ -242,6 +304,51 @@ class NeoLinkViewModelTest {
         assertEquals(80.5, viewModel.tunnels.single().keyBalanceMiB)
         assertEquals(100.0, viewModel.tunnels.single().keyInitialBalanceMiB)
         assertEquals(0L, viewModel.tunnelRuntime[tunnelId]?.trafficSinceBalanceSyncBytes)
+    }
+
+    @Test
+    @DisplayName("closing successful payment dialog moves user to key management")
+    fun closingSuccessfulPaymentDialogMovesUserToKeyManagement() {
+        val viewModel = NeoLinkViewModel()
+        setPrivateProperty(
+            viewModel,
+            "NasState",
+            NasDashboardState(
+                paymentDialog = PaymentDialogState(
+                    visible = true,
+                    orderId = "order-paid",
+                    status = "SUCCESS"
+                )
+            )
+        )
+
+        viewModel.closePaymentDialog()
+
+        assertEquals(false, viewModel.nasState.paymentDialog.visible)
+        assertEquals(MainPage.KEY_MANAGEMENT, viewModel.uiState.currentPage)
+    }
+
+    @Test
+    @DisplayName("pending payment dialog cannot be closed before timeout or success")
+    fun pendingPaymentDialogCannotBeClosedBeforeTerminalState() {
+        val viewModel = NeoLinkViewModel()
+        setPrivateProperty(
+            viewModel,
+            "NasState",
+            NasDashboardState(
+                paymentDialog = PaymentDialogState(
+                    visible = true,
+                    orderId = "order-pending",
+                    status = "PENDING",
+                    timedOut = false
+                )
+            )
+        )
+
+        viewModel.closePaymentDialog()
+
+        assertEquals(true, viewModel.nasState.paymentDialog.visible)
+        assertEquals("order-pending", viewModel.nasState.paymentDialog.orderId)
     }
 
     @Test
@@ -419,6 +526,12 @@ class NeoLinkViewModelTest {
         val method = viewModel.javaClass.getDeclaredMethod("validateTunnel", TunnelCardState::class.java)
         method.isAccessible = true
         return method.invoke(viewModel, tunnel) as String?
+    }
+
+    private fun validateNasAndEmail(viewModel: NeoLinkViewModel): String? {
+        val method = viewModel.javaClass.getDeclaredMethod("validateNasAndEmail")
+        method.isAccessible = true
+        return method.invoke(viewModel) as String?
     }
 
     private fun waitUntil(timeout: Duration, condition: () -> Boolean) {

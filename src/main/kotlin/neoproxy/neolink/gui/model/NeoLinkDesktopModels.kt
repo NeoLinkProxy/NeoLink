@@ -14,7 +14,7 @@ enum class AuthMode {
 enum class MainPage {
     TUNNELS,
     PURCHASE,
-    DOWNLOADS,
+    KEY_MANAGEMENT,
     TUTORIAL,
     USER_CENTER,
     SETTINGS
@@ -125,6 +125,7 @@ data class PaymentDialogState(
     val status: String = "",
     val secondsLeft: Int = 120,
     val message: String = "",
+    val timedOut: Boolean = false,
     val loading: Boolean = false
 )
 
@@ -202,6 +203,27 @@ data class SessionStoreDocument(
     var nasUrl: String = "",
     var email: String = "",
     var sessionToken: String = ""
+)
+
+data class DesktopConfigSettings(
+    val nasUrl: String = "",
+    val nkmNodeListUrl: String = "",
+    val enableAutoUpdate: Boolean = true,
+    val proxyIPToLocalServer: String = "",
+    val proxyIPToNeoServer: String = "",
+    val heartbeatPacketDelay: Int = 1000,
+    val reconnectionIntervalSeconds: Int = 30
+)
+
+data class SettingsUiState(
+    val nasUrl: String = "",
+    val nkmNodeListUrl: String = "",
+    val enableAutoUpdate: Boolean = true,
+    val proxyIPToLocalServer: String = "",
+    val proxyIPToNeoServer: String = "",
+    val heartbeatPacketDelay: String = "1000",
+    val reconnectionIntervalSeconds: String = "30",
+    val message: String = ""
 )
 
 data class CreateTunnelDraft(

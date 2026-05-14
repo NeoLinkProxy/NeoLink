@@ -14,6 +14,7 @@ plugins {
 }
 
 val neoLinkApiVersion = "7.2.0"
+val skikoVersion = "0.7.97"
 
 group = "neoproxy"
 version = neoLinkApiVersion
@@ -55,6 +56,21 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 // ============================================================================
 // 依赖声明
 // ============================================================================
+val shadowJarWindowsRuntime by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val shadowJarMacosRuntime by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val shadowJarLinuxRuntime by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     // 内部模块：共享业务逻辑（config、state、node、app、util）
     implementation(project(":common"))
@@ -68,6 +84,7 @@ dependencies {
     // Compose Desktop 图形界面
     implementation(compose.desktop.currentOs)
     implementation(compose.material)
+    implementation(compose.materialIconsExtended)
     implementation(compose.ui)
     implementation(compose.foundation)
     implementation(compose.runtime)
@@ -77,6 +94,13 @@ dependencies {
     // JNA — Windows DWM 特效等原生调用
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
+
+    // Shadow JAR 必须可在任意构建机上产出所有目标平台包。
+    // compose.desktop.currentOs 只会解析当前构建机平台的 Skiko native，因此平台包在这里显式声明。
+    shadowJarWindowsRuntime("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:$skikoVersion")
+    shadowJarMacosRuntime("org.jetbrains.skiko:skiko-awt-runtime-macos-x64:$skikoVersion")
+    shadowJarMacosRuntime("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:$skikoVersion")
+    shadowJarLinuxRuntime("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:$skikoVersion")
 
     // 桌面 UI 需要直接解析 NAS 响应与本地隧道 JSON；这里使用同一 Jackson 版本避免运行时漂移。
     implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
@@ -130,11 +154,29 @@ fun ShadowJar.configureCommonShadow() {
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
+fun ShadowJar.excludeWindowsSkikoNative() {
+    exclude("skiko-windows-*.dll", "skiko-windows-*.dll.sha256")
+}
+
+fun ShadowJar.excludeMacosSkikoNative() {
+    exclude("libskiko-macos-*.dylib", "libskiko-macos-*.dylib.sha256")
+}
+
+fun ShadowJar.excludeLinuxSkikoNative() {
+    exclude("libskiko-linux-*.so", "libskiko-linux-*.so.sha256")
+}
+
 tasks.named<ShadowJar>("shadowJar") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("universal")
+    configurations = listOf(
+        project.configurations.runtimeClasspath.get(),
+        shadowJarWindowsRuntime,
+        shadowJarMacosRuntime,
+        shadowJarLinuxRuntime
+    )
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -142,11 +184,11 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
-    archiveClassifier.set("windows-x64")
+    archiveClassifier.set("windows")
     from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    exclude("**/skiko-macos-*.jar")
-    exclude("**/skiko-linux-*.jar")
+    configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarWindowsRuntime)
+    excludeMacosSkikoNative()
+    excludeLinuxSkikoNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -156,9 +198,9 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("macos")
     from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    exclude("**/skiko-windows-*.jar")
-    exclude("**/skiko-linux-*.jar")
+    configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarMacosRuntime)
+    excludeWindowsSkikoNative()
+    excludeLinuxSkikoNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -166,11 +208,11 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
-    archiveClassifier.set("linux-x64")
+    archiveClassifier.set("linux")
     from(tasks.named("jar").map { it.outputs })
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    exclude("**/skiko-windows-*.jar")
-    exclude("**/skiko-macos-*.jar")
+    configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarLinuxRuntime)
+    excludeWindowsSkikoNative()
+    excludeMacosSkikoNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 

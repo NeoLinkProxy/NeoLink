@@ -10,6 +10,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -24,6 +25,7 @@ import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.core.VersionInfo
 import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
+import neoproxy.neolink.gui.config.DEFAULT_NKM_NODELIST_URL
 import neoproxy.neolink.gui.data.NasClient
 import neoproxy.neolink.gui.data.NeoLinkLocalStore
 import neoproxy.neolink.gui.data.NkmNodeClient
@@ -31,6 +33,7 @@ import neoproxy.neolink.gui.data.NkmNodeSource
 import neoproxy.neolink.gui.model.AuthMode
 import neoproxy.neolink.gui.model.AuthUiState
 import neoproxy.neolink.gui.model.CreateTunnelDraft
+import neoproxy.neolink.gui.model.DesktopConfigSettings
 import neoproxy.neolink.gui.model.IdentityStatus
 import neoproxy.neolink.gui.model.MainPage
 import neoproxy.neolink.gui.model.NasDashboardState
@@ -43,6 +46,7 @@ import neoproxy.neolink.gui.model.RechargeDraft
 import neoproxy.neolink.gui.model.RefreshKeyDialogState
 import neoproxy.neolink.gui.model.RuntimeUiState
 import neoproxy.neolink.gui.model.SessionStoreDocument
+import neoproxy.neolink.gui.model.SettingsUiState
 import neoproxy.neolink.gui.model.TrafficPoint
 import neoproxy.neolink.gui.model.TunnelCardState
 import neoproxy.neolink.gui.model.TunnelRuntimeUiState
@@ -57,6 +61,7 @@ import top.ceroxe.api.neolink.NeoLinkAPI
 import top.ceroxe.api.neolink.NeoLinkCfg
 import top.ceroxe.api.neolink.NeoLinkState
 import top.ceroxe.api.print.log.LogType
+import java.net.URI
 import java.time.Instant
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -73,11 +78,13 @@ import java.util.concurrent.atomic.LongAdder
 class NeoLinkViewModel {
     private companion object {
         const val GUI_SYSTEM_PREFIX = "[System]"
+        const val UI_LOG_SUBJECT = "UI"
         const val TUNNEL_LOG_SUBJECT = "HOST-CLIENT"
         const val MAX_LOG_LINES = 1000
         const val TRAFFIC_WINDOW_SECONDS = 10
         const val PAYMENT_COUNTDOWN_SECONDS = 120
         const val BYTES_PER_MIB = 1024.0 * 1024.0
+        val EmailPattern: Regex = Regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", RegexOption.IGNORE_CASE)
         val KeyBalanceMessagePattern: Regex = Regex("这个密钥有\\s+(\\d+(?:\\.\\d+)?)\\s+M(?:i)?B\\s+流量可以消耗")
     }
 
@@ -89,16 +96,45 @@ class NeoLinkViewModel {
         private set
     var nasState by mutableStateOf(NasDashboardState())
         private set
+    var settingsState by mutableStateOf(SettingsUiState(DEFAULT_NAS_URL, DEFAULT_NKM_NODELIST_URL))
+        private set
 
     val keys = mutableStateListOf<NasKey>()
     val tunnels = mutableStateListOf<TunnelCardState>()
     val tunnelRuntime = mutableStateMapOf<String, TunnelRuntimeUiState>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val activeApis = ConcurrentHashMap<String, NeoLinkAPI>()
-    private val runRequested = ConcurrentHashMap<String, AtomicBoolean>()
     private val pendingTrafficBytes = ConcurrentHashMap<String, LongAdder>()
     private val trafficFlusherStarted = AtomicBoolean(false)
+    private val tunnelRuntimeController = TunnelRuntimeController(
+        scope = scope,
+        buildApi = ::buildTunnelApi,
+        isAutoReconnectEnabled = ::isTunnelAutoReconnectEnabled,
+        reconnectionIntervalSeconds = { FeatureState.snapshot().reconnectionIntervalSeconds() },
+        appendLog = ::appendTunnelLog,
+        onActiveConnectionsReset = { tunnelId ->
+            setTunnelRuntimeOnMain(tunnelId) { it.copy(activeConnections = 0) }
+        },
+        onStopped = { tunnelId ->
+            pendingTrafficBytes.remove(tunnelId)
+            if (tunnelRuntime.containsKey(tunnelId)) {
+                setTunnelRuntime(tunnelId) { it.copy(running = false, stopping = false, activeConnections = 0) }
+                appendTunnelSystemLog(tunnelId, "服务已停止。", surroundWithBlankLines = true)
+            }
+            DesktopLogManager.closeTunnelLog(tunnelId)
+        }
+    )
+    private val paymentTracker = PaymentTracker(
+        scope = scope,
+        totalSeconds = PAYMENT_COUNTDOWN_SECONDS,
+        isStillCurrent = { orderId -> nasState.paymentDialog.visible && nasState.paymentDialog.orderId == orderId },
+        isSuccessful = { orderId -> nasState.paymentDialog.orderId == orderId && nasState.paymentDialog.status == "SUCCESS" },
+        updateCountdown = ::updatePaymentCountdown,
+        pollStatus = { orderId, requestContext ->
+            pollPaymentStatus(orderId, requestContext as? AuthUiState ?: authState)
+        },
+        onSuccess = ::handlePaymentSuccess
+    )
 
     private var isInitialized = false
     private var isLogRedirected = false
@@ -159,14 +195,15 @@ class NeoLinkViewModel {
         }
 
         RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
-        ClientConsole.initializeLogger(false)
+        if (!ClientConsole.initializeLoggerOrExit(false, UI_LOG_SUBJECT)) return
         setupLogRedirector()
         startTrafficFlusher()
         NeoLinkLocalStore.ensureDesktopConfigDefaults()
 
         val session = NeoLinkLocalStore.loadSession()
-        val configNasUrl = NeoLinkLocalStore.loadNasUrlFromConfig()
-        val resolvedNasUrl = session.nasUrl.ifBlank { configNasUrl }.ifBlank { DEFAULT_NAS_URL }
+        val desktopConfig = NeoLinkLocalStore.loadDesktopConfig()
+        val resolvedNasUrl = session.nasUrl.ifBlank { desktopConfig.nasUrl }.ifBlank { DEFAULT_NAS_URL }
+        settingsState = desktopConfig.toSettingsUiState(resolvedNasUrl)
         authState = authState.copy(
             nasUrl = resolvedNasUrl,
             email = session.email,
@@ -190,8 +227,7 @@ class NeoLinkViewModel {
             appendSystemLog("配置或参数无效，已回退到安全默认值：$initializationError", surroundWithBlankLines = true)
         }
 
-        ClientConsole.printLogo()
-        ClientConsole.printBasicInfo()
+        logUiStartupBanner()
 
         if (authState.isAuthenticated) {
             refreshSessionAndKeys()
@@ -204,6 +240,7 @@ class NeoLinkViewModel {
 
     fun dispose() {
         tunnels.toList().forEach { stopTunnel(it.id) }
+        paymentTracker.cancel()
         scope.cancel()
     }
 
@@ -215,7 +252,7 @@ class NeoLinkViewModel {
         when (page) {
             MainPage.TUNNELS -> refreshKeys()
             MainPage.PURCHASE -> refreshNasDashboard()
-            MainPage.DOWNLOADS,
+            MainPage.KEY_MANAGEMENT -> refreshKeys()
             MainPage.TUTORIAL,
             MainPage.USER_CENTER,
             MainPage.SETTINGS -> Unit
@@ -387,49 +424,23 @@ class NeoLinkViewModel {
             appendTunnelSystemLog(id, it, surroundWithBlankLines = true)
             return it
         }
-        if (tunnelRuntime[id]?.running == true) {
+        if (tunnelRuntime[id]?.running == true || tunnelRuntimeController.isActive(id)) {
             return null
         }
 
         pendingTrafficBytes.remove(id)
-        runRequested[id] = AtomicBoolean(true)
         try {
             DesktopLogManager.openTunnelLog(id, tunnelLogFileName(tunnel), false)
         } catch (e: RuntimeException) {
-            runRequested.remove(id)
             appendTunnelSystemLog(id, "创建隧道日志文件失败：${e.message ?: e.javaClass.simpleName}", surroundWithBlankLines = true)
             return "创建隧道日志文件失败：${e.message ?: e.javaClass.simpleName}"
         }
         setTunnelRuntime(id) { it.copy(running = true, stopping = false, activeConnections = 0, trafficPoints = emptyList()) }
         appendTunnelLog(id, "正在连接 ${tunnel.remoteDomain}:${tunnel.hookPort} ...")
 
-        scope.launch(Dispatchers.IO) {
-            do {
-                val keepRunning = runRequested[id]?.get() == true
-                if (!keepRunning) break
-                val api = buildTunnelApi(tunnel, id)
-                activeApis[id] = api
-                try {
-                    api.start()
-                } catch (e: Exception) {
-                    appendTunnelLog(id, "隧道异常：${e.message ?: e.javaClass.simpleName}", LogType.ERROR)
-                } finally {
-                    activeApis.remove(id, api)
-                    api.close()
-                    setTunnelRuntimeOnMain(id) { it.copy(activeConnections = 0) }
-                }
-
-                if (runRequested[id]?.get() == true && isTunnelAutoReconnectEnabled(id)) {
-                    appendTunnelLog(id, "自动重连将在 30 秒后执行。")
-                    delay(30_000)
-                }
-            } while (runRequested[id]?.get() == true && isTunnelAutoReconnectEnabled(id))
-
-            withContext(Dispatchers.Main) {
-                setTunnelRuntime(id) { it.copy(running = false, stopping = false, activeConnections = 0) }
-                appendTunnelSystemLog(id, "服务已停止。", surroundWithBlankLines = true)
-                DesktopLogManager.closeTunnelLog(id)
-            }
+        if (!tunnelRuntimeController.start(tunnel.copy())) {
+            DesktopLogManager.closeTunnelLog(id)
+            return null
         }
         persistTunnels()
         return null
@@ -440,14 +451,38 @@ class NeoLinkViewModel {
         if (runtime?.running == true && !runtime.stopping) {
             appendTunnelLog(id, "正在停止 NeoLink 服务...")
         }
-        runRequested[id]?.set(false)
         pendingTrafficBytes.remove(id)
         setTunnelRuntime(id) { it.copy(stopping = it.running) }
-        activeApis.remove(id)?.close()
+        tunnelRuntimeController.stop(id)
     }
 
     fun updateNasUrl(value: String) {
         authState = authState.copy(nasUrl = value)
+        settingsState = settingsState.copy(nasUrl = value, message = "")
+    }
+
+    fun updateNkmNodeListUrl(value: String) {
+        settingsState = settingsState.copy(nkmNodeListUrl = value, message = "")
+    }
+
+    fun updateEnableAutoUpdate(enabled: Boolean) {
+        settingsState = settingsState.copy(enableAutoUpdate = enabled, message = "")
+    }
+
+    fun updateProxyIPToLocalServer(value: String) {
+        settingsState = settingsState.copy(proxyIPToLocalServer = value, message = "")
+    }
+
+    fun updateProxyIPToNeoServer(value: String) {
+        settingsState = settingsState.copy(proxyIPToNeoServer = value, message = "")
+    }
+
+    fun updateHeartbeatPacketDelay(value: String) {
+        settingsState = settingsState.copy(heartbeatPacketDelay = value.filter(Char::isDigit), message = "")
+    }
+
+    fun updateReconnectionInterval(value: String) {
+        settingsState = settingsState.copy(reconnectionIntervalSeconds = value.filter(Char::isDigit), message = "")
     }
 
     fun switchAuthMode(mode: AuthMode) {
@@ -726,7 +761,15 @@ class NeoLinkViewModel {
     }
 
     fun closePaymentDialog() {
+        val paymentDialog = nasState.paymentDialog
+        if (paymentDialog.status != "SUCCESS" && !paymentDialog.timedOut) {
+            return
+        }
+        paymentTracker.cancel()
         nasState = nasState.copy(paymentDialog = PaymentDialogState())
+        if (paymentDialog.status == "SUCCESS") {
+            uiState = uiState.copy(currentPage = MainPage.KEY_MANAGEMENT)
+        }
     }
 
     fun closeCurrentAnnouncement(dismissed: Boolean) {
@@ -744,22 +787,56 @@ class NeoLinkViewModel {
         }
     }
 
-    fun recordDownload(platform: String) {
-        if (!authState.isAuthenticated) return
-        val requestState = authState
-        scope.launch(Dispatchers.IO) {
-            runCatching { nasClient(requestState).recordDownload(platform) }
-        }
-    }
-
     fun saveSettings() {
-        val normalized = authState.nasUrl.trim().ifBlank { DEFAULT_NAS_URL }
-        NeoLinkLocalStore.saveNasUrlToConfig(normalized)
-        if (authState.sessionToken.isNotBlank()) {
-            NeoLinkLocalStore.saveSession(SessionStoreDocument(normalized, authState.email, authState.sessionToken))
+        val normalizedNasUrl = settingsState.nasUrl.trim().ifBlank { DEFAULT_NAS_URL }
+        val normalizedNkmNodeListUrl = settingsState.nkmNodeListUrl.trim().ifBlank { DEFAULT_NKM_NODELIST_URL }
+        val heartbeatPacketDelay = settingsState.heartbeatPacketDelay.toIntOrNull()
+        val reconnectionIntervalSeconds = settingsState.reconnectionIntervalSeconds.toIntOrNull()
+        validateHttpUrl("NAS_URL", normalizedNasUrl)?.let { error ->
+            settingsState = settingsState.copy(message = error)
+            return
         }
-        authState = authState.copy(nasUrl = normalized)
-        appendSystemLog("设置已保存。")
+        validateHttpUrl("NKM_NODELIST_URL", normalizedNkmNodeListUrl)?.let { error ->
+            settingsState = settingsState.copy(message = error)
+            return
+        }
+        if (heartbeatPacketDelay == null || heartbeatPacketDelay <= 0) {
+            settingsState = settingsState.copy(message = "HEARTBEAT_PACKET_DELAY 必须是大于 0 的整数。")
+            return
+        }
+        if (reconnectionIntervalSeconds == null || reconnectionIntervalSeconds <= 0) {
+            settingsState = settingsState.copy(message = "RECONNECTION_INTERVAL 必须是大于 0 的整数。")
+            return
+        }
+
+        val previousNkmNodeListUrl = NeoLinkLocalStore.loadNkmNodeListUrlFromConfig()
+        val nextConfig = DesktopConfigSettings(
+            nasUrl = normalizedNasUrl,
+            nkmNodeListUrl = normalizedNkmNodeListUrl,
+            enableAutoUpdate = settingsState.enableAutoUpdate,
+            proxyIPToLocalServer = settingsState.proxyIPToLocalServer,
+            proxyIPToNeoServer = settingsState.proxyIPToNeoServer,
+            heartbeatPacketDelay = heartbeatPacketDelay,
+            reconnectionIntervalSeconds = reconnectionIntervalSeconds
+        )
+        try {
+            NeoLinkLocalStore.saveDesktopConfig(nextConfig)
+            ConfigOperator.readAndSetValue()
+        } catch (e: Exception) {
+            val message = "设置保存或热重载失败：${e.message ?: e.javaClass.simpleName}"
+            settingsState = settingsState.copy(message = message)
+            appendSystemLog(message)
+            return
+        }
+        if (authState.sessionToken.isNotBlank()) {
+            NeoLinkLocalStore.saveSession(SessionStoreDocument(normalizedNasUrl, authState.email, authState.sessionToken))
+        }
+        authState = authState.copy(nasUrl = normalizedNasUrl)
+        settingsState = nextConfig.toSettingsUiState(normalizedNasUrl, "设置已保存并热重载。")
+        appendSystemLog("设置已保存并热重载。")
+        if (authState.isAuthenticated && authState.isVerified && previousNkmNodeListUrl != normalizedNkmNodeListUrl) {
+            refreshKeys()
+        }
     }
 
     var logFontSize: androidx.compose.ui.unit.TextUnit
@@ -773,6 +850,7 @@ class NeoLinkViewModel {
     }
 
     private fun buildTunnelApi(tunnel: TunnelCardState, tunnelId: String): NeoLinkAPI {
+        val globalFeatures = FeatureState.snapshot()
         val cfg = NeoLinkCfg(
             tunnel.remoteDomain.trim(),
             tunnel.hookPort.trim().toInt(),
@@ -785,11 +863,17 @@ class NeoLinkViewModel {
             .setUDPEnabled(tunnel.udpEnabled)
             .setPPV2Enabled(tunnel.ppv2Enabled)
             .setDebugMsg(false)
+            .setHeartBeatPacketDelay(globalFeatures.heartbeatPacketDelay())
+            .setProxyIPToLocalServer(globalFeatures.proxyIPToLocalServer())
+            .setProxyIPToNeoServer(globalFeatures.proxyIPToNeoServer())
             .setClientVersion(ClientConsole.getClientVersionToReport())
         cfg.setLanguage(LanguageData.getChineseLanguage().currentLanguage)
 
         return NeoLinkAPI(cfg)
-            .setUnsupportedVersionDecision { true }
+            .setUnsupportedVersionDecision {
+                appendTunnelLog(tunnelId, "服务端协议版本不受当前客户端支持，请升级 NeoLink 或切换匹配版本。", LogType.ERROR)
+                false
+            }
             .setOnStateChanged { state ->
                 if (state == NeoLinkState.RUNNING) {
                     appendTunnelLog(tunnelId, "隧道已连接。")
@@ -859,14 +943,13 @@ class NeoLinkViewModel {
 
     private fun syncRuntimeProtocolFlags(id: String) {
         val tunnel = tunnels.firstOrNull { it.id == id }?.copy() ?: return
-        val api = activeApis[id]
-        if (api == null) {
+        if (!tunnelRuntimeController.isActive(id)) {
             appendTunnelSystemLog(id, buildProtocolUpdateMessage(tunnel.tcpEnabled, tunnel.udpEnabled))
             return
         }
         scope.launch(Dispatchers.IO) {
             try {
-                api.updateRuntimeProtocolFlags(tunnel.tcpEnabled, tunnel.udpEnabled)
+                tunnelRuntimeController.setProtocolFlags(id, tunnel.tcpEnabled, tunnel.udpEnabled)
                 appendTunnelSystemLog(id, buildProtocolUpdateMessage(tunnel.tcpEnabled, tunnel.udpEnabled))
             } catch (e: Exception) {
                 appendTunnelSystemLog(id, "运行时协议更新失败：${e.message ?: e.javaClass.simpleName}")
@@ -875,14 +958,13 @@ class NeoLinkViewModel {
     }
 
     private fun syncRuntimePpv2Flag(id: String, enabled: Boolean) {
-        val api = activeApis[id]
-        if (api == null) {
+        if (!tunnelRuntimeController.isActive(id)) {
             appendTunnelSystemLog(id, buildPpv2UpdateMessage(enabled))
             return
         }
         scope.launch(Dispatchers.IO) {
             try {
-                api.setPPV2Enabled(enabled)
+                tunnelRuntimeController.setPpv2Enabled(id, enabled)
                 appendTunnelSystemLog(id, buildPpv2UpdateMessage(enabled))
             } catch (e: Exception) {
                 appendTunnelSystemLog(id, "运行时 PPv2 更新失败：${e.message ?: e.javaClass.simpleName}")
@@ -1057,7 +1139,7 @@ class NeoLinkViewModel {
             refreshKeys()
         }
         DesktopLogManager.logTunnel(id, level, message)
-        val line = formatGuiLog(level, TUNNEL_LOG_SUBJECT, message)
+        val line = DesktopLogManager.formatForUi(level, TUNNEL_LOG_SUBJECT, message) + "\n"
         scope.launch(Dispatchers.Main) {
             setTunnelRuntime(id) { runtime ->
                 val updated = runtime.logs.toMutableList()
@@ -1081,10 +1163,11 @@ class NeoLinkViewModel {
             }
         }
         DesktopLogManager.logTunnel(id, LogType.INFO, normalizedMessage)
+        val line = DesktopLogManager.formatForUi(LogType.INFO, TUNNEL_LOG_SUBJECT, normalizedMessage) + "\n"
         scope.launch(Dispatchers.Main) {
             setTunnelRuntime(id) { runtime ->
                 val updated = runtime.logs.toMutableList()
-                updated.add(parseAnsi(normalizedMessage))
+                updated.add(parseAnsi(line))
                 if (updated.size > MAX_LOG_LINES) updated.removeAt(0)
                 runtime.copy(logs = updated)
             }
@@ -1095,8 +1178,8 @@ class NeoLinkViewModel {
         if (isLogRedirected) return
         isLogRedirected = true
 
-        DesktopLogManager.attachMirror { _, tag, message ->
-            addLogSafe("[$tag] $message\n")
+        DesktopLogManager.attachMirror { _, _, message ->
+            addLogSafe("$message\n")
         }
     }
 
@@ -1114,13 +1197,19 @@ class NeoLinkViewModel {
             if (surroundWithBlankLines && runtimeState.logMessages.isNotEmpty()) {
                 append('\n')
             }
-            append(GUI_SYSTEM_PREFIX)
-            append(' ')
             append(message)
             if (surroundWithBlankLines) append('\n')
         }
-        RuntimeState.logSink()?.log(LogSink.Level.INFO, "GUI", normalizedMessage)
+        RuntimeState.logSink()?.log(LogSink.Level.INFO, UI_LOG_SUBJECT, normalizedMessage)
             ?: addLogSafe(normalizedMessage)
+    }
+
+    private fun logUiStartupBanner() {
+        RuntimeState.logSink()?.log(LogSink.Level.INFO, UI_LOG_SUBJECT, NeoLink.ASCII_LOGO)
+            ?: addLogSafe(NeoLink.ASCII_LOGO)
+        appendSystemLog(RuntimeState.languageData().IF_YOU_SEE_EULA)
+        VersionInfo.outPutEula()
+        appendSystemLog(RuntimeState.languageData().VERSION + ClientConsole.getClientVersionToReport())
     }
 
     private fun buildProtocolUpdateMessage(tcpEnabled: Boolean, udpEnabled: Boolean): String {
@@ -1131,15 +1220,6 @@ class NeoLinkViewModel {
 
     private fun buildPpv2UpdateMessage(enabled: Boolean): String {
         return "真实 IP 透传已${if (enabled) "开启" else "关闭"}。"
-    }
-
-    private fun formatGuiLog(level: LogType, subject: String, message: String): String {
-        val prefix = when (level) {
-            LogType.ERROR -> "[ERROR]"
-            LogType.WARNING -> "[WARNING]"
-            else -> "[INFO]"
-        }
-        return "$prefix [$subject] $message\n"
     }
 
     private fun parseAnsi(text: String): AnnotatedString {
@@ -1171,6 +1251,8 @@ class NeoLinkViewModel {
         scope.launch(Dispatchers.IO) {
             try {
                 action(requestState)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 updateAuthStateOnMain { it.copy(message = e.message ?: e.javaClass.simpleName) }
             } finally {
@@ -1290,12 +1372,40 @@ class NeoLinkViewModel {
     }
 
     private fun validateNasAndEmail(): String? {
-        if (authState.nasUrl.trim().isBlank()) return "NAS_URL 不能为空。"
-        if (!authState.nasUrl.startsWith("http://") && !authState.nasUrl.startsWith("https://")) {
-            return "NAS_URL 必须以 http:// 或 https:// 开头。"
-        }
-        if (authState.email.isBlank() || !authState.email.contains("@")) return "邮箱格式无效。"
+        val normalizedUrl = authState.nasUrl.trim()
+        validateHttpUrl("NAS_URL", normalizedUrl)?.let { return it }
+        if (!EmailPattern.matches(authState.email.trim())) return "邮箱格式无效。"
         return null
+    }
+
+    private fun validateHttpUrl(name: String, value: String): String? {
+        if (value.isBlank()) return "$name 不能为空。"
+        val uri = runCatching { URI(value) }.getOrNull()
+            ?: return "$name 格式无效。"
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)
+        if (scheme != "http" && scheme != "https") {
+            return "$name 必须以 http:// 或 https:// 开头。"
+        }
+        if (uri.host.isNullOrBlank()) {
+            return "$name 必须包含有效主机名。"
+        }
+        return null
+    }
+
+    private fun DesktopConfigSettings.toSettingsUiState(
+        resolvedNasUrl: String = nasUrl,
+        message: String = ""
+    ): SettingsUiState {
+        return SettingsUiState(
+            nasUrl = resolvedNasUrl.ifBlank { DEFAULT_NAS_URL },
+            nkmNodeListUrl = nkmNodeListUrl.ifBlank { DEFAULT_NKM_NODELIST_URL },
+            enableAutoUpdate = enableAutoUpdate,
+            proxyIPToLocalServer = proxyIPToLocalServer,
+            proxyIPToNeoServer = proxyIPToNeoServer,
+            heartbeatPacketDelay = heartbeatPacketDelay.toString(),
+            reconnectionIntervalSeconds = reconnectionIntervalSeconds.toString(),
+            message = message
+        )
     }
 
     private fun createOrder(trafficGiB: Double, days: Int, rateMbps: Int, targetKey: String) {
@@ -1303,6 +1413,7 @@ class NeoLinkViewModel {
             nasState = nasState.copy(message = "请先完成实名认证。")
             return
         }
+        paymentTracker.cancel()
         val requestState = authState
         nasState = nasState.copy(
             rechargeDialogVisible = false,
@@ -1321,11 +1432,14 @@ class NeoLinkViewModel {
                             status = "PENDING",
                             secondsLeft = PAYMENT_COUNTDOWN_SECONDS,
                             message = "请在 120 秒内完成支付。",
+                            timedOut = false,
                             loading = false
                         )
                     )
                 }
-                pollPayment(requestState, order.orderId)
+                paymentTracker.start(order.orderId, requestState)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 updateNasStateOnMain {
                     it.copy(paymentDialog = PaymentDialogState(), message = e.message ?: e.javaClass.simpleName)
@@ -1334,39 +1448,46 @@ class NeoLinkViewModel {
         }
     }
 
-    private suspend fun pollPayment(requestState: AuthUiState, orderId: String) {
-        var secondsLeft = PAYMENT_COUNTDOWN_SECONDS
-        while (secondsLeft >= -30) {
-            val currentDialog = nasState.paymentDialog
-            if (!currentDialog.visible || currentDialog.orderId != orderId) {
-                return
-            }
-            val status = runCatching { nasClient(requestState).payStatus(orderId) }.getOrDefault("PENDING")
-            if (status == "SUCCESS") {
-                updateNasStateOnMain {
-                    it.copy(
-                        paymentDialog = it.paymentDialog.copy(
-                            status = "SUCCESS",
-                            secondsLeft = secondsLeft.coerceAtLeast(0),
-                            message = "支付成功，正在刷新密钥列表。"
-                        )
-                    )
-                }
-                refreshKeys()
-                return
-            }
-            updateNasStateOnMain {
+    private suspend fun updatePaymentCountdown(orderId: String, secondsLeft: Int) {
+        updateNasStateOnMain {
+            if (!it.paymentDialog.visible || it.paymentDialog.orderId != orderId || it.paymentDialog.status == "SUCCESS") {
+                it
+            } else {
                 it.copy(
                     paymentDialog = it.paymentDialog.copy(
-                        status = "PENDING",
-                        secondsLeft = secondsLeft.coerceAtLeast(0),
-                        message = if (secondsLeft <= 0) "支付已超时，如已付款请等待后台入账或联系管理员。" else "请在 120 秒内完成支付。"
+                        secondsLeft = secondsLeft,
+                        timedOut = secondsLeft <= 0,
+                        message = if (secondsLeft <= 0) {
+                            "订单已超时，二维码已失效，可关闭后重新创建订单。"
+                        } else {
+                            "请在 120 秒内完成支付。"
+                        }
                     )
                 )
             }
-            delay(2_000)
-            secondsLeft -= 2
         }
+    }
+
+    private fun pollPaymentStatus(orderId: String, state: AuthUiState): Boolean {
+        return runCatching { nasClient(state).payStatus(orderId) }.getOrDefault("PENDING") == "SUCCESS"
+    }
+
+    private suspend fun handlePaymentSuccess(orderId: String, secondsLeft: Int) {
+        updateNasStateOnMain {
+            if (!it.paymentDialog.visible || it.paymentDialog.orderId != orderId) {
+                it
+            } else {
+                it.copy(
+                    paymentDialog = it.paymentDialog.copy(
+                        status = "SUCCESS",
+                        secondsLeft = secondsLeft,
+                        timedOut = false,
+                        message = "支付成功，正在刷新密钥列表。"
+                    )
+                )
+            }
+        }
+        refreshKeys()
     }
 
     private fun validatePurchaseDraft(): String? {

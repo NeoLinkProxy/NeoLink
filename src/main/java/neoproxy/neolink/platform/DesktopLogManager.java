@@ -26,10 +26,12 @@ public final class DesktopLogManager {
 
     private static final Object LOCK = new Object();
     private static final ConcurrentMap<String, Loggist> tunnelLoggists = new ConcurrentHashMap<>();
+    private static Loggist uiLoggist;
     private static LogSink fileSink;
     private static LogSink mirrorSink;
     private static LogSink preservedSink;
     private static LogSink compositeSink;
+    private static boolean colorDisabled;
 
     private DesktopLogManager() {
     }
@@ -37,8 +39,9 @@ public final class DesktopLogManager {
     public static void initialize(boolean noColor) {
         synchronized (LOCK) {
             if (fileSink == null) {
-                Loggist loggist = openLoggist(noColor);
-                fileSink = (level, tag, message) -> loggist.say(new State(toLogType(level), tag, message));
+                uiLoggist = openLoggist(noColor);
+                colorDisabled = noColor;
+                fileSink = (level, tag, message) -> uiLoggist.say(new State(toLogType(level), tag, message));
                 preservedSink = null;
             }
             installCompositeSink();
@@ -75,11 +78,40 @@ public final class DesktopLogManager {
         }
     }
 
+    public static String formatForUi(LogSink.Level level, String tag, String message) {
+        return formatForUi(toLogType(level), tag, message);
+    }
+
+    public static String formatForUi(LogType level, String tag, String message) {
+        State state = new State(level, tag, message);
+        synchronized (LOCK) {
+            if (uiLoggist == null) {
+                return message;
+            }
+            return colorDisabled ? uiLoggist.getNoColString(state) : uiLoggist.getLogString(state);
+        }
+    }
+
     public static void closeTunnelLog(String tunnelId) {
         if (tunnelId == null || tunnelId.isBlank()) {
             return;
         }
         closeQuietly(tunnelLoggists.remove(tunnelId));
+    }
+
+    public static void shutdown() {
+        synchronized (LOCK) {
+            tunnelLoggists.values().forEach(DesktopLogManager::closeQuietly);
+            tunnelLoggists.clear();
+            closeQuietly(uiLoggist);
+            uiLoggist = null;
+            fileSink = null;
+            mirrorSink = null;
+            preservedSink = null;
+            compositeSink = null;
+            colorDisabled = false;
+            RuntimeState.setLogSink(null);
+        }
     }
 
     public static boolean isValidTunnelLogFileName(String tunnelName) {
@@ -190,7 +222,7 @@ public final class DesktopLogManager {
                 currentPreserved = preservedSink;
             }
             if (currentMirror != null) {
-                currentMirror.log(level, tag, message);
+                currentMirror.log(level, tag, formatForUi(level, tag, message));
             }
             if (currentFile != null) {
                 currentFile.log(level, tag, message);

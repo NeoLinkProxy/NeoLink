@@ -102,7 +102,7 @@ class DebuggerTest {
         assertTrue(outContent.toString().isEmpty());
         assertNotNull(capturingLogSink.lastMessage);
         assertEquals(LogSink.Level.INFO, capturingLogSink.lastLevel);
-        assertEquals("DEBUG", capturingLogSink.lastTag);
+        assertEquals("UI", capturingLogSink.lastTag);
         assertEquals("Test debug message", capturingLogSink.lastMessage);
     }
 
@@ -117,7 +117,7 @@ class DebuggerTest {
         Debugger.debugOperation(new RuntimeException("Persisted debug message"));
 
         assertEquals(LogSink.Level.ERROR, capturingLogSink.lastLevel);
-        assertEquals("DEBUG", capturingLogSink.lastTag);
+        assertEquals("UI", capturingLogSink.lastTag);
         assertTrue(capturingLogSink.lastMessage.contains("Persisted debug message"));
     }
 

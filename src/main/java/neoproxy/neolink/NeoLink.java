@@ -75,10 +75,13 @@ public final class NeoLink {
             return;
         }
 
-        ClientConsole.initializeLogger(launchOptions.noColor());
-        debugOperation("Entering main() method.");
         var features = FeatureState.snapshot();
-        debugOperation("Mode: " + (features.guiMode() ? "GUI" : "CLI") + ", Debug: " + features.debugMode());
+        String startupLogSubject = features.guiMode() ? "UI" : "HOST-CLIENT";
+        if (!ClientConsole.initializeLoggerOrExit(launchOptions.noColor(), startupLogSubject)) {
+            return;
+        }
+        debugOperation("Entering main() method.");
+        debugOperation("Mode: " + (features.guiMode() ? "UI" : "CLI") + ", Debug: " + features.debugMode());
 
         if (features.guiMode()) {
             ComposeEntryKt.main(args);

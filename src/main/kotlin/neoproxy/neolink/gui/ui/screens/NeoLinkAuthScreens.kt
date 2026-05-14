@@ -78,10 +78,15 @@ fun authScreen(viewModel: NeoLinkViewModel) {
                                 onClick = viewModel::sendCode,
                                 enabled = !state.isLoading,
                                 shape = ModernTheme.shapeSmall,
-                                colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.surfaceHover, contentColor = ModernTheme.textPrimary),
+                                colors = ButtonDefaults.buttonColors(
+                                    backgroundColor = ModernTheme.success,
+                                    disabledBackgroundColor = ModernTheme.surfaceHover,
+                                    contentColor = Color.White,
+                                    disabledContentColor = Color.White
+                                ),
                                 elevation = ButtonDefaults.elevation(0.dp, 0.dp),
                                 modifier = Modifier.height(34.dp).width(100.dp)
-                            ) { Text("发验证码", fontSize = 12.sp, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset)) }
+                            ) { Text("发验证码", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset)) }
                         }
                         primaryButton("注册并登录", state.isLoading, onClick = viewModel::register)
                         secondaryButton("已有账号，去登录", onClick = { viewModel.switchAuthMode(AuthMode.LOGIN) })

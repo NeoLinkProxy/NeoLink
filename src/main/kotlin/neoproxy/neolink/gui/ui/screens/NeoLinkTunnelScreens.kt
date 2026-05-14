@@ -114,6 +114,7 @@ import neoproxy.neolink.gui.ui.components.modernCheckbox
 import neoproxy.neolink.gui.ui.components.modernTextField
 import neoproxy.neolink.gui.ui.components.inlineIconButton
 import neoproxy.neolink.gui.ui.components.primaryButton
+import neoproxy.neolink.gui.ui.components.modalInputBarrier
 import neoproxy.neolink.gui.ui.components.secondaryButton
 import neoproxy.neolink.gui.ui.components.sectionCard
 import neoproxy.neolink.gui.ui.components.sectionTitle
@@ -538,8 +539,9 @@ fun tunnelLog(runtime: TunnelRuntimeUiState, viewModel: NeoLinkViewModel) {
         if (runtime.logs.isNotEmpty()) listState.scrollToItem(runtime.logs.size - 1)
     }
     Box(
-        Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.recessedBrush, ModernTheme.shapeSmall)
+        Modifier.fillMaxWidth().height(150.dp).background(ModernTheme.terminalBg, ModernTheme.shapeMedium)
             .border(1.dp, ModernTheme.border, ModernTheme.shapeSmall)
+            .clip(ModernTheme.shapeMedium)
             .onPointerEvent(PointerEventType.Scroll) { event ->
                 if (event.keyboardModifiers.isCtrlPressed) {
                     val delta = event.changes.first().scrollDelta.y
@@ -556,7 +558,8 @@ fun tunnelLog(runtime: TunnelRuntimeUiState, viewModel: NeoLinkViewModel) {
                         fontSize = viewModel.logFontSize,
                         fontFamily = FontFamily.Monospace,
                         color = ModernTheme.textPrimary,
-                        style = TextStyle(lineHeight = (viewModel.logFontSize.value * 1.35f).sp, letterSpacing = 0.sp)
+                        style = TextStyle(lineHeight = (viewModel.logFontSize.value * 1.35f).sp, letterSpacing = 0.sp),
+                        modifier = Modifier.padding(bottom = 1.dp)
                     )
                 }
             }
@@ -565,37 +568,36 @@ fun tunnelLog(runtime: TunnelRuntimeUiState, viewModel: NeoLinkViewModel) {
 }
 
 private fun highlightLogMessage(original: AnnotatedString): AnnotatedString {
-    val normalizedText = original.text.replace("\t", "    ")
-    val builder = AnnotatedString.Builder(normalizedText)
+    val newText = original.text.replace("\t", "    ")
+    val builder = AnnotatedString.Builder(newText)
 
+    val tabIndex = original.text.indexOf('\t')
     original.spanStyles.forEach { range ->
-        val safeStart = range.start.coerceIn(0, normalizedText.length)
-        val safeEnd = range.end.coerceIn(safeStart, normalizedText.length)
-        if (safeStart < safeEnd) {
-            builder.addStyle(range.item, safeStart, safeEnd)
+        if (tabIndex == -1 || range.end < tabIndex) {
+            builder.addStyle(range.item, range.start, range.end)
         }
     }
 
-    val exceptionColor = Color(0xFFFF5252)
-    val blueColor = Color(0xFF40C4FF)
-    val purpleColor = Color(0xFFE040FB)
+    val colorPurple = Color(0xFFE040FB)
+    val colorBlue = Color(0xFF40C4FF)
+    val colorRed = Color(0xFFFF5252)
 
     val exceptionHeader = "\\b[\\w\\.]+(?:Exception|Error)(?::\\s*.*)?"
     val stackTrace = "\\bat\\s+[\\w\\.\\$/<> ]+(?:\\(.*?\\))?"
     val sourceInfo = "\\((?:Unknown Source|[\\w\\.]+\\.java:\\d+)\\)"
-    Regex("($exceptionHeader|$stackTrace|$sourceInfo)").findAll(normalizedText).forEach { match ->
+    Regex("($exceptionHeader|$stackTrace|$sourceInfo)").findAll(newText).forEach { match ->
         builder.addStyle(
-            SpanStyle(color = exceptionColor, fontWeight = FontWeight.Bold),
+            SpanStyle(color = colorRed, fontWeight = FontWeight.Bold),
             match.range.first,
             match.range.last + 1
         )
     }
 
-    val trafficAmount = "\\d+(?:\\.\\d+)?\\s*(?:B|KiB|MiB|GiB|TiB|KB|MB|GB|TB)"
+    val mbAmount = "\\d+(?:\\.\\d+)?\\s*MB"
     val dateRange = "\\d{4}/\\d{1,2}/\\d{1,2}-\\d{1,2}:\\d{2}"
-    Regex("($trafficAmount|$dateRange)").findAll(normalizedText).forEach { match ->
+    Regex("($mbAmount|$dateRange)").findAll(newText).forEach { match ->
         builder.addStyle(
-            SpanStyle(color = blueColor, fontWeight = FontWeight.Bold),
+            SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold),
             match.range.first,
             match.range.last + 1
         )
@@ -606,14 +608,14 @@ private fun highlightLogMessage(original: AnnotatedString): AnnotatedString {
     val ipv4 = "\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?"
     val domain = "(?:localhost|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,})(?::\\d+)?"
     val timeOnly = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
-    Regex("($ipv6Bracketed|$ipv6Raw|$ipv4|$domain)").findAll(normalizedText).forEach { match ->
+    Regex("($ipv6Bracketed|$ipv6Raw|$ipv4|$domain)").findAll(newText).forEach { match ->
         if (timeOnly.matches(match.value)) return@forEach
-        val lineStart = normalizedText.lastIndexOf('\n', match.range.first).let { if (it == -1) 0 else it }
-        val lineEnd = normalizedText.indexOf('\n', match.range.first).let { if (it == -1) normalizedText.length else it }
-        val line = normalizedText.substring(lineStart, lineEnd)
+        val lineStart = newText.lastIndexOf('\n', match.range.first).let { if (it == -1) 0 else it }
+        val lineEnd = newText.indexOf('\n', match.range.first).let { if (it == -1) newText.length else it }
+        val line = newText.substring(lineStart, lineEnd)
         if (line.contains("Exception") || line.contains("Error") || line.trimStart().startsWith("at ")) return@forEach
         builder.addStyle(
-            SpanStyle(color = purpleColor, fontWeight = FontWeight.Bold),
+            SpanStyle(color = colorPurple, fontWeight = FontWeight.Bold),
             match.range.first,
             match.range.last + 1
         )
@@ -655,7 +657,12 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
                 draft.localPort.toIntOrNull()?.let { it in 1..65535 } == true
         }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.62f)), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.fillMaxSize()
+            .modalInputBarrier()
+            .background(Color.Black.copy(alpha = 0.62f)),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
             Modifier.width(460.dp).background(ModernTheme.panelBrush, ModernTheme.shapeMedium)
                 .border(1.dp, ModernTheme.borderStrong, ModernTheme.shapeMedium).padding(18.dp),
@@ -670,8 +677,8 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
             labelText("本地端口")
             modernTextField(draft.localPort, { viewModel.updateCreateDraft(localPort = it) }, placeholder = "8080")
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = viewModel::hideCreateTunnelDialog, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.surfaceHover), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-                    Text("取消", color = ModernTheme.textPrimary, modifier = Modifier.offset(y = DialogActionTextBaselineOffset))
+                Button(onClick = viewModel::hideCreateTunnelDialog, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.success), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
+                    Text("取消", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = DialogActionTextBaselineOffset))
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
@@ -771,7 +778,6 @@ private const val TunnelListTunnelStartIndex = 2
 private const val TunnelExpandRevealDelayMs = 260L
 private const val TunnelExpandRevealPaddingPx = 18f
 private const val MaxInlineSvgLength = 16_384
-private val FormalKeyPurple = Color(0xFF7C3AED)
 private val LatencyWarning = Color(0xFFFACC15)
 private val TunnelStatusBarBaselineOffset = (-1.5).dp
 private val TunnelHeaderPortLabelBaselineOffset = (-4).dp
@@ -785,9 +791,6 @@ private val DialogActionTextBaselineOffset = (-0.5).dp
 private val RemainingTrafficTextBaselineOffset = (-2).dp
 private val CreateEntryTextBaselineOffset = (-2).dp
 private val KeyDetailsHeaderTextBaselineOffset = (-2).dp
-private val KeyMetricLabelBaselineOffset = (-2).dp
-private val KeyMetricValueBaselineOffset = (-2).dp
-private val KeyTypeBadgeTextBaselineOffset = (-2.5).dp
 private val NodeLatencyTextBaselineOffset = (-2).dp
 private val StopIcon: ImageVector = ImageVector.Builder(
     name = "Stop",
@@ -827,60 +830,8 @@ private fun keyDetailsPanel(key: NasKey) {
             Spacer(Modifier.width(8.dp))
             keyTypeBadge(key)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            keyMetric("流量", "${formatTrafficMiB(key.balanceMiB)} MiB", Modifier.weight(1f), ModernTheme.success)
-            keyMetric("到期时间", key.expire.ifBlank { "N/A" }, Modifier.weight(1.35f), ModernTheme.accentLight)
-            keyMetric("带宽", formatBandwidth(key.rate), Modifier.weight(0.85f), keyTypeColor(key))
-        }
+        keyParameterGrid(key)
     }
-}
-
-@Composable
-private fun keyMetric(label: String, value: String, modifier: Modifier, valueColor: Color) {
-    Column(modifier) {
-        Text(label, color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.offset(y = KeyMetricLabelBaselineOffset))
-        Spacer(Modifier.height(2.dp))
-        Text(value, color = valueColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = KeyMetricValueBaselineOffset))
-    }
-}
-
-@Composable
-private fun keyTypeBadge(key: NasKey) {
-    Box(
-        modifier = Modifier
-            .background(keyTypeBackground(key), RoundedCornerShape(4.dp))
-            .border(1.dp, keyTypeColor(key).copy(alpha = 0.55f), RoundedCornerShape(4.dp))
-            .padding(horizontal = 7.dp, vertical = 3.dp)
-    ) {
-        Text(key.displayType, color = keyTypeColor(key), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = KeyTypeBadgeTextBaselineOffset))
-    }
-}
-
-private fun keySummaryText(key: NasKey, prefix: String = ""): String {
-    val flow = formatTrafficMiB(key.balanceMiB)
-    val expire = key.expire.ifBlank { "N/A" }
-    val bandwidth = formatBandwidth(key.rate)
-    return "${prefix}流量 $flow MiB / 到期 $expire / 带宽 $bandwidth"
-}
-
-private fun formatTrafficMiB(value: Double): String {
-    return String.format(Locale.ROOT, "%.3f", value)
-}
-
-private fun formatBandwidth(value: String): String {
-    val normalized = value.trim()
-    if (normalized.isBlank() || normalized == "N/A" || normalized == "-") {
-        return "N/A"
-    }
-    return if (normalized.contains("bps", ignoreCase = true)) normalized else "$normalized Mbps"
-}
-
-private fun keyTypeBackground(key: NasKey): Color {
-    return if (key.isTrial) ModernTheme.success.copy(alpha = 0.16f) else FormalKeyPurple.copy(alpha = 0.18f)
-}
-
-private fun keyTypeColor(key: NasKey): Color {
-    return if (key.isTrial) ModernTheme.success else FormalKeyPurple
 }
 
 @Composable

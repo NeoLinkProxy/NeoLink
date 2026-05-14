@@ -32,8 +32,8 @@ public final class Debugger {
 
         LogSink sink = RuntimeState.logSink();
         if (sink != null) {
-            // 已有日志系统就绪时，统一走日志桥，CLI / GUI / Android 都能复用同一份输出。
-            sink.log(LogSink.Level.ERROR, "DEBUG", fullStackTrace);
+            // UI 模式的控制台只保留 UI subject；CLI 仍保留 DEBUG subject，方便排障时区分来源。
+            sink.log(LogSink.Level.ERROR, logSubject(), fullStackTrace);
             return;
         }
 
@@ -49,12 +49,16 @@ public final class Debugger {
 
         LogSink sink = RuntimeState.logSink();
         if (sink != null) {
-            sink.log(LogSink.Level.INFO, "DEBUG", infoMessage);
+            sink.log(LogSink.Level.INFO, logSubject(), infoMessage);
             return;
         }
 
         if (!FeatureState.snapshot().guiMode()) {
             System.out.println("[DEBUG] " + infoMessage);
         }
+    }
+
+    private static String logSubject() {
+        return FeatureState.snapshot().guiMode() ? "UI" : "DEBUG";
     }
 }

@@ -55,6 +55,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -498,11 +500,11 @@ fun primaryButton(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material.CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
-                    color = ModernTheme.textSecondary,
+                    color = Color.White,
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("处理中...", color = ModernTheme.textSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
+                Text("处理中...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
             }
         } else {
             Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
@@ -516,14 +518,14 @@ fun secondaryButton(text: String, onClick: () -> Unit) {
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isPressed by interactionSource.collectIsPressedAsState()
     val backgroundColor = when {
-        isPressed -> ModernTheme.surfaceSunken
-        isHovered -> ModernTheme.surfaceHover
-        else -> ModernTheme.surfaceRaised
+        isPressed -> ModernTheme.success.copy(alpha = 0.82f)
+        isHovered -> ModernTheme.success.copy(alpha = 0.92f)
+        else -> ModernTheme.success
     }
     val borderColor = when {
-        isPressed -> ModernTheme.borderStrong
-        isHovered -> ModernTheme.accent.copy(alpha = 0.55f)
-        else -> ModernTheme.borderStrong.copy(alpha = 0.72f)
+        isPressed -> ModernTheme.success.copy(alpha = 0.76f)
+        isHovered -> Color.White.copy(alpha = 0.55f)
+        else -> ModernTheme.success.copy(alpha = 0.72f)
     }
     Box(
         modifier = Modifier.fillMaxWidth().height(34.dp)
@@ -533,7 +535,18 @@ fun secondaryButton(text: String, onClick: () -> Unit) {
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = ModernTheme.textPrimary, fontSize = 13.sp, modifier = Modifier.offset(y = CenteredButtonTextBaselineOffset))
+        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = CenteredButtonTextBaselineOffset))
+    }
+}
+
+fun Modifier.modalInputBarrier(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            // 自绘模态层必须成为指针事件的终点。放在 Final pass 消费事件，
+            // 让弹窗内部按钮先正常处理点击，同时阻断事件继续穿透到下层界面。
+            val event = awaitPointerEvent(PointerEventPass.Final)
+            event.changes.forEach { it.consume() }
+        }
     }
 }
 

@@ -4,6 +4,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.sun.jna.Native
 import com.sun.jna.platform.win32.WinDef
+import neoproxy.neolink.state.RuntimeState
+import neoproxy.neolink.util.LogSink
 import java.awt.Window
 
 /**
@@ -75,7 +77,7 @@ object WindowsEffects {
             if (WindowsDwm.succeeded(hr)) {
                 isEffectApplied = true
                 window.repaint()
-                println("[视觉注入] 亚克力特效已激活。")
+                logUi("亚克力特效已激活。")
                 return true
             }
 
@@ -91,7 +93,12 @@ object WindowsEffects {
         window.background = java.awt.Color(18, 18, 20)
         window.revalidate()
         window.repaint()
-        println("[视觉注入] 亚克力特效未启用，已切换不透明安全态：$reason")
+        logUi("亚克力特效未启用，已切换不透明安全态：$reason")
         return false
+    }
+
+    private fun logUi(message: String) {
+        RuntimeState.logSink()?.log(LogSink.Level.INFO, "UI", message)
+            ?: System.out.println("[UI] $message")
     }
 }

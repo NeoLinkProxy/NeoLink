@@ -2,6 +2,8 @@ package neoproxy.neolink.gui.app
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
 import neoproxy.neolink.gui.platform.WindowsDwm
+import neoproxy.neolink.state.RuntimeState
+import neoproxy.neolink.util.LogSink
 
 /**
  * NeoLink 全链路环境预检器
@@ -31,7 +33,7 @@ object NeoLinkPreFlightChecker {
     )
 
     fun runFullCheck(): CheckResult {
-        println(">>>>>> [起飞预检] 正在进行 DWM 渲染能力实测 >>>>>>")
+        logUi("正在进行 DWM 渲染能力实测。")
 
         // 核心：创建一个 0x0 像素的不可见测试窗口
         var hwnd: WinDef.HWND? = null
@@ -60,15 +62,15 @@ object NeoLinkPreFlightChecker {
                 val res = hrAcrylic.toInt()
 
                 if (WindowsDwm.succeeded(hrAcrylic)) {
-                    println("[预检] DWM 属性测试成功 (系统支持透明合成背板)")
+                    logUi("DWM 属性测试成功（系统支持透明合成背板）。")
                     CheckResult(true, "DWM 实测通过")
                 } else {
-                    println("[预检] DWM 属性测试拒绝: HRESULT $res (可能是 RDP、旧版 Windows 或基础显卡驱动)")
+                    logUi("DWM 属性测试拒绝：HRESULT $res（可能是 RDP、旧版 Windows 或基础显卡驱动）。")
                     CheckResult(false, "DWM 拒绝特效请求 (HRESULT $res)")
                 }
             }
         } catch (e: Throwable) {
-            println("[预检] 实测过程中发生异常: ${e.message}")
+            logUi("DWM 实测过程中发生异常：${e.message ?: e.javaClass.simpleName}。")
             CheckResult(false, "DWM 实测异常")
         } finally {
             val createdWindow = hwnd
@@ -80,5 +82,10 @@ object NeoLinkPreFlightChecker {
                 }
             }
         }
+    }
+
+    private fun logUi(message: String) {
+        RuntimeState.logSink()?.log(LogSink.Level.INFO, "UI", message)
+            ?: System.out.println("[UI] $message")
     }
 }
