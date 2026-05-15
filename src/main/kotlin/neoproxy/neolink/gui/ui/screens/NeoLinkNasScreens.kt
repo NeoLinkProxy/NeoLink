@@ -253,7 +253,7 @@ private fun keyInfoText(
 ) {
     Row(modifier = modifier.height(KeyMetaRowHeight), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
-            Icon(icon, null, tint = color.copy(alpha = if (color == ModernTheme.success) 1f else 0.70f), modifier = Modifier.size(15.dp).offset(y = KeyMetaIconBaselineOffset))
+            Icon(icon, null, tint = color.copy(alpha = if (color == ModernTheme.success) 1f else 0.70f), modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(5.dp))
         }
         val valueColor = when {
@@ -265,11 +265,11 @@ private fun keyInfoText(
             val label = text.substringBefore(':') + ": "
             val value = text.substringAfter(':')
             Row(Modifier.weight(1f, fill = false), verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = color.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = KeyMetaTextLineHeight, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = KeyMetaTextBaselineOffset))
-                Text(value, color = valueColor, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.offset(y = KeyMetaTextBaselineOffset))
+                Text(label, color = color.copy(alpha = 0.72f), fontSize = 12.sp, lineHeight = KeyMetaTextLineHeight, fontWeight = FontWeight.Bold)
+                Text(value, color = valueColor, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else {
-            Text(text, color = valueColor.copy(alpha = if (emphasized) 1f else 0.72f), fontSize = 12.sp, lineHeight = KeyMetaTextLineHeight, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.offset(y = KeyMetaTextBaselineOffset))
+            Text(text, color = valueColor.copy(alpha = if (emphasized) 1f else 0.72f), fontSize = 12.sp, lineHeight = KeyMetaTextLineHeight, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -284,9 +284,9 @@ private fun keyOutlineAction(icon: ImageVector, text: String, color: Color, onCl
         elevation = ButtonDefaults.elevation(0.dp, 0.dp),
         contentPadding = PaddingValues(horizontal = 13.dp, vertical = 6.dp)
     ) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(16.dp).offset(y = KeyActionIconBaselineOffset))
+        Icon(icon, null, tint = color, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(5.dp))
-        Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = KeyActionTextBaselineOffset))
+        Text(text, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -496,7 +496,7 @@ private fun refreshKeyDialog(viewModel: NeoLinkViewModel) {
 private fun announcementDialog(viewModel: NeoLinkViewModel) {
     val announcement = viewModel.nasState.announcements.getOrNull(viewModel.nasState.announcementIndex) ?: return
     modalSurface(width = 520) {
-        sectionTitle(announcement.title.ifBlank { "公告" })
+        announcementTitle(announcement.title.ifBlank { "公告" })
         Spacer(Modifier.height(12.dp))
         Text(renderAnnouncementText(announcement), color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
         Spacer(Modifier.height(16.dp))
@@ -507,6 +507,25 @@ private fun announcementDialog(viewModel: NeoLinkViewModel) {
             }
             compactAction("我知道了", ModernTheme.success) { viewModel.closeCurrentAnnouncement(dismissed = false) }
         }
+    }
+}
+
+@Composable
+private fun announcementTitle(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(3.dp, 14.dp)
+                .offset(y = AnnouncementMarkerBaselineOffset)
+                .background(AnnouncementMarkerColor, RoundedCornerShape(2.dp))
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text,
+            color = ModernTheme.textPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.offset(y = AnnouncementTitleTextBaselineOffset)
+        )
     }
 }
 
@@ -562,14 +581,13 @@ private fun formatMoney(value: Double): String {
 private val KeyCardShape = RoundedCornerShape(14.dp)
 private val KeyCardHeight = 158.dp
 private val KeyCardStartPadding = 20.dp
-private val KeyNameTextBaselineOffset = (-2).dp
+private val KeyNameTextBaselineOffset = (-1).dp
 private val KeyMetaRowHeight = 20.dp
 private val KeyMetaTextLineHeight = 16.sp
-private val KeyMetaIconBaselineOffset = (-1).dp
-private val KeyMetaTextBaselineOffset = (-1).dp
-private val KeyActionIconBaselineOffset = (-1).dp
-private val KeyActionTextBaselineOffset = (-1).dp
-private val PaymentAmountBaselineOffset = (-2).dp
-private val CountdownTextBaselineOffset = (-3).dp
-private val WarningTitleTextBaselineOffset = (-2).dp
-private val RateValueTextBaselineOffset = (-3).dp
+private val PaymentAmountBaselineOffset = (-1).dp
+private val CountdownTextBaselineOffset = (-2).dp
+private val WarningTitleTextBaselineOffset = (-1).dp
+private val RateValueTextBaselineOffset = (-2).dp
+private val AnnouncementMarkerColor = Color(0xFF8B5CF6)
+private val AnnouncementMarkerBaselineOffset = 2.dp
+private val AnnouncementTitleTextBaselineOffset = (-1).dp

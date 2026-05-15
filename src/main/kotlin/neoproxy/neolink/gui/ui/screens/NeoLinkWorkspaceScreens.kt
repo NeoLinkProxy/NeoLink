@@ -1,5 +1,6 @@
 package neoproxy.neolink.gui.ui.screens
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -59,9 +60,10 @@ import neoproxy.neolink.gui.ui.components.sectionCard
 import neoproxy.neolink.gui.ui.components.sectionTitle
 import neoproxy.neolink.gui.ui.theme.ModernTheme
 
-private val SidebarPrimaryTextIconBaselineOffset = (-3).dp
-private val SidebarSettingsTextIconBaselineOffset = (-4).dp
-private val MaterialButtonTextBaselineOffset = (-2).dp
+private val SidebarPrimaryTextIconBaselineOffset = (-2).dp
+private val SidebarSettingsTextIconBaselineOffset = (-3).dp
+private val MaterialButtonTextBaselineOffset = (-1).dp
+private const val PageCrossfadeDurationMs = 180
 
 @Composable
 fun workspaceScreen(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
@@ -70,13 +72,19 @@ fun workspaceScreen(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
         Divider(Modifier.fillMaxHeight().width(1.dp), color = ModernTheme.divider.copy(alpha = 0.72f))
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.TopCenter) {
             Box(modifier = Modifier.fillMaxWidth().widthIn(max = 1000.dp)) {
-                when (viewModel.uiState.currentPage) {
-                    MainPage.TUNNELS -> tunnelManagementPage(viewModel, onAlert)
-                    MainPage.PURCHASE -> purchasePage(viewModel)
-                    MainPage.KEY_MANAGEMENT -> keyManagementPage(viewModel)
-                    MainPage.TUTORIAL -> tutorialPage(viewModel)
-                    MainPage.USER_CENTER -> userCenterPage(viewModel)
-                    MainPage.SETTINGS -> settingsPage(viewModel)
+                Crossfade(
+                    targetState = viewModel.uiState.currentPage,
+                    animationSpec = tween(durationMillis = PageCrossfadeDurationMs),
+                    label = "workspace-page-crossfade"
+                ) { page ->
+                    when (page) {
+                        MainPage.TUNNELS -> tunnelManagementPage(viewModel, onAlert)
+                        MainPage.PURCHASE -> purchasePage(viewModel)
+                        MainPage.KEY_MANAGEMENT -> keyManagementPage(viewModel)
+                        MainPage.TUTORIAL -> tutorialPage(viewModel)
+                        MainPage.USER_CENTER -> userCenterPage(viewModel)
+                        MainPage.SETTINGS -> settingsPage(viewModel)
+                    }
                 }
             }
         }

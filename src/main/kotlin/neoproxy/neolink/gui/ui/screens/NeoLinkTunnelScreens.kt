@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -651,12 +650,7 @@ fun createTunnelEntry(viewModel: NeoLinkViewModel) {
 fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
     val draft = viewModel.uiState.createDraft
     val selectedKey = viewModel.keys.firstOrNull { it.alias == draft.selectedKeyAlias }
-    val canCreate by remember(draft, selectedKey) {
-        derivedStateOf {
-            selectedKey?.onlineNodes?.isNotEmpty() == true &&
-                draft.localPort.toIntOrNull()?.let { it in 1..65535 } == true
-        }
-    }
+    val canCreate = selectedKey?.onlineNodes?.isNotEmpty() == true
     Box(
         Modifier.fillMaxSize()
             .modalInputBarrier()
@@ -779,19 +773,19 @@ private const val TunnelExpandRevealDelayMs = 260L
 private const val TunnelExpandRevealPaddingPx = 18f
 private const val MaxInlineSvgLength = 16_384
 private val LatencyWarning = Color(0xFFFACC15)
-private val TunnelStatusBarBaselineOffset = (-1.5).dp
-private val TunnelHeaderPortLabelBaselineOffset = (-4).dp
-private val MetricCardTextBaselineOffset = (-3.5).dp
-private val MetricCardValueBaselineOffset = (-3).dp
-private val CompactFieldBaselineOffset = (-2).dp
-private val CompactPortFieldBaselineOffset = (-1.5).dp
-private val CompactFieldPlaceholderBaselineOffset = (-1.5).dp
-private val MaterialButtonTextBaselineOffset = (-2).dp
-private val DialogActionTextBaselineOffset = (-0.5).dp
-private val RemainingTrafficTextBaselineOffset = (-2).dp
-private val CreateEntryTextBaselineOffset = (-2).dp
-private val KeyDetailsHeaderTextBaselineOffset = (-2).dp
-private val NodeLatencyTextBaselineOffset = (-2).dp
+private val TunnelStatusBarBaselineOffset = (-0.5).dp
+private val TunnelHeaderPortLabelBaselineOffset = (-2).dp
+private val MetricCardTextBaselineOffset = (-2.5).dp
+private val MetricCardValueBaselineOffset = (-2).dp
+private val CompactFieldBaselineOffset = (-1.5).dp
+private val CompactPortFieldBaselineOffset = (-0.5).dp
+private val CompactFieldPlaceholderBaselineOffset = (-0.5).dp
+private val MaterialButtonTextBaselineOffset = (-1).dp
+private val DialogActionTextBaselineOffset = 0.5.dp
+private val RemainingTrafficTextBaselineOffset = (-1).dp
+private val CreateEntryTextBaselineOffset = (-1).dp
+private val KeyDetailsHeaderTextBaselineOffset = (-1).dp
+private val NodeLatencyTextBaselineOffset = (-1).dp
 private val StopIcon: ImageVector = ImageVector.Builder(
     name = "Stop",
     defaultWidth = 24.dp,

@@ -35,6 +35,8 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,18 +82,19 @@ val TunnelTrafficChartColor = Color(0xFF22D3EE)
 // Compose Desktop centers text by font bounds. On Windows, CJK and mixed Latin/CJK glyphs
 // look slightly lower than icons, borders, and compact controls, so these offsets preserve
 // the optical baseline established by the 7.x UI.
-private val CenteredButtonTextBaselineOffset = (-2).dp
-private val DropdownSelectedTextBaselineOffset = (-3).dp
-private val DropdownPrimaryTextBaselineOffset = (-2).dp
-private val DropdownSecondaryTextBaselineOffset = (-2).dp
-private val CheckboxTextBaselineOffset = (-3).dp
-private val CompactToggleTextBaselineOffset = (-3).dp
-private val ChartAxisLabelBaselineOffset = (-2).dp
-private val SectionMarkerBaselineOffset = 2.5.dp
-private val SectionTitleTextBaselineOffset = (-2).dp
-private val FieldLabelTextBaselineOffset = (-4).dp
-private val TextFieldBaselineOffset = (-2).dp
-private val TextFieldPlaceholderBaselineOffset = (-1.5).dp
+private val CenteredButtonTextBaselineOffset = (-1).dp
+private val DropdownSelectedTextBaselineOffset = (-2).dp
+private val DropdownPrimaryTextBaselineOffset = (-1).dp
+private val DropdownSecondaryTextBaselineOffset = (-1).dp
+private val CheckboxTextBaselineOffset = (-1).dp
+private val CompactToggleTextBaselineOffset = (-1).dp
+private val ChartAxisLabelBaselineOffset = (-1).dp
+private val ChartTimeLabelBaselineOffset = ChartAxisLabelBaselineOffset + 1.dp
+private val SectionMarkerBaselineOffset = 3.5.dp
+private val SectionTitleTextBaselineOffset = (-1).dp
+private val FieldLabelTextBaselineOffset = (-3).dp
+private val TextFieldBaselineOffset = (-1).dp
+private val TextFieldPlaceholderBaselineOffset = (-0.5).dp
 
 @Composable
 fun inlineDropdown(
@@ -282,8 +285,8 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
             modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 46.dp, end = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            trafficAxisLabel(formatTrafficChartSecond(startSecond))
-            trafficAxisLabel(formatTrafficChartSecond(nowSecond))
+            trafficAxisLabel(formatTrafficChartSecond(startSecond), ChartTimeLabelBaselineOffset)
+            trafficAxisLabel(formatTrafficChartSecond(nowSecond), ChartTimeLabelBaselineOffset)
         }
     }
 }
@@ -295,8 +298,8 @@ private fun formatTrafficChartSecond(second: Long): String =
     LocalDateTime.ofInstant(Instant.ofEpochSecond(second), ZoneId.systemDefault()).format(TrafficChartTimeFormatter)
 
 @Composable
-private fun trafficAxisLabel(text: String) {
-    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp, modifier = Modifier.offset(y = ChartAxisLabelBaselineOffset))
+private fun trafficAxisLabel(text: String, baselineOffset: Dp = ChartAxisLabelBaselineOffset) {
+    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp, modifier = Modifier.offset(y = baselineOffset))
 }
 
 @Composable
@@ -316,12 +319,13 @@ fun labelText(text: String) {
 @Composable
 fun modernTextField(value: String, onValueChange: (String) -> Unit, placeholder: String = "", isPassword: Boolean = false, modifier: Modifier = Modifier) {
     var isFocused by remember { mutableStateOf(false) }
+    var isPasswordVisible by remember { mutableStateOf(false) }
     val commonTextStyle = TextStyle(color = ModernTheme.textPrimary, fontSize = 13.sp, lineHeight = 16.sp)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         textStyle = commonTextStyle,
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        visualTransformation = if (isPassword && !isPasswordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         singleLine = true,
         cursorBrush = SolidColor(ModernTheme.accent),
         decorationBox = { innerTextField ->
@@ -332,19 +336,43 @@ fun modernTextField(value: String, onValueChange: (String) -> Unit, placeholder:
             ) {
                 // Compose Desktop 会按字体边界居中文本，在 Windows 上视觉基线会略低于相邻图标。
                 // 这里保留 7.x 的 UI 补偿，保证输入文本和占位文本在输入框内保持视觉居中。
-                Box(
-                    modifier = Modifier.offset(y = TextFieldBaselineOffset),
-                    contentAlignment = Alignment.CenterStart
+                Row(
+                    modifier = Modifier.fillMaxWidth().offset(y = TextFieldBaselineOffset),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            placeholder,
-                            color = Color.Gray.copy(alpha = 0.5f),
-                            fontSize = 12.sp,
-                            modifier = Modifier.offset(y = TextFieldPlaceholderBaselineOffset)
-                        )
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (value.isEmpty()) {
+                            Text(
+                                placeholder,
+                                color = Color.Gray.copy(alpha = 0.5f),
+                                fontSize = 12.sp,
+                                modifier = Modifier.offset(y = TextFieldPlaceholderBaselineOffset)
+                            )
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
+                    if (isPassword) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier.size(18.dp).clip(ModernTheme.shapeSmall).clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                isPasswordVisible = !isPasswordVisible
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPasswordVisible) "隐藏密码" else "显示密码",
+                                tint = if (isFocused) ModernTheme.accent else ModernTheme.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
         },

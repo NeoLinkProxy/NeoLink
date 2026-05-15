@@ -28,7 +28,7 @@ import androidx.compose.ui.window.PopupProperties
 import neoproxy.neolink.gui.platform.RenderState
 import neoproxy.neolink.gui.platform.WindowsEffects
 
-private val ContextMenuTextBaselineOffset = (-2).dp
+private val ContextMenuTextBaselineOffset = (-1).dp
 
 object ModernTheme {
     val background: Color

@@ -35,10 +35,11 @@ import neoproxy.neolink.gui.ui.components.primaryButton
 import neoproxy.neolink.gui.ui.components.secondaryButton
 import neoproxy.neolink.gui.ui.theme.ModernTheme
 
-private val AuthHeaderTextIconBaselineOffset = (-2).dp
-private val AuthBodyTextBaselineOffset = (-1.5).dp
-private val MaterialButtonTextBaselineOffset = (-1.5).dp
-private val LoginButtonTextBaselineOffset = (-2.5).dp
+private val AuthHeaderTextIconBaselineOffset = (-1).dp
+private val AuthBodyTextBaselineOffset = (-0.5).dp
+private val MaterialButtonTextBaselineOffset = (-0.5).dp
+private val LoginButtonTextBaselineOffset = (-1.5).dp
+private val AuthMessageReservedHeight = 20.dp
 
 @Composable
 fun authScreen(viewModel: NeoLinkViewModel) {
@@ -96,14 +97,16 @@ fun authScreen(viewModel: NeoLinkViewModel) {
                         secondaryButton("没有账号，去注册", onClick = { viewModel.switchAuthMode(AuthMode.REGISTER) })
                     }
                 }
-                if (state.message.isNotBlank()) {
-                    Text(
-                        state.message,
-                        color = if (isAuthErrorMessage(state.message)) ModernTheme.error else ModernTheme.textSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.offset(y = AuthBodyTextBaselineOffset)
-                    )
+                Box(Modifier.fillMaxWidth().height(AuthMessageReservedHeight)) {
+                    if (state.message.isNotBlank()) {
+                        Text(
+                            state.message,
+                            color = if (isAuthErrorMessage(state.message)) ModernTheme.error else ModernTheme.textSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.offset(y = AuthBodyTextBaselineOffset)
+                        )
+                    }
                 }
             }
         }
@@ -176,8 +179,8 @@ private fun authHeader(
         AuthMode.VERIFY_IDENTITY -> "实名认证"
     }
     val subtitle = subtitleOverride ?: when (mode) {
-        AuthMode.LOGIN -> "登录后继续管理你的内网穿透节点。"
-        AuthMode.REGISTER -> "创建账号后即可同步授权节点。"
+        AuthMode.LOGIN -> "登录后即可管理内网穿透。"
+        AuthMode.REGISTER -> "创建账号后即可使用内网穿透。"
         AuthMode.VERIFY_IDENTITY -> "完成认证后即可进入控制台。"
     }
 

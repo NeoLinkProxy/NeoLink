@@ -7,14 +7,15 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    kotlin("jvm") version "1.9.22"
-    id("org.jetbrains.compose") version "1.6.1"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    kotlin("jvm") version "2.3.21"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
+    id("org.jetbrains.compose") version "1.11.0"
+    id("com.gradleup.shadow") version "9.4.1"
     jacoco
 }
 
 val neoLinkApiVersion = "7.2.0"
-val skikoVersion = "0.7.97"
+val skikoVersion = "0.144.6"
 
 group = "neoproxy"
 version = neoLinkApiVersion
@@ -28,14 +29,15 @@ extra["neoLinkApiVersion"] = neoLinkApiVersion
 allprojects {
     repositories {
         mavenLocal()
-        mavenCentral()
-        google()
-        maven("https://maven.pkg.jetbrains.space/public/p/public/compose/dev") {
+        maven("https://packages.jetbrains.team/maven/p/cmp/dev") {
             content {
+                includeGroupByRegex("androidx\\.compose.*")
                 includeGroup("org.jetbrains.compose")
                 includeGroup("org.jetbrains.skiko")
             }
         }
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://repo1.maven.org/maven2")
     }
 }
 
@@ -50,7 +52,9 @@ tasks.withType<JavaCompile> {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "21"
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }
 
 // ============================================================================
@@ -83,17 +87,19 @@ dependencies {
 
     // Compose Desktop 图形界面
     implementation(compose.desktop.currentOs)
-    implementation(compose.material)
-    implementation(compose.materialIconsExtended)
-    implementation(compose.ui)
-    implementation(compose.foundation)
-    implementation(compose.runtime)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
+    implementation("org.jetbrains.compose.material:material:1.11.0")
+    // JetBrains no longer publishes fresh Material Icons Extended artifacts for Compose 1.11.x.
+    // Keep the last supported artifact explicit so the build does not silently depend on a deprecated alias.
+    implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
+    implementation("org.jetbrains.compose.ui:ui:1.11.0")
+    implementation("org.jetbrains.compose.foundation:foundation:1.11.0")
+    implementation("org.jetbrains.compose.runtime:runtime:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
 
     // JNA — Windows DWM 特效等原生调用
-    implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    implementation("net.java.dev.jna:jna:5.18.1")
+    implementation("net.java.dev.jna:jna-platform:5.18.1")
 
     // Shadow JAR 必须可在任意构建机上产出所有目标平台包。
     // compose.desktop.currentOs 只会解析当前构建机平台的 Skiko native，因此平台包在这里显式声明。
@@ -103,13 +109,14 @@ dependencies {
     shadowJarLinuxRuntime("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:$skikoVersion")
 
     // 桌面 UI 需要直接解析 NAS 响应与本地隧道 JSON；这里使用同一 Jackson 版本避免运行时漂移。
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.21.3")
 
     // 测试
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-core:5.11.0")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
+    testImplementation("org.mockito:mockito-core:5.23.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
 }
 
 // ============================================================================
@@ -129,12 +136,13 @@ tasks.processResources {
 val verifyNeoLinkApiVersionBinding by tasks.registering {
     group = "verification"
     description = "Ensures project version matches neolinkapi dependency version."
+    val projectVersion = project.version.toString()
+    val expectedNeoLinkApiVersion = neoLinkApiVersion
     doLast {
-        val projectVersion = project.version.toString()
-        require(projectVersion == neoLinkApiVersion) {
-            "Version mismatch! project.version=$projectVersion but neoLinkApiVersion=$neoLinkApiVersion"
+        require(projectVersion == expectedNeoLinkApiVersion) {
+            "Version mismatch! project.version=$projectVersion but neoLinkApiVersion=$expectedNeoLinkApiVersion"
         }
-        logger.lifecycle("[VersionBinding] OK: project=$projectVersion == neolinkapi=$neoLinkApiVersion")
+        logger.lifecycle("[VersionBinding] OK: project=$projectVersion == neolinkapi=$expectedNeoLinkApiVersion")
     }
 }
 
@@ -185,7 +193,6 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("windows")
-    from(tasks.named("jar").map { it.outputs })
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarWindowsRuntime)
     excludeMacosSkikoNative()
     excludeLinuxSkikoNative()
@@ -197,7 +204,6 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("macos")
-    from(tasks.named("jar").map { it.outputs })
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarMacosRuntime)
     excludeWindowsSkikoNative()
     excludeLinuxSkikoNative()
@@ -209,7 +215,6 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     archiveBaseName.set("NeoLink")
     archiveVersion.set(project.version.toString())
     archiveClassifier.set("linux")
-    from(tasks.named("jar").map { it.outputs })
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarLinuxRuntime)
     excludeWindowsSkikoNative()
     excludeMacosSkikoNative()
@@ -236,7 +241,7 @@ tasks.test {
 // 最低行覆盖率 50%，GUI 包不参与统计（UI 层难以纯单元测试覆盖）。
 // ============================================================================
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.14"
 }
 
 tasks.jacocoTestReport {

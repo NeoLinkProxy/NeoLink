@@ -22,9 +22,9 @@ import neoproxy.neolink.gui.ui.theme.ModernTheme
 import java.util.Locale
 
 private val FormalKeyPurple = Color(0xFF7C3AED)
-private val MetricLabelBaselineOffset = (-2).dp
-private val MetricValueBaselineOffset = (-2).dp
-private val KeyTypeBadgeTextBaselineOffset = (-2.5).dp
+private val MetricLabelBaselineOffset = (-1).dp
+private val MetricValueBaselineOffset = (-1).dp
+private val KeyTypeBadgeTextBaselineOffset = (-1.5).dp
 
 @Composable
 fun keyParameterGrid(key: NasKey, modifier: Modifier = Modifier) {

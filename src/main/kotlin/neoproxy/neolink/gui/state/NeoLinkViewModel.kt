@@ -294,7 +294,11 @@ class NeoLinkViewModel {
     fun createTunnelFromDraft(): String? {
         val key = keys.firstOrNull { it.alias == uiState.createDraft.selectedKeyAlias }
             ?: return "请选择密钥。"
-        val port = uiState.createDraft.localPort.toIntOrNull()
+        val localPortText = uiState.createDraft.localPort.trim()
+        if (localPortText.isBlank()) {
+            return "本地端口不得为空。"
+        }
+        val port = localPortText.toIntOrNull()
         if (port == null || port !in 1..65535) {
             return "本地端口必须在 1~65535 之间。"
         }
