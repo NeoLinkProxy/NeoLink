@@ -39,6 +39,7 @@ data class AuthUiState(
     val sessionToken: String = "",
     val isAuthenticated: Boolean = false,
     val isVerified: Boolean = false,
+    val isAccountLocked: Boolean = false,
     val isRestoringSession: Boolean = false,
     val isLoading: Boolean = false,
     val message: String = ""

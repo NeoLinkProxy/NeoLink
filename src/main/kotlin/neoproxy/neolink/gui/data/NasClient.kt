@@ -12,10 +12,18 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
+class NasSessionExpiredException(message: String) : IllegalStateException(message)
+
+class NasAccountLockedException(message: String) : IllegalStateException(message)
+
 class NasClient(
     private val baseUrl: String,
     private val sessionToken: String = ""
 ) {
+    private companion object {
+        const val ACCOUNT_LOCKED_MESSAGE_FRAGMENT = "封禁"
+    }
+
     private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
     private val httpClient = HttpClient.newBuilder()
         .cookieHandler(cookieManager)
@@ -33,6 +41,12 @@ class NasClient(
 
         val message: String
             get() = (body["msg"] ?: body["message"] ?: "请求失败").toString()
+
+        val isSessionExpired: Boolean
+            get() = statusCode == 401
+
+        val isAccountLocked: Boolean
+            get() = statusCode == 403 && message.contains(ACCOUNT_LOCKED_MESSAGE_FRAGMENT)
     }
 
     fun sendCode(email: String, mode: String): Response {
@@ -57,12 +71,10 @@ class NasClient(
 
     fun identityStatus(): String {
         val response = post("/api/id-check", emptyMap())
-        if (response.statusCode == 401) {
-            throw IllegalStateException(response.message)
+        if (response.isSessionExpired) {
+            throw NasSessionExpiredException(response.message.ifBlank { "会话已失效，请重新登录。" })
         }
-        if (response.statusCode == 403) {
-            throw IllegalStateException(response.message)
-        }
+        if (response.isAccountLocked) return "LOCKED"
         return (response.body["status"] ?: response.body["data"] ?: "UNVERIFIED").toString()
     }
 
@@ -76,9 +88,7 @@ class NasClient(
 
     fun myKeys(): List<NasKey> {
         val response = get("/api/my-keys")
-        if (!response.success) {
-            throw IllegalStateException(response.message)
-        }
+        response.requireSuccess()
         val data = response.body["data"]
         if (data !is List<*>) {
             return emptyList()
@@ -88,9 +98,7 @@ class NasClient(
 
     fun config(): NasPricingConfig {
         val response = get("/api/config")
-        if (!response.success) {
-            throw IllegalStateException(response.message)
-        }
+        response.requireSuccess()
         val data = response.body["data"] as? Map<*, *> ?: return NasPricingConfig()
         return NasPricingConfig(
             priceTraffic = number(data["price_traffic"]).takeIf { it > 0 } ?: 0.05,
@@ -106,9 +114,7 @@ class NasClient(
 
     fun myAnnouncements(): List<NasAnnouncement> {
         val response = get("/api/my-announcements")
-        if (!response.success) {
-            throw IllegalStateException(response.message)
-        }
+        response.requireSuccess()
         val data = response.body["data"] as? List<*> ?: return emptyList()
         return data.mapNotNull { parseAnnouncement(it as? Map<*, *>) }
     }
@@ -127,9 +133,7 @@ class NasClient(
             payload["targetKey"] = targetKey
         }
         val response = post("/api/create-order", payload)
-        if (!response.success) {
-            throw IllegalStateException(response.message)
-        }
+        response.requireSuccess()
         val data = response.body["data"] as? Map<*, *> ?: emptyMap<Any, Any>()
         return NasOrder(
             orderId = text(data["orderId"]),
@@ -141,9 +145,7 @@ class NasClient(
     fun payStatus(orderId: String): String {
         val encoded = URLEncoder.encode(orderId, Charsets.UTF_8)
         val response = get("/api/pay-poll?oid=$encoded")
-        if (!response.success) {
-            throw IllegalStateException(response.message)
-        }
+        response.requireSuccess()
         val data = response.body["data"] as? Map<*, *> ?: return "PENDING"
         return text(data["status"]).ifBlank { "PENDING" }
     }
@@ -198,6 +200,22 @@ class NasClient(
         }
         @Suppress("UNCHECKED_CAST")
         return NeoLinkJson.mapper.readValue(json, Map::class.java) as Map<String, Any?>
+    }
+
+    private fun Response.requireSuccess() {
+        throwIfSessionBoundary()
+        if (!success) {
+            throw IllegalStateException(message)
+        }
+    }
+
+    private fun Response.throwIfSessionBoundary() {
+        if (isSessionExpired) {
+            throw NasSessionExpiredException(message.ifBlank { "会话已失效，请重新登录。" })
+        }
+        if (isAccountLocked) {
+            throw NasAccountLockedException(message.ifBlank { "账号已被封禁，请联系管理员。" })
+        }
     }
 
     private fun extractSessionToken(response: HttpResponse<String>): String {

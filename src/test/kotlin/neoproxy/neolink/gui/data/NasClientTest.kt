@@ -2,6 +2,7 @@ package neoproxy.neolink.gui.data
 import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -64,10 +65,46 @@ class NasClientTest {
         }
     }
 
-    private fun json(exchange: com.sun.net.httpserver.HttpExchange, body: String) {
+    @Test
+    @DisplayName("session protected endpoints expose NAS login expiry as a typed exception")
+    fun sessionProtectedEndpointsExposeLoginExpiry() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/my-keys") { exchange ->
+            json(exchange, """{"success":false,"msg":"会话已失效，请重新登录。"}""", statusCode = 401)
+        }
+        server.start()
+        try {
+            val client = NasClient("http://127.0.0.1:${server.address.port}", "expired-session")
+
+            assertThrows(NasSessionExpiredException::class.java) {
+                client.myKeys()
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    @DisplayName("id-check maps NAS banned accounts to the locked identity state")
+    fun idCheckMapsBannedAccountsToLockedIdentityState() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/id-check") { exchange ->
+            json(exchange, """{"success":false,"msg":"账号已被封禁"}""", statusCode = 403)
+        }
+        server.start()
+        try {
+            val client = NasClient("http://127.0.0.1:${server.address.port}", "banned-session")
+
+            assertEquals("LOCKED", client.identityStatus())
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    private fun json(exchange: com.sun.net.httpserver.HttpExchange, body: String, statusCode: Int = 200) {
         val response = body.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
-        exchange.sendResponseHeaders(200, response.size.toLong())
+        exchange.sendResponseHeaders(statusCode, response.size.toLong())
         exchange.responseBody.use { it.write(response) }
     }
 }

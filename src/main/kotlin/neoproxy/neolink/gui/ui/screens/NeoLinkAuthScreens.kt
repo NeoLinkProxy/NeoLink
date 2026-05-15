@@ -19,6 +19,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,6 +119,47 @@ fun sessionRestoringPanel(email: String) {
         authHeader(AuthMode.LOGIN, titleOverride = "正在恢复会话", subtitleOverride = "正在验证本地会话，请稍候。")
         if (email.isNotBlank()) {
             Text("用户: $email", color = ModernTheme.textSecondary, fontSize = 13.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
+        }
+    }
+}
+
+@Composable
+fun accountLockedScreen(viewModel: NeoLinkViewModel) {
+    val state = viewModel.authState
+    Box(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Warning, null, tint = ModernTheme.error, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "账号已被封禁",
+                    color = ModernTheme.error,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                    lineHeight = 30.sp,
+                    modifier = Modifier.offset(y = AuthHeaderTextIconBaselineOffset)
+                )
+            }
+            Text(
+                "该账号当前禁止登录和使用服务，请退出登录并联系管理员处理。",
+                color = ModernTheme.textSecondary,
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier.offset(y = AuthBodyTextBaselineOffset)
+            )
+            if (state.email.isNotBlank()) {
+                Text("用户: ${state.email}", color = ModernTheme.textSecondary, fontSize = 12.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
+            }
+            if (state.message.isNotBlank()) {
+                Text(state.message, color = ModernTheme.error, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.offset(y = AuthBodyTextBaselineOffset))
+            }
+            primaryButton("退出登录", false, onClick = viewModel::logout)
         }
     }
 }

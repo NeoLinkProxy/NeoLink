@@ -98,7 +98,9 @@ fun WindowScope.neoLinkMainScreen(
                     Box(modifier = Modifier.fillMaxSize().background(ModernTheme.backgroundBrush)) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             customTitleBar(windowState, appIcon, onExit)
-                            if (!viewModel.authState.isAuthenticated) {
+                            if (viewModel.authState.isAccountLocked) {
+                                accountLockedScreen(viewModel)
+                            } else if (!viewModel.authState.isAuthenticated) {
                                 authScreen(viewModel)
                             } else {
                                 workspaceScreen(viewModel, onAlert = { alertMessage = it })
@@ -107,7 +109,7 @@ fun WindowScope.neoLinkMainScreen(
                         alertMessage?.let { message ->
                             modernAlertDialog("参数验证未通过", message, onDismiss = { alertMessage = null })
                         }
-                        if (viewModel.authState.isAuthenticated) {
+                        if (viewModel.authState.isAuthenticated && !viewModel.authState.isAccountLocked) {
                             nasGlobalDialogs(viewModel)
                         }
                     }

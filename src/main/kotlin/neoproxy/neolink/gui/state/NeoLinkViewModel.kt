@@ -26,7 +26,9 @@ import neoproxy.neolink.config.LanguageData
 import neoproxy.neolink.core.VersionInfo
 import neoproxy.neolink.gui.config.DEFAULT_NAS_URL
 import neoproxy.neolink.gui.config.DEFAULT_NKM_NODELIST_URL
+import neoproxy.neolink.gui.data.NasAccountLockedException
 import neoproxy.neolink.gui.data.NasClient
+import neoproxy.neolink.gui.data.NasSessionExpiredException
 import neoproxy.neolink.gui.data.NeoLinkLocalStore
 import neoproxy.neolink.gui.data.NkmNodeClient
 import neoproxy.neolink.gui.data.NkmNodeSource
@@ -535,6 +537,10 @@ class NeoLinkViewModel {
         runAuth("正在登录...") { state ->
             val response = nasClient(state).login(state.email, state.password)
             if (!response.success) {
+                if (response.isAccountLocked) {
+                    showAccountLockedOnMain(state.nasUrl, state.email, response.message)
+                    return@runAuth
+                }
                 updateAuthStateOnMain { it.copy(message = response.message) }
                 return@runAuth
             }
@@ -611,11 +617,12 @@ class NeoLinkViewModel {
                 nasClient(requestState).heartbeat()
                 checkIdentityAndRefreshKeys(requestState.nasUrl, requestState.sessionToken)
                 refreshNasDashboard(requestState.sessionToken)
+            } catch (e: NasAccountLockedException) {
+                showAccountLockedOnMain(requestState.nasUrl, requestState.email, e.message ?: "账号已被封禁，请联系管理员。")
+            } catch (e: NasSessionExpiredException) {
+                expireSessionOnMain(requestState.nasUrl, requestState.email, e.message ?: "会话已失效，请重新登录。")
             } catch (e: Exception) {
-                NeoLinkLocalStore.clearSession()
-                updateAuthStateOnMain {
-                    it.copy(isAuthenticated = false, sessionToken = "", message = "会话已失效，请重新登录。")
-                }
+                expireSessionOnMain(requestState.nasUrl, requestState.email, "会话已失效，请重新登录。")
             } finally {
                 updateAuthStateOnMain { it.copy(isRestoringSession = false) }
             }
@@ -634,6 +641,10 @@ class NeoLinkViewModel {
                     reconcileTunnelsWithKeys()
                     appendSystemLog("密钥列表已刷新，共 ${loaded.size} 个。")
                 }
+            } catch (e: NasAccountLockedException) {
+                showAccountLockedOnMain(requestState.nasUrl, requestState.email, e.message ?: "账号已被封禁，请联系管理员。")
+            } catch (e: NasSessionExpiredException) {
+                expireSessionOnMain(requestState.nasUrl, requestState.email, e.message ?: "会话已失效，请重新登录。")
             } catch (e: Exception) {
                 appendSystemLog("密钥列表刷新失败：${e.message ?: e.javaClass.simpleName}")
             }
@@ -646,8 +657,8 @@ class NeoLinkViewModel {
         scope.launch(Dispatchers.IO) {
             try {
                 val client = nasClient(requestState)
-                val pricing = runCatching { client.config() }.getOrDefault(nasState.pricing)
-                val announcements = runCatching { client.myAnnouncements() }
+                val pricing = runCatchingPreservingSessionBoundary { client.config() }.getOrDefault(nasState.pricing)
+                val announcements = runCatchingPreservingSessionBoundary { client.myAnnouncements() }
                     .getOrDefault(emptyList())
                     .filterNot { it.id in acknowledgedAnnouncementIds }
                 updateNasStateOnMain {
@@ -659,6 +670,10 @@ class NeoLinkViewModel {
                         message = ""
                     )
                 }
+            } catch (e: NasAccountLockedException) {
+                showAccountLockedOnMain(requestState.nasUrl, requestState.email, e.message ?: "账号已被封禁，请联系管理员。")
+            } catch (e: NasSessionExpiredException) {
+                expireSessionOnMain(requestState.nasUrl, requestState.email, e.message ?: "会话已失效，请重新登录。")
             } catch (e: Exception) {
                 updateNasStateOnMain { it.copy(message = e.message ?: e.javaClass.simpleName) }
             }
@@ -1253,6 +1268,10 @@ class NeoLinkViewModel {
                 action(requestState)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: NasAccountLockedException) {
+                showAccountLockedOnMain(requestState.nasUrl, requestState.email, e.message ?: "账号已被封禁，请联系管理员。")
+            } catch (e: NasSessionExpiredException) {
+                expireSessionOnMain(requestState.nasUrl, requestState.email, e.message ?: "会话已失效，请重新登录。")
             } catch (e: Exception) {
                 updateAuthStateOnMain { it.copy(message = e.message ?: e.javaClass.simpleName) }
             } finally {
@@ -1261,10 +1280,22 @@ class NeoLinkViewModel {
         }
     }
 
+    private inline fun <T> runCatchingPreservingSessionBoundary(block: () -> T): Result<T> {
+        return try {
+            Result.success(block())
+        } catch (e: NasAccountLockedException) {
+            throw e
+        } catch (e: NasSessionExpiredException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     private suspend fun checkIdentityAndRefreshKeys(nasUrl: String, sessionToken: String) {
         val client = NasClient(nasUrl, sessionToken)
         val status = runCatching { client.identityStatus() }
-            .getOrElse { error -> if ((error.message ?: "").contains("锁定")) "LOCKED" else throw error }
+            .getOrElse { error -> if (isAccountLockedError(error)) "LOCKED" else throw error }
         val identityStatus = when (status) {
             "VERIFIED" -> IdentityStatus.VERIFIED
             "LOCKED" -> IdentityStatus.LOCKED
@@ -1279,6 +1310,7 @@ class NeoLinkViewModel {
                     sessionToken = sessionToken,
                     isAuthenticated = true,
                     isVerified = true,
+                    isAccountLocked = false,
                     mode = AuthMode.LOGIN,
                     message = "已登录。"
                 )
@@ -1293,8 +1325,9 @@ class NeoLinkViewModel {
                     sessionToken = sessionToken,
                     isAuthenticated = true,
                     isVerified = false,
+                    isAccountLocked = identityStatus == IdentityStatus.LOCKED,
                     mode = AuthMode.LOGIN,
-                    message = if (identityStatus == IdentityStatus.LOCKED) "账号已锁定，请联系管理员。" else "请完成实名认证。"
+                    message = if (identityStatus == IdentityStatus.LOCKED) "账号已被封禁，请联系管理员。" else "请完成实名认证。"
                 )
             }
         }
@@ -1305,8 +1338,41 @@ class NeoLinkViewModel {
         NeoLinkLocalStore.saveNasUrlToConfig(normalizedNasUrl)
         NeoLinkLocalStore.saveSession(SessionStoreDocument(normalizedNasUrl, email, sessionToken))
         updateAuthStateOnMain {
-            it.copy(nasUrl = normalizedNasUrl, email = email, sessionToken = sessionToken, isAuthenticated = sessionToken.isNotBlank())
+            it.copy(nasUrl = normalizedNasUrl, email = email, sessionToken = sessionToken, isAuthenticated = sessionToken.isNotBlank(), isAccountLocked = false)
         }
+    }
+
+    private suspend fun expireSessionOnMain(nasUrl: String, email: String, message: String) {
+        withContext(Dispatchers.Main) {
+            clearAuthenticatedSession(nasUrl, email, message, accountLocked = false)
+            appendSystemLog(message)
+        }
+    }
+
+    private suspend fun showAccountLockedOnMain(nasUrl: String, email: String, message: String) {
+        withContext(Dispatchers.Main) {
+            clearAuthenticatedSession(nasUrl, email, message, accountLocked = true)
+            appendSystemLog(message)
+        }
+    }
+
+    private fun clearAuthenticatedSession(nasUrl: String, email: String, message: String, accountLocked: Boolean) {
+        tunnels.toList().forEach { stopTunnel(it.id) }
+        NeoLinkLocalStore.clearSession()
+        acknowledgedAnnouncementIds.clear()
+        keys.clear()
+        nasState = NasDashboardState(identityStatus = if (accountLocked) IdentityStatus.LOCKED else IdentityStatus.UNKNOWN)
+        authState = AuthUiState(
+            nasUrl = nasUrl.ifBlank { authState.nasUrl.ifBlank { DEFAULT_NAS_URL } },
+            email = email,
+            isAccountLocked = accountLocked,
+            message = message
+        )
+    }
+
+    private fun isAccountLockedError(error: Throwable): Boolean {
+        return error is NasAccountLockedException ||
+            (error.message ?: "").let { it.contains("封禁") || it.contains("锁定") }
     }
 
     private suspend fun updateAuthStateOnMain(update: (AuthUiState) -> AuthUiState) {
