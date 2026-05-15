@@ -145,20 +145,22 @@ class TunnelViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun observeSettings() {
         viewModelScope.launch {
-            combine(
-                remoteDomain,
-                hookPort,
-                connectPort,
-                accessKey,
-                localPort,
-                tcpEnabled,
-                udpEnabled,
-                ppv2Enabled,
-                autoReconnect,
-                heartbeatDelay,
-                nodeListUrl,
-                selectedNodeId
-            ) { values -> values }.collect { values ->
+            val persistedSettings: Array<Flow<Any?>> = arrayOf(
+                remoteDomain.map { it },
+                hookPort.map { it },
+                connectPort.map { it },
+                accessKey.map { it },
+                localPort.map { it },
+                tcpEnabled.map { it },
+                udpEnabled.map { it },
+                ppv2Enabled.map { it },
+                autoReconnect.map { it },
+                heartbeatDelay.map { it },
+                nodeListUrl.map { it },
+                selectedNodeId.map { it }
+            )
+
+            combine(*persistedSettings) { values -> values }.collect { values ->
                 prefs.edit()
                     .putString(KEY_REMOTE_DOMAIN, values[0] as String)
                     .putString(KEY_HOOK_PORT, values[1] as String)

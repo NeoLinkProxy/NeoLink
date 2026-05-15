@@ -8,8 +8,10 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import neoproxy.neolink.config.ConfigOperator
+import neoproxy.neolink.node.NodeWorkflow
 import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.LogSink
+import neoproxy.neolink.util.MessageSink
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -37,12 +39,13 @@ class NeoLinkViewModelTest {
     @AfterEach
     fun tearDown() {
         RuntimeState.setLogSink(originalLogSink)
+        NodeWorkflow.setMessageSink { _, _ -> }
         Dispatchers.resetMain()
     }
 
     @Test
-    @DisplayName("appendSystemLog keeps GUI and LogSink content identical")
-    fun appendSystemLogKeepsGuiAndLogSinkContentIdentical() = runTest(mainDispatcher) {
+    @DisplayName("appendSystemLog keeps 7.1.6 write-style GUI content")
+    fun appendSystemLogKeepsLegacyWriteStyleGuiContent() = runTest(mainDispatcher) {
         val capturedMessages = mutableListOf<String>()
         val viewModel = NeoLinkViewModel()
 
@@ -59,12 +62,81 @@ class NeoLinkViewModelTest {
         val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
         assertEquals(2, guiMessages.size)
         assertEquals("前置日志", guiMessages[0])
-        assertEquals("[GUI] \n[System] 服务已停止。\n\n", guiMessages[1])
+        assertEquals("\n[System] 服务已停止。\n", guiMessages[1])
 
         assertTrue(
             capturedMessages.contains("\n[System] 服务已停止。\n"),
-            "LogSink 必须接收到和 GUI 中同源的 [System] 消息文本"
+            "GUI write-style 系统日志仍要转发到上游日志文件"
         )
+    }
+
+    @Test
+    @DisplayName("LogSink keeps 7.1 GUI log structure")
+    fun logSinkKeepsLegacyGuiLogStructure() = runTest(mainDispatcher) {
+        val viewModel = NeoLinkViewModel()
+
+        ConfigOperator.WORKING_DIR = tempDir.toString()
+        RuntimeState.setLogSink(null)
+        invokePrivate(viewModel, "setupLogRedirector")
+
+        RuntimeState.logSink()!!.log(LogSink.Level.INFO, "HOST-CLIENT", "API版本 ： 7.2.0")
+        RuntimeState.logSink()!!.log(LogSink.Level.WARNING, "", "有效期至： 2027/01/01-12:00")
+        advanceUntilIdle()
+
+        val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
+        assertTrue(
+            Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[INFO] \\[HOST-CLIENT] API版本 ： 7.2.0$")
+                .matches(guiMessages[0]),
+            "普通 GUI 日志必须保持 7.1.x 的时间、级别、Subject 输出结构"
+        )
+        assertTrue(
+            Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[WARNING] \\[HOST-CLIENT] 有效期至： 2027/01/01-12:00$")
+                .matches(guiMessages[1]),
+            "空 tag 必须回退为 HOST-CLIENT，且保留 WARNING 级别"
+        )
+    }
+
+    @Test
+    @DisplayName("NodeWorkflow messages are rendered as HOST-CLIENT GUI logs")
+    fun nodeWorkflowMessagesAreRenderedAsHostClientGuiLogs() = runTest(mainDispatcher) {
+        val viewModel = NeoLinkViewModel()
+
+        ConfigOperator.WORKING_DIR = tempDir.toString()
+        RuntimeState.setLogSink(null)
+        invokePrivate(viewModel, "setupLogRedirector")
+        invokePrivate(viewModel, "setupNodeWorkflowMessageSink")
+
+        val nodeWorkflowSink = nodeWorkflowMessageSink()
+        nodeWorkflowSink.say(
+            "正在向 NKM 获取最新可用节点列表: https://p.ceroxe.top:49999/client/nodelist",
+            LogSink.Level.INFO
+        )
+        nodeWorkflowSink.say("节点列表已成功更新。", LogSink.Level.INFO)
+        nodeWorkflowSink.say("获取节点列表失败或超时 (已跳过): ", LogSink.Level.WARNING)
+        advanceUntilIdle()
+
+        val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
+        assertTrue(
+            Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[INFO] \\[HOST-CLIENT] 正在向 NKM 获取最新可用节点列表: https://p\\.ceroxe\\.top:49999/client/nodelist$")
+                .matches(guiMessages[0]),
+            "NKM 拉取日志必须进入 GUI，并保持 7.1.6 的 HOST-CLIENT 运行日志结构"
+        )
+        assertTrue(
+            Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[INFO] \\[HOST-CLIENT] 节点列表已成功更新。$")
+                .matches(guiMessages[1]),
+            "NKM 成功日志必须进入 GUI，并保持 7.1.6 的 HOST-CLIENT 运行日志结构"
+        )
+        assertTrue(
+            Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[WARNING] \\[HOST-CLIENT] 获取节点列表失败或超时 \\(已跳过\\): $")
+                .matches(guiMessages[2]),
+            "NKM 失败日志必须进入 GUI，并保持 7.1.6 的 WARNING HOST-CLIENT 运行日志结构"
+        )
+    }
+
+    private fun nodeWorkflowMessageSink(): MessageSink {
+        val field = NodeWorkflow::class.java.getDeclaredField("messageSink")
+        field.isAccessible = true
+        return field.get(null) as MessageSink
     }
 
     private fun invokePrivate(target: Any, methodName: String, vararg args: Any) {

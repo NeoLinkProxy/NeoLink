@@ -30,8 +30,11 @@ import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.LogSink
 import top.ceroxe.api.neolink.NeoLinkCfg
 import top.ceroxe.api.neolink.NeoNode
+import top.ceroxe.api.print.Printer
 import java.io.File
 import java.io.IOException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * NeoLink 桌面 UI 的 View-model 边界。
@@ -44,6 +47,9 @@ import java.io.IOException
 class NeoLinkViewModel {
     private companion object {
         const val GUI_SYSTEM_PREFIX = "[System]"
+        const val DEFAULT_GUI_LOG_TAG = "HOST-CLIENT"
+        const val MAX_GUI_LOG_MESSAGES = 1000
+        val LEGACY_LOG_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss")
     }
 
     var connectionState by mutableStateOf(connectionUiStateFromCore())
@@ -160,6 +166,7 @@ class NeoLinkViewModel {
 
     private var isInitialized = false
     private var isLogRedirected = false
+    private var upstreamLogSink: LogSink? = null
 
     fun initialize(args: Array<String>) {
         if (isInitialized) return
@@ -185,6 +192,7 @@ class NeoLinkViewModel {
         syncStateFromCore()
         ClientConsole.initializeLogger(false)
         setupLogRedirector()
+        setupNodeWorkflowMessageSink()
 
         if (initializationError != null) {
             appendSystemLog("配置或参数无效，已回退到安全默认值：$initializationError", surroundWithBlankLines = true)
@@ -483,9 +491,17 @@ class NeoLinkViewModel {
         isLogRedirected = true
 
         val originalLogSink = RuntimeState.logSink()
+        upstreamLogSink = originalLogSink
         RuntimeState.setLogSink { level, tag, message ->
-            addLogSafe("[$tag] $message\n")
+            addLogSafe(formatLegacyGuiLogLine(level, tag, message))
             originalLogSink?.log(level, tag, message)
+        }
+    }
+
+    private fun setupNodeWorkflowMessageSink() {
+        NodeWorkflow.setMessageSink { message, level ->
+            RuntimeState.logSink()?.log(level, DEFAULT_GUI_LOG_TAG, message)
+                ?: addLogSafe(formatLegacyGuiLogLine(level, DEFAULT_GUI_LOG_TAG, message))
         }
     }
 
@@ -493,11 +509,42 @@ class NeoLinkViewModel {
         scope.launch(Dispatchers.Main) {
             val updatedMessages = runtimeState.logMessages.toMutableList()
             updatedMessages.add(parseAnsi(ansiMsg))
-            if (updatedMessages.size > 1000) {
+            if (updatedMessages.size > MAX_GUI_LOG_MESSAGES) {
                 updatedMessages.removeAt(0)
             }
             runtimeState = runtimeState.copy(logMessages = updatedMessages)
         }
+    }
+
+    private fun formatLegacyGuiLogLine(level: LogSink.Level, tag: String?, message: String?): String {
+        val resolvedTag = tag?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_GUI_LOG_TAG
+        val resolvedMessage = message.orEmpty()
+        val time = LocalDateTime.now().format(LEGACY_LOG_TIME_FORMATTER)
+        val (levelText, levelColor) = when (level) {
+            LogSink.Level.ERROR -> "ERROR" to Printer.color.RED
+            LogSink.Level.WARNING -> "WARNING" to Printer.color.YELLOW
+            LogSink.Level.INFO -> "INFO" to Printer.color.GREEN
+        }
+
+        return buildString(resolvedTag.length + resolvedMessage.length + time.length + 64) {
+            append(formatLegacyAnsi("[", Printer.color.PURPLE))
+            append(formatLegacyAnsi(time, Printer.color.YELLOW))
+            append(formatLegacyAnsi("]", Printer.color.PURPLE))
+            append("  ")
+            append(formatLegacyAnsi("[", Printer.color.PURPLE))
+            append(formatLegacyAnsi(levelText, levelColor))
+            append(formatLegacyAnsi("]", Printer.color.PURPLE))
+            append(' ')
+            append(formatLegacyAnsi("[", Printer.color.PURPLE))
+            append(formatLegacyAnsi(resolvedTag, Printer.color.ORANGE))
+            append(formatLegacyAnsi("]", Printer.color.PURPLE))
+            append(' ')
+            append(resolvedMessage)
+        }
+    }
+
+    private fun formatLegacyAnsi(value: String, colorCode: Int): String {
+        return Printer.getFormatLogString(value, colorCode, Printer.style.NONE)
     }
 
     private fun parseAnsi(text: String): AnnotatedString {
@@ -513,6 +560,7 @@ class NeoLinkViewModel {
                 }
                 val code = result.groupValues[1]
                 currentStyle = when (code) {
+                    "0" -> SpanStyle(color = Color(0xFFCCCCCC))
                     "31" -> SpanStyle(color = Color(0xFFFF5555))
                     "32" -> SpanStyle(color = Color(0xFF50FA7B))
                     "33" -> SpanStyle(color = Color(0xFFF1FA8C))
@@ -545,7 +593,8 @@ class NeoLinkViewModel {
                 append('\n')
             }
         }
-        RuntimeState.logSink()?.log(LogSink.Level.INFO, "GUI", normalizedMessage) ?: addLogSafe(normalizedMessage)
+        addLogSafe(normalizedMessage)
+        upstreamLogSink?.log(LogSink.Level.INFO, "GUI", normalizedMessage)
     }
 
     private fun buildProtocolUpdateMessage(tcpEnabled: Boolean, udpEnabled: Boolean): String {

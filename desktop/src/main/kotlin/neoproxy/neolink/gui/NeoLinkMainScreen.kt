@@ -368,7 +368,7 @@ fun WindowScope.customTitleBar(windowState: WindowState, appIcon: Painter, onExi
                 Image(
                     painter = appIcon,
                     contentDescription = "Logo",
-                    modifier = Modifier.size(23.dp).offset(y = (3).dp),
+                    modifier = Modifier.size(23.dp),
                     contentScale = ContentScale.Fit,
                 )
                 Spacer(modifier = Modifier.width(10.dp))
@@ -475,7 +475,7 @@ fun connectionSection(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onMode
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
+                modifier = Modifier.size(3.dp, 14.dp)
                     .background(ModernTheme.primary, RoundedCornerShape(2.dp))
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -571,7 +571,7 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
             ) {
                 viewModel.selectedNode?.let { node ->
                     Box(
-                        modifier = Modifier.size(18.dp).offset(y = 1.dp),
+                        modifier = Modifier.size(18.dp),
                         contentAlignment = Alignment.Center
                     ) { svgIcon(node.iconSvg, size = 16.dp) }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -579,7 +579,7 @@ fun nodeSelector(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onModeChang
                         node.name,
                         color = ModernTheme.textPrimary,
                         fontSize = 13.sp,
-                        modifier = Modifier.weight(1f).offset(y = (-2).dp)
+                        modifier = Modifier.weight(1f)
                     )
                 } ?: Text(
                     "选择节点",
@@ -692,14 +692,14 @@ fun advancedSettingsSection(viewModel: NeoLinkViewModel) {
                 color = ModernTheme.textPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.offset(x = (-3).dp, y = (-2).dp)
+                modifier = Modifier
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 if (isExpanded) "收起" else "展开",
                 color = ModernTheme.textSecondary,
                 fontSize = 12.sp,
-                modifier = Modifier.offset(x = (-1).dp, y = (-2).dp)
+                modifier = Modifier
             )
         }
         AnimatedVisibility(
@@ -777,7 +777,7 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
     Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(3.dp, 14.dp).offset(y = 2.5.dp)
+                modifier = Modifier.size(3.dp, 14.dp)
                     .background(statusColor, RoundedCornerShape(2.dp))
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -955,7 +955,7 @@ fun bottomBar(viewModel: NeoLinkViewModel, isCustomMode: Boolean, onValidationEr
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             Box(
-                modifier = Modifier.size(6.dp).offset(y = 2.5.dp).background(
+                modifier = Modifier.size(6.dp).background(
                     indicatorColor,
                     CircleShape
                 )
@@ -1024,7 +1024,7 @@ fun labelText(text: String) {
         color = ModernTheme.textSecondary,
         fontSize = 12.sp,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.offset(y = (-4).dp)
+        modifier = Modifier
     )
 }
 
@@ -1066,7 +1066,7 @@ fun modernTextField(
                 contentAlignment = Alignment.CenterStart
             ) {
                 Box(
-                    modifier = Modifier.offset(y = (-1).dp),
+                    modifier = Modifier,
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (value.isEmpty()) {
@@ -1075,8 +1075,7 @@ fun modernTextField(
                             style = commonTextStyle.copy(
                                 color = Color.Gray.copy(alpha = 0.5f),
                                 fontSize = 12.sp
-                            ),
-                            modifier = Modifier.offset(y = (-0.5).dp)
+                            )
                         )
                     }
                     innerTextField()
@@ -1108,7 +1107,7 @@ fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) ->
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = (-4).dp))
+        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp)
     }
 }
 

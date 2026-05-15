@@ -5,12 +5,12 @@
 // ============================================================================
 
 plugins {
-    kotlin("jvm") version "1.9.22" apply false
-    id("org.jetbrains.compose") version "1.6.1" apply false
-    id("com.github.johnrengelman.shadow") version "8.1.1" apply false
+    kotlin("jvm") version "2.3.21" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.21" apply false
+    id("org.jetbrains.compose") version "1.11.0" apply false
+    id("com.gradleup.shadow") version "9.4.1" apply false
     // Android 生态插件（供 :android 子模块使用）
-    id("com.android.application") version "8.7.3" apply false
-    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+    id("com.android.application") version "9.2.1" apply false
 }
 
 group = "neoproxy"
@@ -35,5 +35,14 @@ subprojects {
             }
         }
     }
+}
+
+// IDEA sometimes asks the root project for :testClasses even though this is a
+// pure aggregator project. Keep that entry point stable and delegate to the real
+// module-specific test compilation tasks.
+tasks.register("testClasses") {
+    group = "verification"
+    description = "Assembles test classes for all modules that expose test compilation tasks."
+    dependsOn(":common:testClasses", ":desktop:testClasses", ":android:compileDebugUnitTestSources")
 }
 

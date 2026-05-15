@@ -14,7 +14,8 @@ import org.gradle.api.attributes.java.TargetJvmVersion
 plugins {
     kotlin("jvm")
     id("org.jetbrains.compose")
-    id("com.github.johnrengelman.shadow")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("com.gradleup.shadow")
     jacoco
 }
 
@@ -34,7 +35,9 @@ tasks.withType<JavaCompile> {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "21"
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }
 
 // ============================================================================
@@ -81,39 +84,43 @@ dependencies {
     implementation("top.ceroxe.api:ceroxe-detector:2.0.0")
 
     // Compose Desktop GUI
-    implementation(compose.desktop.common)
-    implementation(compose.material)
-    implementation(compose.ui)
-    implementation(compose.foundation)
-    implementation(compose.runtime)
+    implementation("org.jetbrains.compose.desktop:desktop:1.11.0")
+    implementation("org.jetbrains.compose.material:material:1.11.0")
+    // Compose 1.11 no longer publishes a fresh Material Icons Extended artifact.
+    // Keep the last supported icon artifact explicit instead of relying on the deprecated alias.
+    implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
+    implementation("org.jetbrains.compose.ui:ui:1.11.0")
+    implementation("org.jetbrains.compose.foundation:foundation:1.11.0")
+    implementation("org.jetbrains.compose.runtime:runtime:1.11.0")
 
     // Shadow JAR 的平台原生库边界在独立 classpath 中声明：
     // universal 明确包含四套 Compose Desktop runtime；平台包只解析自己的 runtime。
-    add(universalShadowRuntimeClasspath.name, compose.desktop.windows_x64)
-    add(universalShadowRuntimeClasspath.name, compose.desktop.macos_x64)
-    add(universalShadowRuntimeClasspath.name, compose.desktop.macos_arm64)
-    add(universalShadowRuntimeClasspath.name, compose.desktop.linux_x64)
-    add(windowsShadowRuntimeClasspath.name, compose.desktop.windows_x64)
-    add(macosShadowRuntimeClasspath.name, compose.desktop.macos_x64)
-    add(macosShadowRuntimeClasspath.name, compose.desktop.macos_arm64)
-    add(linuxShadowRuntimeClasspath.name, compose.desktop.linux_x64)
+    add(universalShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-windows-x64:1.11.0")
+    add(universalShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-macos-x64:1.11.0")
+    add(universalShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-macos-arm64:1.11.0")
+    add(universalShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-linux-x64:1.11.0")
+    add(windowsShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-windows-x64:1.11.0")
+    add(macosShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-macos-x64:1.11.0")
+    add(macosShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-macos-arm64:1.11.0")
+    add(linuxShadowRuntimeClasspath.name, "org.jetbrains.compose.desktop:desktop-jvm-linux-x64:1.11.0")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
 
     // JNA — Windows DWM 特效等原生调用
-    implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    implementation("net.java.dev.jna:jna:5.18.1")
+    implementation("net.java.dev.jna:jna-platform:5.18.1")
 
     // Jackson 运行时：common 模块 api() 暴露了 jackson-databind，
     // 但 shadow JAR 需要确保类路径完整
-    runtimeOnly("com.fasterxml.jackson.core:jackson-databind:2.21.2")
+    runtimeOnly("com.fasterxml.jackson.core:jackson-databind:2.21.3")
 
     // 测试
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-core:5.11.0")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
+    testImplementation("org.mockito:mockito-core:5.23.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
 }
 
 // ============================================================================
@@ -158,6 +165,54 @@ fun ShadowJar.configureCommonShadow() {
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
+fun ShadowJar.excludeNonWindowsJnaNative() {
+    exclude(
+        "com/sun/jna/aix-*/**",
+        "com/sun/jna/darwin-*/**",
+        "com/sun/jna/dragonflybsd-*/**",
+        "com/sun/jna/freebsd-*/**",
+        "com/sun/jna/linux-*/**",
+        "com/sun/jna/openbsd-*/**",
+        "com/sun/jna/sunos-*/**",
+        "com/sun/jna/win32-aarch64/**",
+        "com/sun/jna/win32-x86/**"
+    )
+}
+
+fun ShadowJar.excludeNonMacosJnaNative() {
+    exclude(
+        "com/sun/jna/aix-*/**",
+        "com/sun/jna/dragonflybsd-*/**",
+        "com/sun/jna/freebsd-*/**",
+        "com/sun/jna/linux-*/**",
+        "com/sun/jna/openbsd-*/**",
+        "com/sun/jna/sunos-*/**",
+        "com/sun/jna/win32-*/**"
+    )
+}
+
+fun ShadowJar.excludeNonLinuxJnaNative() {
+    exclude(
+        "com/sun/jna/aix-*/**",
+        "com/sun/jna/darwin-*/**",
+        "com/sun/jna/dragonflybsd-*/**",
+        "com/sun/jna/freebsd-*/**",
+        "com/sun/jna/linux-aarch64/**",
+        "com/sun/jna/linux-arm/**",
+        "com/sun/jna/linux-armel/**",
+        "com/sun/jna/linux-loongarch64/**",
+        "com/sun/jna/linux-mips64el/**",
+        "com/sun/jna/linux-ppc/**",
+        "com/sun/jna/linux-ppc64le/**",
+        "com/sun/jna/linux-riscv64/**",
+        "com/sun/jna/linux-s390x/**",
+        "com/sun/jna/linux-x86/**",
+        "com/sun/jna/openbsd-*/**",
+        "com/sun/jna/sunos-*/**",
+        "com/sun/jna/win32-*/**"
+    )
+}
+
 tasks.named<ShadowJar>("shadowJar") {
     configureCommonShadow()
     archiveBaseName.set("NeoLink")
@@ -176,6 +231,7 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     archiveClassifier.set("windows")
     from(sourceSets.main.get().output)
     configurations = listOf(windowsShadowRuntimeClasspath)
+    excludeNonWindowsJnaNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -186,6 +242,7 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     archiveClassifier.set("macos")
     from(sourceSets.main.get().output)
     configurations = listOf(macosShadowRuntimeClasspath)
+    excludeNonMacosJnaNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -196,6 +253,7 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     archiveClassifier.set("linux")
     from(sourceSets.main.get().output)
     configurations = listOf(linuxShadowRuntimeClasspath)
+    excludeNonLinuxJnaNative()
     dependsOn(verifyNeoLinkApiVersionBinding)
 }
 
@@ -219,7 +277,7 @@ tasks.test {
 // 最低行覆盖率 50%，GUI 包不参与统计（UI 层难以纯单元测试覆盖）
 // ============================================================================
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.14"
 }
 
 tasks.jacocoTestReport {
