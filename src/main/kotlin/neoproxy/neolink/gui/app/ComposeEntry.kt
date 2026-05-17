@@ -18,6 +18,7 @@ import neoproxy.neolink.gui.platform.RenderState
 import neoproxy.neolink.gui.platform.WindowsEffects
 import neoproxy.neolink.gui.state.NeoLinkViewModel
 import neoproxy.neolink.gui.ui.screens.neoLinkMainScreen
+import neoproxy.neolink.platform.DesktopDirectoryProvider
 import neoproxy.neolink.state.RuntimeState
 import neoproxy.neolink.util.Debugger.debugOperation
 import neoproxy.neolink.util.LogSink
@@ -40,6 +41,7 @@ import kotlin.system.exitProcess
  * 初始化过程也做了包装，避免无效配置或参数把整个窗口生命周期直接打崩。</p>
  */
 fun main(args: Array<String>) {
+    ConfigOperator.setWorkingDirectoryProvider(DesktopDirectoryProvider())
     ConfigOperator.initEnvironment()
     if (RuntimeState.logSink() == null && !ClientConsole.initializeLoggerOrExit(args.contains("--no-color"), UI_LOG_SUBJECT)) {
         return

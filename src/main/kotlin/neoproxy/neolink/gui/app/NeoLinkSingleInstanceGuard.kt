@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -27,7 +28,9 @@ class NeoLinkSingleInstanceGuard private constructor(
         }
 
         internal fun acquire(lockFile: File): NeoLinkSingleInstanceGuard? {
-            lockFile.parentFile?.mkdirs()
+            lockFile.parentFile?.toPath()?.let { parent ->
+                Files.createDirectories(parent)
+            }
             val channel = FileChannel.open(
                 lockFile.toPath(),
                 StandardOpenOption.CREATE,

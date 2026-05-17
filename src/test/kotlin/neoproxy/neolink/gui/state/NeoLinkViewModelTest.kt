@@ -33,6 +33,7 @@ import top.ceroxe.api.print.log.LogType
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.time.Duration
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.charset.StandardCharsets
@@ -466,6 +467,18 @@ class NeoLinkViewModelTest {
         val third = NeoLinkSingleInstanceGuard.acquire(lockFile)
         assertNotNull(third)
         third?.close()
+    }
+
+    @Test
+    @DisplayName("single instance guard fails fast when lock parent is a file")
+    fun singleInstanceGuardFailsFastWhenLockParentIsAFile() {
+        val occupiedParent = tempDir.resolve("occupied")
+        Files.writeString(occupiedParent, "not-a-directory")
+        val lockFile = occupiedParent.resolve("neolink-desktop.lock").toFile()
+
+        org.junit.jupiter.api.assertThrows<FileSystemException> {
+            NeoLinkSingleInstanceGuard.acquire(lockFile)
+        }
     }
 
     @Test

@@ -53,10 +53,7 @@ public final class ConfigOperator {
             Path resolved = workingDirectoryProvider.resolveWorkingDirectory();
             WORKING_DIR = resolved.toAbsolutePath().toString();
             BASE_PACKAGE_DIR = WORKING_DIR;
-            File dir = resolved.toFile();
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
+            ensureDirectory(resolved);
             ensureConfigTemplateExists();
             debugOperation("WorkingDirectoryProvider resolved: " + WORKING_DIR);
             return;
@@ -77,9 +74,7 @@ public final class ConfigOperator {
 
         File workingDirectory = new File(getPlatformSpecificDataPath());
         WORKING_DIR = workingDirectory.getAbsolutePath();
-        if (!workingDirectory.exists()) {
-            workingDirectory.mkdirs();
-        }
+        ensureDirectory(workingDirectory.toPath());
         forceSyncBaseline("config.cfg");
         forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
         ensureConfigTemplateExists();
@@ -111,6 +106,14 @@ public final class ConfigOperator {
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    private static void ensureDirectory(Path directory) {
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create NeoLink runtime directory: " + directory, e);
         }
     }
 
@@ -264,18 +267,6 @@ public final class ConfigOperator {
     }
 
     private static String getPlatformSpecificDataPath() {
-        String os = System.getProperty("os.name").toLowerCase();
-        String home = System.getProperty("user.home");
-        if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            if (localAppData != null && !localAppData.isBlank()) {
-                return localAppData + File.separator + "NeoLink";
-            }
-            return home + File.separator + "AppData" + File.separator + "Local" + File.separator + "NeoLink";
-        }
-        if (os.contains("mac")) {
-            return home + "/Library/Application Support/NeoLink";
-        }
-        return home + File.separator + ".neolink";
+        return WorkingDirectoryProvider.resolveDefaultDesktopWorkingDirectory().toString();
     }
 }

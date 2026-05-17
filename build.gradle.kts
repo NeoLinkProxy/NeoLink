@@ -231,6 +231,7 @@ tasks.register("shadowJarAll") {
 // 测试配置
 // ============================================================================
 tasks.test {
+    mustRunAfter(":common:test")
     useJUnitPlatform()
     jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
     finalizedBy(tasks.jacocoTestReport)
