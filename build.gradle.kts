@@ -15,13 +15,15 @@ plugins {
 }
 
 val neoLinkApiVersion = "7.2.0"
+val neoLinkUiVersion = "7.2.1"
 val skikoVersion = "0.144.6"
 
 group = "neoproxy"
-version = neoLinkApiVersion
+version = neoLinkUiVersion
 
-// :common 仍通过 rootProject.extra 读取协议版本；这里继续暴露同一真源，避免版本漂移。
+// :common 仍通过 rootProject.extra 读取协议版本；UI 发布版本独立于协议层依赖版本。
 extra["neoLinkApiVersion"] = neoLinkApiVersion
+extra["neoLinkUiVersion"] = neoLinkUiVersion
 
 // ============================================================================
 // 仓库源：根桌面应用与 :common 都需要解析同一组依赖。
@@ -130,19 +132,23 @@ tasks.processResources {
 }
 
 // ============================================================================
-// 版本绑定校验：确保项目 version 与 neolinkapi 依赖版本严格一致。
-// 防止桌面客户端发布包与协议层版本因人为修改而漂移。
+// 版本边界校验：UI 发布版本与 neolinkapi 依赖版本各自独立。
+// 防止桌面客户端显示/产物版本被协议层依赖版本隐式牵引。
 // ============================================================================
-val verifyNeoLinkApiVersionBinding by tasks.registering {
+val verifyNeoLinkVersionDeclarations by tasks.registering {
     group = "verification"
-    description = "Ensures project version matches neolinkapi dependency version."
-    val projectVersion = project.version.toString()
-    val expectedNeoLinkApiVersion = neoLinkApiVersion
+    description = "Ensures UI and API versions are explicitly declared and intentionally decoupled."
     doLast {
-        require(projectVersion == expectedNeoLinkApiVersion) {
-            "Version mismatch! project.version=$projectVersion but neoLinkApiVersion=$expectedNeoLinkApiVersion"
+        require(neoLinkUiVersion.isNotBlank()) {
+            "neoLinkUiVersion must be declared."
         }
-        logger.lifecycle("[VersionBinding] OK: project=$projectVersion == neolinkapi=$expectedNeoLinkApiVersion")
+        require(neoLinkApiVersion.isNotBlank()) {
+            "neoLinkApiVersion must be declared."
+        }
+        require(project.version.toString() == neoLinkUiVersion) {
+            "Desktop artifact version must use neoLinkUiVersion. project.version=${project.version}, neoLinkUiVersion=$neoLinkUiVersion"
+        }
+        logger.lifecycle("[VersionBinding] OK: ui=$neoLinkUiVersion, neolinkapi=$neoLinkApiVersion")
     }
 }
 
@@ -185,7 +191,7 @@ tasks.named<ShadowJar>("shadowJar") {
         shadowJarMacosRuntime,
         shadowJarLinuxRuntime
     )
-    dependsOn(verifyNeoLinkApiVersionBinding)
+    dependsOn(verifyNeoLinkVersionDeclarations)
 }
 
 tasks.register<ShadowJar>("shadowJarWindows") {
@@ -196,7 +202,7 @@ tasks.register<ShadowJar>("shadowJarWindows") {
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarWindowsRuntime)
     excludeMacosSkikoNative()
     excludeLinuxSkikoNative()
-    dependsOn(verifyNeoLinkApiVersionBinding)
+    dependsOn(verifyNeoLinkVersionDeclarations)
 }
 
 tasks.register<ShadowJar>("shadowJarMacos") {
@@ -207,7 +213,7 @@ tasks.register<ShadowJar>("shadowJarMacos") {
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarMacosRuntime)
     excludeWindowsSkikoNative()
     excludeLinuxSkikoNative()
-    dependsOn(verifyNeoLinkApiVersionBinding)
+    dependsOn(verifyNeoLinkVersionDeclarations)
 }
 
 tasks.register<ShadowJar>("shadowJarLinux") {
@@ -218,7 +224,7 @@ tasks.register<ShadowJar>("shadowJarLinux") {
     configurations = listOf(project.configurations.runtimeClasspath.get(), shadowJarLinuxRuntime)
     excludeWindowsSkikoNative()
     excludeMacosSkikoNative()
-    dependsOn(verifyNeoLinkApiVersionBinding)
+    dependsOn(verifyNeoLinkVersionDeclarations)
 }
 
 tasks.register("shadowJarAll") {
@@ -278,6 +284,6 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
-    dependsOn(verifyNeoLinkApiVersionBinding)
+    dependsOn(verifyNeoLinkVersionDeclarations)
 }
 

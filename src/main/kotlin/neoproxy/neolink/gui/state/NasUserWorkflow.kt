@@ -141,7 +141,7 @@ class NasUserWorkflow {
     }
 
     private fun validateSixDigitCode(code: String): String? {
-        return if (code.length != 6 || !code.all(Char::isDigit)) "请输入 6 位验证码。" else null
+        return if (code.length != 6 || !code.all(Char::isDigit)) "请输入验证码。" else null
     }
 
     private fun intersectNasAuthorizedNodesWithNkmAvailability(keysFromNas: List<NasKey>, onlineNodesFromNkm: List<NkmNode>): List<NasKey> {

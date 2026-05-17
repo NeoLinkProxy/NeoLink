@@ -93,6 +93,7 @@ import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import top.ceroxe.api.net.TcpPingUtil
+import neoproxy.neolink.gui.model.IdentityStatus
 import neoproxy.neolink.gui.model.NasKey
 import neoproxy.neolink.gui.model.NasNode
 import neoproxy.neolink.gui.model.TrafficPoint
@@ -129,7 +130,14 @@ fun tunnelManagementPage(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit)
     LaunchedEffect(Unit) { viewModel.refreshKeys() }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val verified = viewModel.authState.isVerified || viewModel.nasState.identityStatus == IdentityStatus.VERIFIED
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (!verified) {
+            item {
+                identityStatusCard(viewModel)
+            }
+            return@LazyColumn
+        }
         item {
             metricsRow(viewModel)
         }
@@ -681,13 +689,13 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
                         backgroundColor = ModernTheme.success,
                         disabledBackgroundColor = ModernTheme.surfaceHover,
                         contentColor = Color.White,
-                        disabledContentColor = Color.White
+                        disabledContentColor = ModernTheme.textSecondary
                     ),
                     elevation = ButtonDefaults.elevation(0.dp, 0.dp)
                 ) {
                     Text(
                         "创建隧道",
-                        color = Color.White,
+                        color = if (canCreate) Color.White else ModernTheme.textSecondary,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                     )

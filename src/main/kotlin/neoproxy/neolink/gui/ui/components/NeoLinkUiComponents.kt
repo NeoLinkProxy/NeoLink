@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -266,7 +267,10 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
             trafficAxisLabel("0 B/s")
         }
         Row(
-            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 46.dp, end = 4.dp),
+            modifier = Modifier.align(Alignment.BottomStart)
+                .offset(y = TrafficChartTimeLabelOffsetY)
+                .fillMaxWidth()
+                .padding(start = 46.dp, end = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             trafficAxisLabel(formatTrafficChartSecond(startSecond))
@@ -277,6 +281,7 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
 
 private val TrafficChartTopPadding = 8.dp
 private val TrafficChartBottomPadding = 16.dp
+private val TrafficChartTimeLabelOffsetY = 1.5.dp
 
 private fun formatTrafficChartSecond(second: Long): String =
     LocalDateTime.ofInstant(Instant.ofEpochSecond(second), ZoneId.systemDefault()).format(TrafficChartTimeFormatter)
@@ -480,43 +485,48 @@ fun compactToggle(text: String, checked: Boolean, onCheckedChange: (Boolean) -> 
 fun primaryButton(
     text: String,
     loading: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isPressed by interactionSource.collectIsPressedAsState()
+    val interactive = enabled && !loading
     val backgroundColor = when {
         loading -> ModernTheme.surfaceHover
+        !enabled -> ModernTheme.surfaceHover
         isPressed -> ModernTheme.success.copy(alpha = 0.82f)
         isHovered -> ModernTheme.success.copy(alpha = 0.92f)
         else -> ModernTheme.success
     }
     val borderColor = when {
         loading -> ModernTheme.border
+        !enabled -> ModernTheme.border
         isPressed -> ModernTheme.success.copy(alpha = 0.76f)
         isHovered -> Color.White.copy(alpha = 0.55f)
         else -> ModernTheme.success.copy(alpha = 0.72f)
     }
+    val contentColor = if (interactive) Color.White else ModernTheme.textSecondary
     Box(
         modifier = Modifier.fillMaxWidth().height(38.dp)
             .background(backgroundColor, ModernTheme.shapeSmall)
             .border(1.dp, borderColor, ModernTheme.shapeSmall)
             .clip(ModernTheme.shapeSmall)
-            .clickable(enabled = !loading, interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(enabled = interactive, interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (loading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material.CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
-                    color = Color.White,
+                    color = contentColor,
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("处理中...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
+                Text("处理中...", color = contentColor, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
             }
         } else {
-            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
+            Text(text, color = contentColor, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
         }
     }
 }

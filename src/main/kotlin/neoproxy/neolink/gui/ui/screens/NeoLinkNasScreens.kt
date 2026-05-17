@@ -71,35 +71,51 @@ import kotlin.math.roundToInt
 @Composable
 fun purchasePage(viewModel: NeoLinkViewModel) {
     LaunchedEffect(Unit) { viewModel.refreshNasDashboard() }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        identityStatusCard(viewModel)
-        sectionCard {
-            sectionTitle("购买服务")
-            Spacer(Modifier.height(12.dp))
-            Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    labelText("流量 (GiB)")
-                    modernTextField(viewModel.nasState.purchaseDraft.trafficGiB, viewModel::updatePurchaseTraffic, placeholder = "10")
-                    labelText("时长 (天)")
-                    modernTextField(viewModel.nasState.purchaseDraft.days, viewModel::updatePurchaseDays, placeholder = "30")
-                    rateLimitSlider(viewModel)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 18.dp)
+    ) {
+        item { identityStatusCard(viewModel) }
+        item { purchaseServiceCard(viewModel) }
+    }
+}
+
+@Composable
+private fun purchaseServiceCard(viewModel: NeoLinkViewModel) {
+    val canCreateOrder = viewModel.authState.isVerified ||
+            viewModel.nasState.identityStatus == IdentityStatus.VERIFIED
+    sectionCard {
+        sectionTitle("购买服务")
+        Spacer(Modifier.height(12.dp))
+        Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                labelText("流量 (GiB)")
+                modernTextField(viewModel.nasState.purchaseDraft.trafficGiB, viewModel::updatePurchaseTraffic, placeholder = "10")
+                labelText("时长 (天)")
+                modernTextField(viewModel.nasState.purchaseDraft.days, viewModel::updatePurchaseDays, placeholder = "30")
+                rateLimitSlider(viewModel)
+            }
+            Column(
+                Modifier.width(300.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("订单总额", color = ModernTheme.textSecondary, fontSize = 12.sp)
+                    Text("¥ ${formatMoney(viewModel.purchaseAmount())}", color = ModernTheme.success, fontSize = 44.sp, fontWeight = FontWeight.Bold)
                 }
-                Column(
-                    Modifier.width(300.dp).fillMaxHeight(),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("订单总额", color = ModernTheme.textSecondary, fontSize = 12.sp)
-                        Text("¥ ${formatMoney(viewModel.purchaseAmount())}", color = ModernTheme.success, fontSize = 44.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        paymentWarningCard(compact = true)
-                        primaryButton("创建订单", viewModel.nasState.paymentDialog.loading, viewModel::createPurchaseOrder)
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    paymentWarningCard(compact = true)
+                    primaryButton(
+                        "创建订单",
+                        viewModel.nasState.paymentDialog.loading,
+                        enabled = canCreateOrder,
+                        onClick = viewModel::createPurchaseOrder
+                    )
                 }
             }
-            nasMessage(viewModel.nasState.message)
         }
+        nasMessage(viewModel.nasState.message)
     }
 }
 
@@ -360,7 +376,7 @@ fun nasGlobalDialogs(viewModel: NeoLinkViewModel) {
 }
 
 @Composable
-private fun identityStatusCard(viewModel: NeoLinkViewModel) {
+fun identityStatusCard(viewModel: NeoLinkViewModel) {
     val status = viewModel.nasState.identityStatus
     val verified = viewModel.authState.isVerified || status == IdentityStatus.VERIFIED
     sectionCard {
@@ -378,7 +394,7 @@ private fun identityStatusCard(viewModel: NeoLinkViewModel) {
                 labelText("身份证号")
                 modernTextField(viewModel.authState.idCard, viewModel::updateIdCard, placeholder = "请输入身份证号")
                 Spacer(Modifier.height(10.dp))
-                primaryButton("提交认证", viewModel.authState.isLoading, viewModel::verifyIdentity)
+                primaryButton("提交认证", viewModel.authState.isLoading, onClick = viewModel::verifyIdentity)
             }
         }
     }

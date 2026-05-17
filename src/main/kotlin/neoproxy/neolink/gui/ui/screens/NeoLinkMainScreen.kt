@@ -144,7 +144,7 @@ fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Text(message, color = ModernTheme.textSecondary, fontSize = 13.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(24.dp))
-            primaryButton("返回修改", false, onDismiss)
+            primaryButton("返回修改", false, onClick = onDismiss)
         }
     }
 }

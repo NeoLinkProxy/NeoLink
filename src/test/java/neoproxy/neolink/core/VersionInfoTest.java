@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("VersionInfoTest")
 class VersionInfoTest {
     private static final Pattern BUILD_SCRIPT_VERSION_PATTERN =
-            Pattern.compile("(?m)^\\s*val\\s+neoLinkApiVersion\\s*=\\s*\"([^\"]+)\"");
+            Pattern.compile("(?m)^\\s*val\\s+neoLinkUiVersion\\s*=\\s*\"([^\"]+)\"");
 
     @TempDir
     File tempDir;
@@ -51,7 +51,7 @@ class VersionInfoTest {
     private String versionFromBuildScript() throws IOException {
         String content = Files.readString(Path.of("build.gradle.kts"), StandardCharsets.UTF_8);
         Matcher matcher = BUILD_SCRIPT_VERSION_PATTERN.matcher(content);
-        assertTrue(matcher.find(), "build.gradle.kts must declare neoLinkApiVersion");
+        assertTrue(matcher.find(), "build.gradle.kts must declare neoLinkUiVersion");
         return matcher.group(1);
     }
 
@@ -162,8 +162,8 @@ class VersionInfoTest {
     }
 
     @Test
-    @DisplayName("testEulaContainsResolvedVersion")
-    void testEulaContainsResolvedVersion() throws Exception {
+    @DisplayName("testEulaContainsEulaVersion")
+    void testEulaContainsEulaVersion() throws Exception {
         useEulaDirectory(tempDir);
 
         VersionInfo.outPutEula();
@@ -171,7 +171,7 @@ class VersionInfoTest {
         File eulaFile = new File(tempDir, "eula.txt");
         String content = Files.readString(eulaFile.toPath());
 
-        assertTrue(content.contains("版本：" + VersionInfo.VERSION));
+        assertTrue(content.contains("版本：1.0.0"));
         assertFalse(content.contains("__NEOLINK_VERSION__"));
     }
 
