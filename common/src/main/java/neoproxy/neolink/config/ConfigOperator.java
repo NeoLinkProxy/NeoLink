@@ -49,17 +49,18 @@ public final class ConfigOperator {
         workingDirectoryProvider = provider;
     }
 
+    static void resetWorkingDirectoryProviderForTest() {
+        workingDirectoryProvider = null;
+    }
+
     public static void initEnvironment() {
         // 优先使用注入的 provider（Android 场景）
         if (workingDirectoryProvider != null) {
             Path resolved = workingDirectoryProvider.resolveWorkingDirectory();
             WORKING_DIR = resolved.toAbsolutePath().toString();
             BASE_PACKAGE_DIR = WORKING_DIR;
-            File dir = resolved.toFile();
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-            new File(dir, "logs").mkdirs();
+            ensureDirectory(resolved);
+            ensureDirectory(resolved.resolve("logs"));
             ensureConfigFileExists();
             debugOperation("WorkingDirectoryProvider resolved: " + WORKING_DIR);
             return;
@@ -74,17 +75,15 @@ public final class ConfigOperator {
         File basePackageDir = safeDirectory(BASE_PACKAGE_DIR);
         if (basePackageDir != null && isWritableDirectory(basePackageDir)) {
             WORKING_DIR = basePackageDir.getAbsolutePath();
-            new File(WORKING_DIR, "logs").mkdirs();
+            ensureDirectory(Path.of(WORKING_DIR, "logs"));
             ensureConfigFileExists();
             return;
         }
 
-        File workingDirectory = new File(getPlatformSpecificDataPath());
-        WORKING_DIR = workingDirectory.getAbsolutePath();
-        if (!workingDirectory.exists()) {
-            workingDirectory.mkdirs();
-        }
-        new File(workingDirectory, "logs").mkdirs();
+        Path workingDirectory = WorkingDirectoryProvider.resolveDefaultDesktopWorkingDirectory().toAbsolutePath();
+        WORKING_DIR = workingDirectory.toString();
+        ensureDirectory(workingDirectory);
+        ensureDirectory(workingDirectory.resolve("logs"));
         ensureConfigFileExists();
         forceSyncBaseline(NodeConfig.NODE_LIST_FILE_NAME);
         debugOperation("Redirected to AppData: " + WORKING_DIR);
@@ -115,6 +114,14 @@ public final class ConfigOperator {
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    private static void ensureDirectory(Path directory) {
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create NeoLink runtime directory: " + directory, e);
         }
     }
 
@@ -158,7 +165,8 @@ public final class ConfigOperator {
                     new File(WORKING_DIR, fileName).toPath(),
                     StandardCopyOption.REPLACE_EXISTING
             );
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            debugOperation(e);
         }
     }
 
@@ -255,18 +263,6 @@ public final class ConfigOperator {
     }
 
     private static String getPlatformSpecificDataPath() {
-        String os = System.getProperty("os.name").toLowerCase();
-        String home = System.getProperty("user.home");
-        if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            if (localAppData != null && !localAppData.isBlank()) {
-                return localAppData + File.separator + "NeoLink";
-            }
-            return home + File.separator + "AppData" + File.separator + "Local" + File.separator + "NeoLink";
-        }
-        if (os.contains("mac")) {
-            return home + "/Library/Application Support/NeoLink";
-        }
-        return home + File.separator + ".neolink";
+        return WorkingDirectoryProvider.resolveDefaultDesktopWorkingDirectory().toString();
     }
 }

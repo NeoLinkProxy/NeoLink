@@ -15,10 +15,11 @@ plugins {
 
 group = "neoproxy"
 
-// 统一版本管理：所有子模块通过 rootProject.extra["neoLinkApiVersion"] 引用
+// UI 应用版本与 NeoLink API 依赖版本是两个独立发布节奏，禁止互相推导。
+extra["neoLinkUiVersion"] = "7.2.1"
 extra["neoLinkApiVersion"] = "7.2.0"
 
-version = extra["neoLinkApiVersion"] as String
+version = extra["neoLinkUiVersion"] as String
 
 // ============================================================================
 // 子模块公共配置：确保所有子模块继承仓库源

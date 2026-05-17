@@ -14,7 +14,9 @@ import kotlinx.coroutines.delay
 import neoproxy.neolink.cli.ClientConsole
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.config.LanguageData
+import neoproxy.neolink.platform.DesktopDirectoryProvider
 import neoproxy.neolink.state.RuntimeState
+import neoproxy.neolink.util.Debugger.debugOperation
 import java.awt.Dimension
 import java.io.PrintStream
 import java.util.Locale
@@ -44,6 +46,7 @@ fun main(args: Array<String>) {
         }
     }
 
+    ConfigOperator.setWorkingDirectoryProvider(DesktopDirectoryProvider())
     ConfigOperator.initEnvironment()
     RuntimeState.setLanguageData(LanguageData.getChineseLanguage())
     ClientConsole.initializeLogger(false)
@@ -148,6 +151,6 @@ fun customizeSwingLook() {
             defaults[keys[i]] = keys[i + 1]
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        debugOperation(e)
     }
 }

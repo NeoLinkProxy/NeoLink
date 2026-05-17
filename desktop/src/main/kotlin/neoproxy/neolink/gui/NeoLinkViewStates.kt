@@ -1,6 +1,5 @@
 package neoproxy.neolink.gui
 
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import top.ceroxe.api.neolink.NeoNode
@@ -25,12 +24,12 @@ data class FeatureToggleUiState(
 
 data class UiState(
     val nodeList: List<NeoNode> = emptyList(),
-    val selectedNode: NeoNode? = null,
+    val selectedNodeId: String? = null,
     val logFontSize: TextUnit = 12.sp
 )
 
 data class RuntimeUiState(
     val isRunning: Boolean = false,
     val isStopping: Boolean = false,
-    val logMessages: List<AnnotatedString> = emptyList()
+    val logMessages: List<String> = emptyList()
 )

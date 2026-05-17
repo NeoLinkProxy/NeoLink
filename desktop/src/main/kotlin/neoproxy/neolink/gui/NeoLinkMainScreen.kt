@@ -41,12 +41,15 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -60,6 +63,13 @@ import java.io.ByteArrayInputStream
 import java.io.StringReader
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
+
+private val AnsiEscapeRegex = Regex("\u001B\\[([0-9;]*)m")
+private val LogExceptionRegex = Regex("\\b[\\w\\.]+(?:Exception|Error)(?::\\s*.*)?|\\bat\\s+[\\w\\.\\$/<> ]+(?:\\(.*?\\))?|\\((?:Unknown Source|[\\w\\.]+\\.java:\\d+)\\)")
+private val LogBlueTokenRegex = Regex("\\d+(?:\\.\\d+)?\\s*MB|\\d{4}/\\d{1,2}/\\d{1,2}-\\d{1,2}:\\d{2}")
+private val LogEndpointRegex = Regex("\\[[a-fA-F0-9:]+\\](?::\\d+)?|(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}|\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?|localhost|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}(?::\\d+)?")
+private val LogClockTokenRegex = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
+private val SvgViewBoxSplitRegex = Regex("[\\s,]+")
 
 /**
  * NeoLink 现代感主题配置
@@ -832,9 +842,9 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(10.dp)
                     ) {
-                        items(viewModel.logMessages) { msg ->
-                            val highlightedText = remember(msg, viewModel.logFontSize) {
-                                highlightLogMessage(msg)
+                        items(viewModel.logMessages) { rawLog ->
+                            val highlightedText = remember(rawLog, viewModel.logFontSize) {
+                                highlightLogMessage(rawLog)
                             }
 
                             androidx.compose.material.Text(
@@ -861,9 +871,10 @@ fun ColumnScope.logConsoleSection(viewModel: NeoLinkViewModel) {
 /**
  * 完整高亮逻辑函数（包含异常红色、MB/日期蓝色、IP域名紫色、缩进修复）
  */
-private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.AnnotatedString {
+private fun highlightLogMessage(rawLog: String): AnnotatedString {
+    val original = parseAnsiLogMessage(rawLog)
     val newText = original.text.replace("\t", "    ")
-    val builder = androidx.compose.ui.text.AnnotatedString.Builder(newText)
+    val builder = AnnotatedString.Builder(newText)
 
     // 保留原有 [INFO] 颜色
     val tabIndex = original.text.indexOf('\t')
@@ -878,26 +889,8 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
     val colorRed = Color(0xFFFF5252)
 
     // A. 红色：异常头部、堆栈、源码引用
-    val patternExHeader = "\\b[\\w\\.]+(?:Exception|Error)(?::\\s*.*)?"
-    val patternStackTrace = "\\bat\\s+[\\w\\.\\$/<> ]+(?:\\(.*?\\))?"
-    val patternSourceInfo = "\\((?:Unknown Source|[\\w\\.]+\\.java:\\d+)\\)"
-    val regexException = Regex("($patternExHeader|$patternStackTrace|$patternSourceInfo)")
-
-    // B. 蓝色：MB、日期范围
-    val patternMB = "\\d+(?:\\.\\d+)?\\s*MB"
-    val patternDateRange = "\\d{4}/\\d{1,2}/\\d{1,2}-\\d{1,2}:\\d{2}"
-    val regexBlue = Regex("($patternMB|$patternDateRange)")
-
-    // C. 紫色：IP、域名
-    val ipv6Bracketed = "\\[[a-fA-F0-9:]+\\](?::\\d+)?"
-    val ipv6Raw = "(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}"
-    val ipv4 = "\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?"
-    val domain = "(?:localhost|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,})(?::\\d+)?"
-    val regexPurple = Regex("($ipv6Bracketed|$ipv6Raw|$ipv4|$domain)")
-    val timePattern = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
-
     // 1. 红色应用
-    for (match in regexException.findAll(newText)) {
+    for (match in LogExceptionRegex.findAll(newText)) {
         builder.addStyle(
             SpanStyle(color = colorRed, fontWeight = FontWeight.Bold),
             match.range.first,
@@ -906,7 +899,7 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
     }
 
     // 2. 蓝色应用
-    for (match in regexBlue.findAll(newText)) {
+    for (match in LogBlueTokenRegex.findAll(newText)) {
         builder.addStyle(
             SpanStyle(color = colorBlue, fontWeight = FontWeight.Bold),
             match.range.first,
@@ -915,9 +908,9 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
     }
 
     // 3. 紫色应用（含避让逻辑）
-    for (match in regexPurple.findAll(newText)) {
+    for (match in LogEndpointRegex.findAll(newText)) {
         val start = match.range.first
-        if (timePattern.matches(match.value)) continue
+        if (LogClockTokenRegex.matches(match.value)) continue
 
         val lineStart = newText.lastIndexOf('\n', start).let { if (it == -1) 0 else it }
         val lineEnd = newText.indexOf('\n', start).let { if (it == -1) newText.length else it }
@@ -932,6 +925,34 @@ private fun highlightLogMessage(original: androidx.compose.ui.text.AnnotatedStri
     }
 
     return builder.toAnnotatedString()
+}
+
+private fun parseAnsiLogMessage(text: String): AnnotatedString {
+    return buildAnnotatedString {
+        var lastIndex = 0
+        var currentStyle = SpanStyle(color = Color(0xFFCCCCCC))
+
+        AnsiEscapeRegex.findAll(text).forEach { result ->
+            val beforeText = text.substring(lastIndex, result.range.first)
+            if (beforeText.isNotEmpty()) {
+                withStyle(currentStyle) { append(beforeText) }
+            }
+            currentStyle = when (result.groupValues[1]) {
+                "0" -> SpanStyle(color = Color(0xFFCCCCCC))
+                "31" -> SpanStyle(color = Color(0xFFFF5555))
+                "32" -> SpanStyle(color = Color(0xFF50FA7B))
+                "33" -> SpanStyle(color = Color(0xFFF1FA8C))
+                "34" -> SpanStyle(color = Color(0xFFBD93F9))
+                "36" -> SpanStyle(color = Color(0xFF8BE9FD))
+                else -> SpanStyle(color = Color(0xFFCCCCCC))
+            }
+            lastIndex = result.range.last + 1
+        }
+
+        if (lastIndex < text.length) {
+            withStyle(currentStyle) { append(text.substring(lastIndex)) }
+        }
+    }
 }
 
 @Composable
@@ -1121,7 +1142,7 @@ fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
             builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
             val doc = builder.parse(ByteArrayInputStream(svgContent.toByteArray(Charsets.UTF_8)));
             val root = doc.documentElement
-            val vbAttr = root.getAttribute("viewBox").split(Regex("[\\s,]+"))
+            val vbAttr = root.getAttribute("viewBox").split(SvgViewBoxSplitRegex)
             val viewBox = if (vbAttr.size == 4) Rect(
                 vbAttr[0].toFloat(),
                 vbAttr[1].toFloat(),
@@ -1140,10 +1161,9 @@ fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
     }
     if (drawInstructions != null) {
         val (viewBox, ops) = drawInstructions
-        Canvas(modifier = Modifier.size(size)) {
-            val scaleX = size.toPx() / viewBox.width;
-            val scaleY = size.toPx() / viewBox.height;
-            val finalScale = minOf(scaleX, scaleY)
+        val iconHeight = size * (viewBox.height / viewBox.width).coerceIn(0.1f, 10f)
+        Canvas(modifier = Modifier.size(width = size, height = iconHeight)) {
+            val finalScale = size.toPx() / viewBox.width
             scale(
                 finalScale,
                 finalScale,

@@ -3,11 +3,6 @@ package neoproxy.neolink.gui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +28,7 @@ import top.ceroxe.api.neolink.NeoNode
 import top.ceroxe.api.print.Printer
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -82,10 +78,9 @@ class NeoLinkViewModel {
     val nodeList: List<NeoNode>
         get() = uiState.nodeList
 
-    var selectedNode: NeoNode?
-        get() = uiState.selectedNode
-        private set(value) {
-            uiState = uiState.copy(selectedNode = value)
+    val selectedNode: NeoNode?
+        get() = uiState.selectedNodeId?.let { selectedId ->
+            uiState.nodeList.firstOrNull { it.realId == selectedId }
         }
 
     var localDomain: String
@@ -154,7 +149,7 @@ class NeoLinkViewModel {
             runtimeState = runtimeState.copy(isStopping = value)
         }
 
-    val logMessages: List<AnnotatedString>
+    val logMessages: List<String>
         get() = runtimeState.logMessages
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -173,7 +168,7 @@ class NeoLinkViewModel {
         isInitialized = true
 
         ConfigOperator.initEnvironment()
-        File(ConfigOperator.WORKING_DIR, "logs").mkdirs()
+        Files.createDirectories(File(ConfigOperator.WORKING_DIR, "logs").toPath())
 
         val originalConnectionState = ConnectionState.snapshot()
         val originalFeatureState = FeatureState.snapshot()
@@ -233,7 +228,7 @@ class NeoLinkViewModel {
 
             uiState = uiState.copy(
                 nodeList = loadedNodes,
-                selectedNode = loadedNodes.firstOrNull()
+                selectedNodeId = loadedNodes.firstOrNull()?.realId
             )
             loadedNodes.firstOrNull()?.let(::selectNode)
         } catch (e: Exception) {
@@ -251,7 +246,7 @@ class NeoLinkViewModel {
     }
 
     fun selectNode(node: NeoNode) {
-        selectedNode = node
+        uiState = uiState.copy(selectedNodeId = node.realId)
         connectionState = connectionState.copy(
             remoteDomain = node.address,
             hostHookPort = node.hookPort.toString(),
@@ -508,9 +503,9 @@ class NeoLinkViewModel {
     private fun addLogSafe(ansiMsg: String) {
         scope.launch(Dispatchers.Main) {
             val updatedMessages = runtimeState.logMessages.toMutableList()
-            updatedMessages.add(parseAnsi(ansiMsg))
+            updatedMessages.add(ansiMsg)
             if (updatedMessages.size > MAX_GUI_LOG_MESSAGES) {
-                updatedMessages.removeAt(0)
+                updatedMessages.subList(0, updatedMessages.size - MAX_GUI_LOG_MESSAGES).clear()
             }
             runtimeState = runtimeState.copy(logMessages = updatedMessages)
         }
@@ -545,36 +540,6 @@ class NeoLinkViewModel {
 
     private fun formatLegacyAnsi(value: String, colorCode: Int): String {
         return Printer.getFormatLogString(value, colorCode, Printer.style.NONE)
-    }
-
-    private fun parseAnsi(text: String): AnnotatedString {
-        return buildAnnotatedString {
-            val ansiRegex = Regex("\u001B\\[([0-9;]*)m")
-            var lastIndex = 0
-            var currentStyle = SpanStyle(color = Color(0xFFCCCCCC))
-
-            ansiRegex.findAll(text).forEach { result ->
-                val beforeText = text.substring(lastIndex, result.range.first)
-                if (beforeText.isNotEmpty()) {
-                    withStyle(currentStyle) { append(beforeText) }
-                }
-                val code = result.groupValues[1]
-                currentStyle = when (code) {
-                    "0" -> SpanStyle(color = Color(0xFFCCCCCC))
-                    "31" -> SpanStyle(color = Color(0xFFFF5555))
-                    "32" -> SpanStyle(color = Color(0xFF50FA7B))
-                    "33" -> SpanStyle(color = Color(0xFFF1FA8C))
-                    "34" -> SpanStyle(color = Color(0xFFBD93F9))
-                    "36" -> SpanStyle(color = Color(0xFF8BE9FD))
-                    else -> SpanStyle(color = Color(0xFFCCCCCC))
-                }
-                lastIndex = result.range.last + 1
-            }
-
-            if (lastIndex < text.length) {
-                withStyle(currentStyle) { append(text.substring(lastIndex)) }
-            }
-        }
     }
 
     fun appendLog(ansiText: String) {

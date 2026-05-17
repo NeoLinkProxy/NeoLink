@@ -59,7 +59,7 @@ class NeoLinkViewModelTest {
         invokePrivate(viewModel, "appendSystemLog", "服务已停止。", true)
         advanceUntilIdle()
 
-        val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
+        val guiMessages = viewModel.runtimeState.logMessages.map(::stripAnsi)
         assertEquals(2, guiMessages.size)
         assertEquals("前置日志", guiMessages[0])
         assertEquals("\n[System] 服务已停止。\n", guiMessages[1])
@@ -83,7 +83,7 @@ class NeoLinkViewModelTest {
         RuntimeState.logSink()!!.log(LogSink.Level.WARNING, "", "有效期至： 2027/01/01-12:00")
         advanceUntilIdle()
 
-        val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
+        val guiMessages = viewModel.runtimeState.logMessages.map(::stripAnsi)
         assertTrue(
             Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[INFO] \\[HOST-CLIENT] API版本 ： 7.2.0$")
                 .matches(guiMessages[0]),
@@ -115,7 +115,7 @@ class NeoLinkViewModelTest {
         nodeWorkflowSink.say("获取节点列表失败或超时 (已跳过): ", LogSink.Level.WARNING)
         advanceUntilIdle()
 
-        val guiMessages = viewModel.runtimeState.logMessages.map { it.text }
+        val guiMessages = viewModel.runtimeState.logMessages.map(::stripAnsi)
         assertTrue(
             Regex("^\\[\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2}]  \\[INFO] \\[HOST-CLIENT] 正在向 NKM 获取最新可用节点列表: https://p\\.ceroxe\\.top:49999/client/nodelist$")
                 .matches(guiMessages[0]),
@@ -139,6 +139,8 @@ class NeoLinkViewModelTest {
         return field.get(null) as MessageSink
     }
 
+    private fun stripAnsi(text: String): String = text.replace(AnsiEscapeRegex, "")
+
     private fun invokePrivate(target: Any, methodName: String, vararg args: Any) {
         val parameterTypes = args.map {
             when (it) {
@@ -153,5 +155,9 @@ class NeoLinkViewModelTest {
         val method = target.javaClass.getDeclaredMethod(methodName, *parameterTypes)
         method.isAccessible = true
         method.invoke(target, *args)
+    }
+
+    private companion object {
+        val AnsiEscapeRegex = Regex("\u001B\\[[0-9;]*m")
     }
 }

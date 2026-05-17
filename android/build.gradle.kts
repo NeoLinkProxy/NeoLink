@@ -75,9 +75,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":common")) {
-        exclude(group = "top.ceroxe.api", module = "neolinkapi-shared")
-    }
+    implementation(project(":common"))
     implementation("top.ceroxe.api:neolinkapi-android:${rootProject.extra["neoLinkApiVersion"]}")
 
     // Jetpack Compose BOM - 统一 Compose 库版本

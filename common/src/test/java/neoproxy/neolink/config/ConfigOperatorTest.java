@@ -33,6 +33,7 @@ class ConfigOperatorTest {
 
     @AfterEach
     void tearDown() {
+        ConfigOperator.resetWorkingDirectoryProviderForTest();
         ConfigOperator.WORKING_DIR = originalWorkingDir;
         ConfigOperator.BASE_PACKAGE_DIR = originalBasePackageDir;
     }

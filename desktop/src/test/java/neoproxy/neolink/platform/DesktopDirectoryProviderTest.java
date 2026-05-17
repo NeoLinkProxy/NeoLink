@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("DesktopDirectoryProviderTest")
@@ -48,6 +49,17 @@ class DesktopDirectoryProviderTest {
         assertEquals(expected, workingDirectory);
         assertTrue(Files.isDirectory(workingDirectory));
         assertTrue(Files.isDirectory(workingDirectory.resolve("logs")));
+    }
+
+    @Test
+    @DisplayName("resolveWorkingDirectory fails fast when home path is not a directory")
+    void resolveWorkingDirectoryFailsFastWhenHomePathIsNotDirectory(@TempDir Path tempDir) throws Exception {
+        Path homeFile = tempDir.resolve("not-a-directory");
+        Files.writeString(homeFile, "occupied");
+        System.setProperty("os.name", "Linux");
+        System.setProperty("user.home", homeFile.toString());
+
+        assertThrows(IllegalStateException.class, () -> new DesktopDirectoryProvider().resolveWorkingDirectory());
     }
 
     private static void restoreProperty(String name, String value) {

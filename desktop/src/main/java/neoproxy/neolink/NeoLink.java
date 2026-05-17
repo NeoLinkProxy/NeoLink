@@ -6,6 +6,7 @@ import neoproxy.neolink.cli.LaunchOptions;
 import neoproxy.neolink.config.ConfigOperator;
 import neoproxy.neolink.core.NeoLinkCoreRunner;
 import neoproxy.neolink.gui.ComposeEntryKt;
+import neoproxy.neolink.platform.DesktopDirectoryProvider;
 import neoproxy.neolink.state.ConnectionState;
 import neoproxy.neolink.state.FeatureState;
 import neoproxy.neolink.state.RuntimeState;
@@ -66,6 +67,7 @@ public final class NeoLink {
 
     public static void main(String[] args) {
         LaunchOptions launchOptions;
+        ConfigOperator.setWorkingDirectoryProvider(new DesktopDirectoryProvider());
         ConfigOperator.initEnvironment();
         try {
             ConfigOperator.readAndSetValue();
