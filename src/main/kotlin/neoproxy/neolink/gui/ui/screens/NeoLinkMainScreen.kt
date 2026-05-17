@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -139,9 +138,7 @@ fun modernAlertDialog(title: String, message: String, onDismiss: () -> Unit) {
                     color = ModernTheme.textPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    // 对话框标题与图标同排显示，因此沿用统一的视觉基线上移补偿，
-                    // 不直接依赖字体边界的原始居中结果。
-                    modifier = Modifier.offset(y = AlertTitleTextIconBaselineOffset)
+                    modifier = Modifier
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -184,15 +181,14 @@ fun WindowScope.customTitleBar(windowState: WindowState, appIcon: Painter, onExi
                 .padding(end = WindowControlButtonWidth * WindowControlButtonCount)
         ) {
             Row(Modifier.fillMaxSize().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Image(appIcon, "Logo", Modifier.size(23.dp).offset(y = 3.dp), contentScale = ContentScale.Fit)
+                Image(appIcon, "Logo", Modifier.size(23.dp), contentScale = ContentScale.Fit)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     "NeoLink 内网穿透客户端",
                     color = ModernTheme.textSecondary,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.SansSerif,
-                    // 文本与 Logo 的视觉盒模型不同；将文本上移以匹配既有的 7.x 视觉基线补偿。
-                    modifier = Modifier.offset(y = TitleBarTextIconBaselineOffset)
+                    modifier = Modifier
                 )
             }
         }
@@ -220,8 +216,6 @@ private val WindowControlButtonWidth = 46.dp
 private const val WindowControlButtonCount = 3
 private const val TitleBarHeightPx = 32
 private const val WindowControlButtonsWidthPx = 46 * WindowControlButtonCount
-private val TitleBarTextIconBaselineOffset = (-1).dp
-private val AlertTitleTextIconBaselineOffset = (-1).dp
 
 @Composable
 fun windowControlButton(isClose: Boolean = false, onClick: () -> Unit, drawIcon: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit) {

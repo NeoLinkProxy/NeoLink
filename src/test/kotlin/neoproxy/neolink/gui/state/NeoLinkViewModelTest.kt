@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import neoproxy.neolink.config.ConfigOperator
 import neoproxy.neolink.gui.app.NeoLinkSingleInstanceGuard
+import neoproxy.neolink.gui.model.AuthMode
 import neoproxy.neolink.gui.model.AuthUiState
 import neoproxy.neolink.gui.model.MainPage
 import neoproxy.neolink.gui.model.NasKey
@@ -109,6 +110,78 @@ class NeoLinkViewModelTest {
         assertTrue(capturedMessages.first().contains("_____"), capturedMessages.first())
         assertTrue(capturedMessages.first().startsWith("[UI]"), capturedMessages.first())
         assertTrue(capturedMessages.drop(1).none { it.contains("[System]") })
+    }
+
+    @Test
+    @DisplayName("sendCode starts the same cooldown behavior as NeoAuth web")
+    fun sendCodeStartsCooldown() = runTest(mainDispatcher) {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/send-code") { exchange ->
+            json(exchange, """{"success":true,"msg":"验证码已发送"}""")
+        }
+        server.start()
+        try {
+            val viewModel = NeoLinkViewModel()
+            setPrivateProperty(
+                viewModel,
+                "AuthState",
+                AuthUiState(
+                    mode = AuthMode.REGISTER,
+                    nasUrl = "http://127.0.0.1:${server.address.port}",
+                    email = "user@example.com"
+                )
+            )
+
+            viewModel.sendCode()
+
+            waitUntil(Duration.ofSeconds(2)) { viewModel.authState.codeCooldownSeconds in 1..60 }
+            waitUntil(Duration.ofSeconds(2)) { viewModel.authState.message == "验证码已发送" }
+            assertEquals("验证码已发送", viewModel.authState.message)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    @DisplayName("reset password follows NeoAuth ordinary-user web contract")
+    fun resetPasswordFollowsNeoAuthUserContract() = runTest(mainDispatcher) {
+        val requestBodies = CopyOnWriteArrayList<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/send-code") { exchange ->
+            requestBodies += "send:" + exchange.requestBody.use { String(it.readAllBytes(), StandardCharsets.UTF_8) }
+            json(exchange, """{"success":true,"msg":"验证码已发送"}""")
+        }
+        server.createContext("/api/reset-password") { exchange ->
+            requestBodies += "reset:" + exchange.requestBody.use { String(it.readAllBytes(), StandardCharsets.UTF_8) }
+            json(exchange, """{"success":true}""")
+        }
+        server.start()
+        try {
+            val viewModel = NeoLinkViewModel()
+            setPrivateProperty(
+                viewModel,
+                "AuthState",
+                AuthUiState(
+                    mode = AuthMode.RESET_PASSWORD,
+                    nasUrl = "http://127.0.0.1:${server.address.port}",
+                    email = "user@example.com",
+                    code = "123456",
+                    password = "StrongPwd123",
+                    confirmPassword = "StrongPwd123"
+                )
+            )
+
+            viewModel.sendCode()
+            waitUntil(Duration.ofSeconds(2)) { requestBodies.any { it.startsWith("send:") } }
+            viewModel.resetPassword()
+            waitUntil(Duration.ofSeconds(2)) { viewModel.authState.message == "重置成功，请登录。" }
+
+            assertTrue(Regex(""""mode"\s*:\s*"reset"""").containsMatchIn(requestBodies.single { it.startsWith("send:") }))
+            assertTrue(Regex(""""password"\s*:\s*"StrongPwd123"""").containsMatchIn(requestBodies.single { it.startsWith("reset:") }))
+            assertEquals(AuthMode.LOGIN, viewModel.authState.mode)
+        } finally {
+            server.stop(0)
+        }
     }
 
     @Test
@@ -469,7 +542,8 @@ class NeoLinkViewModelTest {
                 AuthUiState(
                     nasUrl = "http://127.0.0.1:${server.address.port}",
                     sessionToken = "session-token",
-                    isAuthenticated = true
+                    isAuthenticated = true,
+                    isVerified = true
                 )
             )
 
@@ -488,6 +562,45 @@ class NeoLinkViewModelTest {
             assertEquals(false, viewModel.nasState.announcementDialogVisible)
             waitUntil(Duration.ofSeconds(2)) { readBodies.isNotEmpty() }
             assertTrue(Regex(""""dismissed"\s*:\s*false""").containsMatchIn(readBodies.single()), readBodies.single())
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    @DisplayName("NAS announcements are hidden until identity is verified")
+    fun nasAnnouncementsAreHiddenUntilIdentityIsVerified() = runTest(mainDispatcher) {
+        val announcementRequests = CopyOnWriteArrayList<String>()
+        val configRequests = CopyOnWriteArrayList<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/config") { exchange ->
+            configRequests += exchange.requestURI.path
+            json(exchange, """{"success":true,"data":{"price_traffic":0.07}}""")
+        }
+        server.createContext("/api/my-announcements") { exchange ->
+            announcementRequests += exchange.requestURI.path
+            json(exchange, """{"success":true,"data":[{"id":7,"title":"维护公告","content":"今晚维护","content_type":"text","allow_dismiss":true}]}""")
+        }
+        server.start()
+        try {
+            val viewModel = NeoLinkViewModel()
+            setPrivateProperty(
+                viewModel,
+                "AuthState",
+                AuthUiState(
+                    nasUrl = "http://127.0.0.1:${server.address.port}",
+                    sessionToken = "session-token",
+                    isAuthenticated = true,
+                    isVerified = false
+                )
+            )
+
+            viewModel.refreshNasDashboard()
+
+            waitUntil(Duration.ofSeconds(2)) { configRequests.isNotEmpty() }
+            assertTrue(announcementRequests.isEmpty())
+            assertTrue(viewModel.nasState.announcements.isEmpty())
+            assertEquals(false, viewModel.nasState.announcementDialogVisible)
         } finally {
             server.stop(0)
         }

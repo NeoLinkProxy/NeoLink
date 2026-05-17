@@ -47,6 +47,11 @@ class NasClient(
 
         val isAccountLocked: Boolean
             get() = statusCode == 403 && message.contains(ACCOUNT_LOCKED_MESSAGE_FRAGMENT)
+
+        val timeLeftSeconds: Int
+            get() = (body["timeLeft"] as? Number)?.toInt()
+                ?: body["timeLeft"]?.toString()?.toIntOrNull()
+                ?: 0
     }
 
     fun sendCode(email: String, mode: String): Response {

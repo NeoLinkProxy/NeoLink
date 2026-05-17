@@ -8,13 +8,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -75,7 +76,7 @@ fun purchasePage(viewModel: NeoLinkViewModel) {
         sectionCard {
             sectionTitle("购买服务")
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     labelText("流量 (GiB)")
                     modernTextField(viewModel.nasState.purchaseDraft.trafficGiB, viewModel::updatePurchaseTraffic, placeholder = "10")
@@ -83,11 +84,18 @@ fun purchasePage(viewModel: NeoLinkViewModel) {
                     modernTextField(viewModel.nasState.purchaseDraft.days, viewModel::updatePurchaseDays, placeholder = "30")
                     rateLimitSlider(viewModel)
                 }
-                Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("订单总额", color = ModernTheme.textSecondary, fontSize = 12.sp)
-                    Text("¥ ${formatMoney(viewModel.purchaseAmount())}", color = ModernTheme.success, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    paymentWarningCard(compact = true)
-                    primaryButton("创建订单", viewModel.nasState.paymentDialog.loading, viewModel::createPurchaseOrder)
+                Column(
+                    Modifier.width(300.dp).fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("订单总额", color = ModernTheme.textSecondary, fontSize = 12.sp)
+                        Text("¥ ${formatMoney(viewModel.purchaseAmount())}", color = ModernTheme.success, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        paymentWarningCard(compact = true)
+                        primaryButton("创建订单", viewModel.nasState.paymentDialog.loading, viewModel::createPurchaseOrder)
+                    }
                 }
             }
             nasMessage(viewModel.nasState.message)
@@ -103,7 +111,7 @@ private fun rateLimitSlider(viewModel: NeoLinkViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             labelText("端口速率限制")
-            Text("$currentRate Mbps", color = ModernTheme.accentLight, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = RateValueTextBaselineOffset))
+            Text("$currentRate Mbps", color = ModernTheme.accentLight, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier)
         }
         Slider(
             value = currentRate.toFloat(),
@@ -198,7 +206,7 @@ private fun keyServiceRow(viewModel: NeoLinkViewModel, key: NasKey) {
                     lineHeight = 20.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.offset(y = KeyNameTextBaselineOffset)
+                    modifier = Modifier
                 )
                 Spacer(Modifier.width(10.dp))
                 keyTypeBadge(key)
@@ -403,6 +411,7 @@ private fun rechargeDialog(viewModel: NeoLinkViewModel) {
 private fun paymentDialog(viewModel: NeoLinkViewModel) {
     val dialog = viewModel.nasState.paymentDialog
     val isSuccess = dialog.status == "SUCCESS"
+    val isTerminal = isSuccess || dialog.timedOut
     modalSurface(width = 520) {
         sectionTitle(if (dialog.status == "SUCCESS") "支付成功" else "微信扫码支付")
         Spacer(Modifier.height(12.dp))
@@ -416,7 +425,7 @@ private fun paymentDialog(viewModel: NeoLinkViewModel) {
                 .background(Color.White, ModernTheme.shapeSmall)
                 .border(1.dp, ModernTheme.borderStrong, ModernTheme.shapeSmall)
                 .padding(10.dp)
-                .then(if (dialog.timedOut) Modifier.blur(4.dp).alpha(0.48f) else Modifier),
+                .then(if (isTerminal) Modifier.blur(14.dp).alpha(0.18f) else Modifier),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -427,17 +436,21 @@ private fun paymentDialog(viewModel: NeoLinkViewModel) {
             )
         }
         Spacer(Modifier.height(14.dp))
-        Text("支付金额 ¥ ${formatMoney(dialog.amount)}", color = ModernTheme.success, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = PaymentAmountBaselineOffset))
-        Text("订单号 ${dialog.orderId}", color = ModernTheme.textSecondary, fontSize = 11.sp)
-        if (isSuccess) {
-            Text("支付成功，密钥将自动刷新。", color = ModernTheme.textSecondary, fontSize = 13.sp)
-        } else {
+        Text(
+            "支付金额 ¥ ${formatMoney(dialog.amount)}",
+            color = ModernTheme.success,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+        Text("订单号 ${dialog.orderId}", color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        if (!isSuccess) {
             Text(
                 "${dialog.secondsLeft.coerceAtLeast(0)}s",
                 color = if (dialog.timedOut) ModernTheme.error else ModernTheme.warning,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.CenterHorizontally).offset(y = CountdownTextBaselineOffset)
+                modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             if (dialog.timedOut) {
                 Text("订单已超时，二维码已失效，请关闭后重新创建订单。", color = ModernTheme.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -445,9 +458,14 @@ private fun paymentDialog(viewModel: NeoLinkViewModel) {
         }
         if (dialog.message.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
-            Text(dialog.message, color = if (dialog.status == "SUCCESS") ModernTheme.success else ModernTheme.textSecondary, fontSize = 12.sp)
+            Text(
+                dialog.message,
+                color = if (dialog.status == "SUCCESS") ModernTheme.success else ModernTheme.textSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
-        if (isSuccess || dialog.timedOut) {
+        if (isTerminal) {
             Spacer(Modifier.height(14.dp))
             secondaryButton(if (isSuccess) "完成" else "关闭", viewModel::closePaymentDialog)
         }
@@ -466,7 +484,7 @@ private fun paymentWarningCard(compact: Boolean) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Warning, null, tint = ModernTheme.error, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("支付警告", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = WarningTitleTextBaselineOffset))
+            Text("支付警告", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier)
         }
         if (!compact) Divider(color = ModernTheme.error.copy(alpha = 0.22f))
         Text("请在 120 秒内完成支付。", color = ModernTheme.error.copy(alpha = 0.92f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -515,7 +533,7 @@ private fun announcementTitle(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier.size(3.dp, 14.dp)
-                .offset(y = AnnouncementMarkerBaselineOffset)
+                
                 .background(AnnouncementMarkerColor, RoundedCornerShape(2.dp))
         )
         Spacer(modifier = Modifier.width(6.dp))
@@ -524,7 +542,7 @@ private fun announcementTitle(text: String) {
             color = ModernTheme.textPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.offset(y = AnnouncementTitleTextBaselineOffset)
+            modifier = Modifier
         )
     }
 }
@@ -555,7 +573,7 @@ private fun compactAction(text: String, color: Color = ModernTheme.success, onCl
         colors = ButtonDefaults.buttonColors(backgroundColor = color),
         elevation = ButtonDefaults.elevation(0.dp, 0.dp)
     ) {
-        Text(text, color = Color.White, fontSize = 12.sp, modifier = Modifier.offset(y = (-1).dp))
+        Text(text, color = Color.White, fontSize = 12.sp, modifier = Modifier)
     }
 }
 
@@ -581,13 +599,6 @@ private fun formatMoney(value: Double): String {
 private val KeyCardShape = RoundedCornerShape(14.dp)
 private val KeyCardHeight = 158.dp
 private val KeyCardStartPadding = 20.dp
-private val KeyNameTextBaselineOffset = (-1).dp
 private val KeyMetaRowHeight = 20.dp
 private val KeyMetaTextLineHeight = 16.sp
-private val PaymentAmountBaselineOffset = (-1).dp
-private val CountdownTextBaselineOffset = (-2).dp
-private val WarningTitleTextBaselineOffset = (-1).dp
-private val RateValueTextBaselineOffset = (-2).dp
 private val AnnouncementMarkerColor = Color(0xFF8B5CF6)
-private val AnnouncementMarkerBaselineOffset = 2.dp
-private val AnnouncementTitleTextBaselineOffset = (-1).dp

@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -188,8 +187,8 @@ fun metricCard(label: String, value: String, modifier: Modifier) {
             .border(1.dp, ModernTheme.border, ModernTheme.shapeMedium).padding(12.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, color = ModernTheme.textSecondary, fontSize = 12.sp, modifier = Modifier.offset(y = MetricCardTextBaselineOffset))
-        Text(value, color = ModernTheme.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = MetricCardValueBaselineOffset))
+        Text(label, color = ModernTheme.textSecondary, fontSize = 12.sp, modifier = Modifier)
+        Text(value, color = ModernTheme.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier)
     }
 }
 
@@ -206,13 +205,13 @@ fun trafficCollapsible(title: String, expanded: Boolean, points: List<TrafficPoi
         ) {
             Icon(if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ModernTheme.textSecondary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(title, color = ModernTheme.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.offset(x = (-3).dp, y = (-2).dp))
+            Text(title, color = ModernTheme.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier)
             Spacer(Modifier.weight(1f))
             Text(
                 formatBytes(totalBytes),
                 color = ModernTheme.textSecondary,
                 fontSize = 12.sp,
-                modifier = Modifier.offset(x = (-1).dp, y = (-2).dp)
+                modifier = Modifier
             )
         }
         AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -256,7 +255,7 @@ fun tunnelCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
-                modifier = Modifier.size(3.dp, 18.dp).offset(y = TunnelStatusBarBaselineOffset)
+                modifier = Modifier.size(3.dp, 18.dp)
                     .background(statusBarColor, RoundedCornerShape(2.dp))
             )
             tunnelNameEditor(
@@ -274,7 +273,7 @@ fun tunnelCard(
                     )
             )
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("本地端口", color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.offset(y = TunnelHeaderPortLabelBaselineOffset))
+                Text("本地端口", color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier)
                 compactTunnelPortField(tunnel.localPort, { viewModel.updateTunnelLocalPort(tunnel.id, it) }, modifier = Modifier.width(76.dp))
             }
             compactToggle("TCP", tunnel.tcpEnabled) { viewModel.updateTunnelTcp(tunnel.id, it) }
@@ -381,9 +380,7 @@ fun tunnelNameEditor(value: String, onValueChange: (String) -> Unit, nameFocusRe
             cursorBrush = SolidColor(ModernTheme.primary),
             decorationBox = { innerTextField ->
                 Box(Modifier.width(fieldWidth).height(TunnelHeaderControlHeight), contentAlignment = Alignment.CenterStart) {
-                    // 标题文本与矢量图标按钮同排显示；上移文本以保留 7.x 视觉基线，
-                    // 不直接依赖 Windows 上按字体边界计算的居中结果。
-                    Box(modifier = Modifier.offset(y = CompactFieldBaselineOffset), contentAlignment = Alignment.CenterStart) {
+                    Box(modifier = Modifier, contentAlignment = Alignment.CenterStart) {
                         innerTextField()
                     }
                 }
@@ -418,15 +415,13 @@ fun compactTunnelPortField(value: String, onValueChange: (String) -> Unit, modif
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                // 紧凑输入框沿用与标准输入框一致的 7.x 基线上移补偿；
-                // 否则在 Windows 字体度量下，字形会略低于相邻控件。
-                Box(modifier = Modifier.offset(y = CompactPortFieldBaselineOffset), contentAlignment = Alignment.CenterStart) {
+                Box(modifier = Modifier, contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
                             "端口",
                             color = Color.Gray.copy(alpha = 0.5f),
                             fontSize = 11.sp,
-                            modifier = Modifier.offset(y = CompactFieldPlaceholderBaselineOffset)
+                            modifier = Modifier
                         )
                     }
                     innerTextField()
@@ -525,7 +520,7 @@ fun remainingTrafficRing(tunnel: TunnelCardState, runtime: TunnelRuntimeUiState)
             "%.3f MiB".format(remainingBytes / 1024.0 / 1024.0),
             color = ModernTheme.textSecondary,
             fontSize = 11.sp,
-            modifier = Modifier.offset(y = RemainingTrafficTextBaselineOffset)
+            modifier = Modifier
         )
     }
 }
@@ -640,7 +635,7 @@ fun createTunnelEntry(viewModel: NeoLinkViewModel) {
                 "创建隧道",
                 color = if (enabled) ModernTheme.success else ModernTheme.textSecondary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.offset(y = CreateEntryTextBaselineOffset)
+                modifier = Modifier
             )
         }
     }
@@ -672,7 +667,7 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
             modernTextField(draft.localPort, { viewModel.updateCreateDraft(localPort = it) }, placeholder = "8080")
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = viewModel::hideCreateTunnelDialog, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.success), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-                    Text("取消", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = DialogActionTextBaselineOffset))
+                    Text("取消", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier)
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
@@ -694,7 +689,7 @@ fun createTunnelDialog(viewModel: NeoLinkViewModel, onAlert: (String) -> Unit) {
                         "创建隧道",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.offset(y = DialogActionTextBaselineOffset)
+                        modifier = Modifier
                     )
                 }
             }
@@ -773,19 +768,6 @@ private const val TunnelExpandRevealDelayMs = 260L
 private const val TunnelExpandRevealPaddingPx = 18f
 private const val MaxInlineSvgLength = 16_384
 private val LatencyWarning = Color(0xFFFACC15)
-private val TunnelStatusBarBaselineOffset = (-0.5).dp
-private val TunnelHeaderPortLabelBaselineOffset = (-2).dp
-private val MetricCardTextBaselineOffset = (-2.5).dp
-private val MetricCardValueBaselineOffset = (-2).dp
-private val CompactFieldBaselineOffset = (-1.5).dp
-private val CompactPortFieldBaselineOffset = (-0.5).dp
-private val CompactFieldPlaceholderBaselineOffset = (-0.5).dp
-private val MaterialButtonTextBaselineOffset = (-1).dp
-private val DialogActionTextBaselineOffset = 0.5.dp
-private val RemainingTrafficTextBaselineOffset = (-1).dp
-private val CreateEntryTextBaselineOffset = (-1).dp
-private val KeyDetailsHeaderTextBaselineOffset = (-1).dp
-private val NodeLatencyTextBaselineOffset = (-1).dp
 private val StopIcon: ImageVector = ImageVector.Builder(
     name = "Stop",
     defaultWidth = 24.dp,
@@ -812,14 +794,12 @@ private fun keyDetailsPanel(key: NasKey) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // 密钥标题、徽标、延迟等小字号文本与图标/边框胶囊同排时，
-            // Windows 字体边界会让视觉中心略低，沿用 7.x 的上移补偿。
             Text(
                 "密钥参数",
                 color = ModernTheme.textPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
-                modifier = Modifier.offset(y = KeyDetailsHeaderTextBaselineOffset)
+                modifier = Modifier
             )
             Spacer(Modifier.width(8.dp))
             keyTypeBadge(key)
@@ -879,7 +859,7 @@ private fun nodeLatencyText(result: String?) {
         color = nodeLatencyColor(result),
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.offset(y = NodeLatencyTextBaselineOffset)
+        modifier = Modifier
     )
 }
 

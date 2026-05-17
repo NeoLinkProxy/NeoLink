@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,9 +59,6 @@ import neoproxy.neolink.gui.ui.components.sectionCard
 import neoproxy.neolink.gui.ui.components.sectionTitle
 import neoproxy.neolink.gui.ui.theme.ModernTheme
 
-private val SidebarPrimaryTextIconBaselineOffset = (-2).dp
-private val SidebarSettingsTextIconBaselineOffset = (-3).dp
-private val MaterialButtonTextBaselineOffset = (-1).dp
 private const val PageCrossfadeDurationMs = 180
 
 @Composable
@@ -140,18 +136,13 @@ fun sidebarItem(viewModel: NeoLinkViewModel, page: MainPage, icon: androidx.comp
                         color = if (selected) ModernTheme.textPrimary else ModernTheme.textSecondary,
                         fontSize = 13.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        // Compose Desktop 在 Windows 上的字体边界会让文本看起来低于矢量图标。
-                        // 侧边栏图标行保留 7.x 的视觉基线补偿。
-                        modifier = Modifier.offset(y = sidebarTextBaselineOffset(page))
+                        modifier = Modifier
                     )
                 }
             }
         }
     }
 }
-
-private fun sidebarTextBaselineOffset(page: MainPage) =
-    if (page == MainPage.SETTINGS) SidebarSettingsTextIconBaselineOffset else SidebarPrimaryTextIconBaselineOffset
 
 @Composable
 fun userCenterPage(viewModel: NeoLinkViewModel) {
@@ -165,7 +156,7 @@ fun userCenterPage(viewModel: NeoLinkViewModel) {
             Text("密钥总数: ${viewModel.totalKeyCount}", color = ModernTheme.textSecondary, fontSize = 13.sp)
         }
         Button(onClick = viewModel::logout, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.error), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-            Text("退出登录", color = Color.White, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset))
+            Text("退出登录", color = Color.White, modifier = Modifier)
         }
     }
 }
@@ -270,7 +261,7 @@ fun settingsPage(viewModel: NeoLinkViewModel) {
                 Spacer(Modifier.height(8.dp))
             }
             Button(onClick = viewModel::saveSettings, shape = ModernTheme.shapeSmall, colors = ButtonDefaults.buttonColors(backgroundColor = ModernTheme.success), elevation = ButtonDefaults.elevation(0.dp, 0.dp)) {
-                Text("保存设置", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = MaterialButtonTextBaselineOffset))
+                Text("保存设置", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier)
             }
         }
     }

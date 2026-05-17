@@ -11,6 +11,8 @@ import top.ceroxe.api.utils.TimeUtils;
 import java.io.File;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 桌面端日志生命周期管理器。
@@ -23,6 +25,21 @@ public final class DesktopLogManager {
     private static final String UI_LOG_PREFIX = "UI-";
     private static final String TUNNEL_LOG_SUFFIX = ".log";
     private static final String TUNNEL_LOG_SUBJECT = "HOST-CLIENT";
+    private static final String REDACTION_MARKER = "***";
+    private static final Pattern CHINESE_KEY_WRITE_PATTERN = Pattern.compile(
+            "(((?:写入|保存|更新|设置|使用|加载|读取)\\s*密钥\\s*(?:为|是|:|：|=)?\\s*)|(?:密钥\\s*(?:为|是|:|：|=)\\s*))([^\\s,，。;；]+)"
+    );
+    private static final Pattern ENGLISH_KEY_WRITE_PATTERN = Pattern.compile(
+            "((?i)(?:write|wrote|save|saved|persist|persisted|set|update|updated|load|loaded|use|using)\\s+(?:key|api[-_ ]?key|access[-_ ]?key)\\s*(?:to|as|:|=)?\\s*)([^\\s,，。;；]+)"
+    );
+    private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
+            "((?i)(?:password|passwd|pwd|token|session[-_ ]?token|secret|authorization|auth[-_ ]?token|cookie|private[-_ ]?key)\\s*(?:=|:|：)\\s*)([^\\s,，。;；]+)"
+    );
+    private static final Pattern CHINESE_PASSWORD_PATTERN = Pattern.compile(
+            "((?:密码|口令|令牌|会话令牌)\\s*(?:为|是|:|：|=)?\\s*)([^\\s,，。;；]+)"
+    );
+    private static final Pattern PROXY_CREDENTIAL_PATTERN = Pattern.compile("(@[^;\\s]+;)([^\\s,，。;；]+)");
+    private static final Pattern AUTHORIZATION_BEARER_PATTERN = Pattern.compile("((?i)Bearer\\s+)([A-Za-z0-9._~+\\-/]+=*)");
 
     private static final Object LOCK = new Object();
     private static final ConcurrentMap<String, Loggist> tunnelLoggists = new ConcurrentHashMap<>();
@@ -74,7 +91,7 @@ public final class DesktopLogManager {
         requireTunnelId(tunnelId);
         Loggist loggist = tunnelLoggists.get(tunnelId);
         if (loggist != null) {
-            loggist.say(new State(level, TUNNEL_LOG_SUBJECT, message));
+            loggist.say(new State(level, TUNNEL_LOG_SUBJECT, sanitizeForLog(message)));
         }
     }
 
@@ -83,13 +100,28 @@ public final class DesktopLogManager {
     }
 
     public static String formatForUi(LogType level, String tag, String message) {
-        State state = new State(level, tag, message);
+        String sanitizedMessage = sanitizeForLog(message);
+        State state = new State(level, tag, sanitizedMessage);
         synchronized (LOCK) {
             if (uiLoggist == null) {
-                return message;
+                return sanitizedMessage;
             }
             return colorDisabled ? uiLoggist.getNoColString(state) : uiLoggist.getLogString(state);
         }
+    }
+
+    public static String sanitizeForLog(String message) {
+        if (message == null || message.isBlank()) {
+            return message;
+        }
+        String sanitized = message;
+        sanitized = maskKeyValues(sanitized, CHINESE_KEY_WRITE_PATTERN);
+        sanitized = maskKeyValues(sanitized, ENGLISH_KEY_WRITE_PATTERN);
+        sanitized = maskWholeValues(sanitized, SENSITIVE_ASSIGNMENT_PATTERN);
+        sanitized = maskWholeValues(sanitized, CHINESE_PASSWORD_PATTERN);
+        sanitized = maskWholeValues(sanitized, PROXY_CREDENTIAL_PATTERN);
+        sanitized = maskWholeValues(sanitized, AUTHORIZATION_BEARER_PATTERN);
+        return sanitized;
     }
 
     public static void closeTunnelLog(String tunnelId) {
@@ -213,6 +245,7 @@ public final class DesktopLogManager {
 
     private static void installCompositeSink() {
         compositeSink = (level, tag, message) -> {
+            String sanitizedMessage = sanitizeForLog(message);
             LogSink currentMirror;
             LogSink currentFile;
             LogSink currentPreserved;
@@ -222,16 +255,46 @@ public final class DesktopLogManager {
                 currentPreserved = preservedSink;
             }
             if (currentMirror != null) {
-                currentMirror.log(level, tag, formatForUi(level, tag, message));
+                currentMirror.log(level, tag, formatForUi(level, tag, sanitizedMessage));
             }
             if (currentFile != null) {
-                currentFile.log(level, tag, message);
+                currentFile.log(level, tag, sanitizedMessage);
             }
             if (currentPreserved != null) {
-                currentPreserved.log(level, tag, message);
+                currentPreserved.log(level, tag, sanitizedMessage);
             }
         };
         RuntimeState.setLogSink(compositeSink);
+    }
+
+    private static String maskKeyValues(String input, Pattern pattern) {
+        Matcher matcher = pattern.matcher(input);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(output, Matcher.quoteReplacement(matcher.group(1) + revealKeyPrefix(matcher.group(matcher.groupCount()))));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private static String maskWholeValues(String input, Pattern pattern) {
+        Matcher matcher = pattern.matcher(input);
+        StringBuffer output = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(output, Matcher.quoteReplacement(matcher.group(1) + REDACTION_MARKER));
+        }
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private static String revealKeyPrefix(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return REDACTION_MARKER;
+        }
+        String value = rawValue.trim();
+        int prefixLength = Math.min(3, value.codePointCount(0, value.length()));
+        int prefixEnd = value.offsetByCodePoints(0, prefixLength);
+        return value.substring(0, prefixEnd) + REDACTION_MARKER;
     }
 
     private static LogType toLogType(LogSink.Level level) {

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
@@ -22,9 +21,6 @@ import neoproxy.neolink.gui.ui.theme.ModernTheme
 import java.util.Locale
 
 private val FormalKeyPurple = Color(0xFF7C3AED)
-private val MetricLabelBaselineOffset = (-1).dp
-private val MetricValueBaselineOffset = (-1).dp
-private val KeyTypeBadgeTextBaselineOffset = (-1.5).dp
 
 @Composable
 fun keyParameterGrid(key: NasKey, modifier: Modifier = Modifier) {
@@ -69,7 +65,7 @@ fun keyTypeBadge(key: NasKey) {
             color = keyTypeColor(key),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.offset(y = KeyTypeBadgeTextBaselineOffset)
+            modifier = Modifier
         )
     }
 }
@@ -82,7 +78,7 @@ private fun keyMetricText(label: String, value: String, color: Color, modifier: 
             color = ModernTheme.textSecondary,
             fontSize = 11.sp,
             maxLines = 1,
-            modifier = Modifier.offset(y = MetricLabelBaselineOffset)
+            modifier = Modifier
         )
         Text(
             value,
@@ -91,7 +87,7 @@ private fun keyMetricText(label: String, value: String, color: Color, modifier: 
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.offset(y = MetricValueBaselineOffset)
+            modifier = Modifier
         )
     }
 }

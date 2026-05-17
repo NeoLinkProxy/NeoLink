@@ -8,6 +8,7 @@ import java.util.UUID
 enum class AuthMode {
     LOGIN,
     REGISTER,
+    RESET_PASSWORD,
     VERIFY_IDENTITY
 }
 
@@ -42,6 +43,7 @@ data class AuthUiState(
     val isAccountLocked: Boolean = false,
     val isRestoringSession: Boolean = false,
     val isLoading: Boolean = false,
+    val codeCooldownSeconds: Int = 0,
     val message: String = ""
 )
 

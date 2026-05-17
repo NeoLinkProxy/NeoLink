@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -79,22 +78,7 @@ import java.time.format.DateTimeFormatter
 private val TrafficChartTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 val TotalTrafficChartColor = Color(0xFF7C3AED)
 val TunnelTrafficChartColor = Color(0xFF22D3EE)
-// Compose Desktop centers text by font bounds. On Windows, CJK and mixed Latin/CJK glyphs
-// look slightly lower than icons, borders, and compact controls, so these offsets preserve
-// the optical baseline established by the 7.x UI.
-private val CenteredButtonTextBaselineOffset = (-1).dp
-private val DropdownSelectedTextBaselineOffset = (-2).dp
-private val DropdownPrimaryTextBaselineOffset = (-1).dp
-private val DropdownSecondaryTextBaselineOffset = (-1).dp
-private val CheckboxTextBaselineOffset = (-1).dp
-private val CompactToggleTextBaselineOffset = (-1).dp
-private val ChartAxisLabelBaselineOffset = (-1).dp
-private val ChartTimeLabelBaselineOffset = ChartAxisLabelBaselineOffset + 1.dp
-private val SectionMarkerBaselineOffset = 3.5.dp
-private val SectionTitleTextBaselineOffset = (-1).dp
-private val FieldLabelTextBaselineOffset = (-3).dp
-private val TextFieldBaselineOffset = (-1).dp
-private val TextFieldPlaceholderBaselineOffset = (-0.5).dp
+private val SectionMarkerDefaultColor = Color(0xFF8B5CF6)
 
 @Composable
 fun inlineDropdown(
@@ -127,7 +111,7 @@ fun inlineDropdown(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(selectedText.ifBlank { emptyText }, color = selectedColor, fontSize = 13.sp, modifier = Modifier.offset(y = DropdownSelectedTextBaselineOffset))
+                Text(selectedText.ifBlank { emptyText }, color = selectedColor, fontSize = 13.sp, modifier = Modifier)
                 if (selectedTrailing != null) {
                     Spacer(Modifier.width(8.dp))
                     selectedTrailing()
@@ -182,12 +166,12 @@ fun inlineDropdownItem(
                 primary,
                 color = if (enabled) primaryColor else ModernTheme.textSecondary,
                 fontSize = 13.sp,
-                modifier = Modifier.weight(1f).offset(y = DropdownPrimaryTextBaselineOffset)
+                modifier = Modifier.weight(1f)
             )
             trailing?.invoke()
         }
         if (secondary.isNotBlank()) {
-            Text(secondary, color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier.offset(y = DropdownSecondaryTextBaselineOffset))
+            Text(secondary, color = ModernTheme.textSecondary, fontSize = 11.sp, modifier = Modifier)
         }
     }
 }
@@ -202,10 +186,10 @@ fun sectionCard(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun sectionTitle(text: String, color: Color = ModernTheme.primary) {
+fun sectionTitle(text: String, color: Color = SectionMarkerDefaultColor) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            modifier = Modifier.size(3.dp, 14.dp).offset(y = SectionMarkerBaselineOffset)
+            modifier = Modifier.size(3.dp, 14.dp)
                 .background(color, RoundedCornerShape(2.dp))
         )
         Spacer(modifier = Modifier.width(6.dp))
@@ -214,7 +198,7 @@ fun sectionTitle(text: String, color: Color = ModernTheme.primary) {
             color = ModernTheme.textPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.offset(y = SectionTitleTextBaselineOffset)
+            modifier = Modifier
         )
     }
 }
@@ -285,8 +269,8 @@ fun trafficChart(points: List<TrafficPoint>, modifier: Modifier = Modifier, line
             modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 46.dp, end = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            trafficAxisLabel(formatTrafficChartSecond(startSecond), ChartTimeLabelBaselineOffset)
-            trafficAxisLabel(formatTrafficChartSecond(nowSecond), ChartTimeLabelBaselineOffset)
+            trafficAxisLabel(formatTrafficChartSecond(startSecond))
+            trafficAxisLabel(formatTrafficChartSecond(nowSecond))
         }
     }
 }
@@ -298,8 +282,8 @@ private fun formatTrafficChartSecond(second: Long): String =
     LocalDateTime.ofInstant(Instant.ofEpochSecond(second), ZoneId.systemDefault()).format(TrafficChartTimeFormatter)
 
 @Composable
-private fun trafficAxisLabel(text: String, baselineOffset: Dp = ChartAxisLabelBaselineOffset) {
-    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp, modifier = Modifier.offset(y = baselineOffset))
+private fun trafficAxisLabel(text: String) {
+    Text(text, color = ModernTheme.textSecondary.copy(alpha = 0.72f), fontSize = 9.sp)
 }
 
 @Composable
@@ -313,7 +297,7 @@ fun fieldColumn(label: String, value: String, onValueChange: (String) -> Unit, m
 
 @Composable
 fun labelText(text: String) {
-    Text(text, color = ModernTheme.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.offset(y = FieldLabelTextBaselineOffset))
+    Text(text, color = ModernTheme.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier)
 }
 
 @Composable
@@ -334,10 +318,8 @@ fun modernTextField(value: String, onValueChange: (String) -> Unit, placeholder:
                     .border(1.dp, if (isFocused) ModernTheme.accent else ModernTheme.border, ModernTheme.shapeSmall).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                // Compose Desktop 会按字体边界居中文本，在 Windows 上视觉基线会略低于相邻图标。
-                // 这里保留 7.x 的 UI 补偿，保证输入文本和占位文本在输入框内保持视觉居中。
                 Row(
-                    modifier = Modifier.fillMaxWidth().offset(y = TextFieldBaselineOffset),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -349,7 +331,7 @@ fun modernTextField(value: String, onValueChange: (String) -> Unit, placeholder:
                                 placeholder,
                                 color = Color.Gray.copy(alpha = 0.5f),
                                 fontSize = 12.sp,
-                                modifier = Modifier.offset(y = TextFieldPlaceholderBaselineOffset)
+                                modifier = Modifier
                             )
                         }
                         innerTextField()
@@ -366,7 +348,7 @@ fun modernTextField(value: String, onValueChange: (String) -> Unit, placeholder:
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = if (isPasswordVisible) "隐藏密码" else "显示密码",
                                 tint = if (isFocused) ModernTheme.accent else ModernTheme.textSecondary,
                                 modifier = Modifier.size(16.dp)
@@ -443,7 +425,7 @@ fun modernCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) ->
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier.offset(y = CheckboxTextBaselineOffset))
+        Text(text, color = ModernTheme.textPrimary, fontSize = 12.sp, modifier = Modifier)
     }
 }
 
@@ -490,7 +472,7 @@ fun compactToggle(text: String, checked: Boolean, onCheckedChange: (Boolean) -> 
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = if (visualChecked) ModernTheme.success else ModernTheme.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = CompactToggleTextBaselineOffset))
+        Text(text, color = if (visualChecked) ModernTheme.success else ModernTheme.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier)
     }
 }
 
@@ -498,8 +480,7 @@ fun compactToggle(text: String, checked: Boolean, onCheckedChange: (Boolean) -> 
 fun primaryButton(
     text: String,
     loading: Boolean,
-    onClick: () -> Unit,
-    textBaselineOffset: Dp = CenteredButtonTextBaselineOffset
+    onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -532,10 +513,10 @@ fun primaryButton(
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("处理中...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
+                Text("处理中...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
             }
         } else {
-            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.offset(y = textBaselineOffset))
+            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier)
         }
     }
 }
@@ -563,7 +544,7 @@ fun secondaryButton(text: String, onClick: () -> Unit) {
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(y = CenteredButtonTextBaselineOffset))
+        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier)
     }
 }
 
