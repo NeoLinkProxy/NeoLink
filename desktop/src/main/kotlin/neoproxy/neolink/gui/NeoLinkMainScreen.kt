@@ -35,7 +35,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -48,7 +47,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -128,7 +126,6 @@ val ModernContextMenuRepresentation = object : ContextMenuRepresentation {
         val status = state.status
         if (status is ContextMenuState.Status.Open) {
             Popup(
-                offset = IntOffset(status.rect.left.toInt(), status.rect.top.toInt()),
                 onDismissRequest = { state.status = ContextMenuState.Status.Closed }
             ) {
                 Surface(
@@ -1147,24 +1144,18 @@ fun svgIcon(svgContent: String?, size: androidx.compose.ui.unit.Dp) {
             val scaleX = size.toPx() / viewBox.width;
             val scaleY = size.toPx() / viewBox.height;
             val finalScale = minOf(scaleX, scaleY)
-            val drawWidth = viewBox.width * finalScale;
-            val drawHeight = viewBox.height * finalScale
-            val offsetX = (size.toPx() - drawWidth) / 2;
-            val offsetY = (size.toPx() - drawHeight) / 2
-            translate(left = offsetX, top = offsetY) {
-                scale(
-                    finalScale,
-                    finalScale,
-                    pivot = Offset.Zero
-                ) {
-                    ops.forEach { op ->
-                        when (op) {
-                            is DrawOp.PathOp -> drawPath(op.path, op.color); is DrawOp.RectOp -> drawRect(
+            scale(
+                finalScale,
+                finalScale,
+                pivot = Offset.Zero
+            ) {
+                ops.forEach { op ->
+                    when (op) {
+                        is DrawOp.PathOp -> drawPath(op.path, op.color); is DrawOp.RectOp -> drawRect(
                             op.color,
                             op.topLeft,
                             op.size
-                        ); is DrawOp.CircleOp -> drawCircle(op.color, op.radius, op.center)
-                        }
+                    ); is DrawOp.CircleOp -> drawCircle(op.color, op.radius, op.center)
                     }
                 }
             }
