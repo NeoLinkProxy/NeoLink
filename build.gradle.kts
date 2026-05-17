@@ -31,6 +31,17 @@ extra["neoLinkUiVersion"] = neoLinkUiVersion
 allprojects {
     repositories {
         mavenLocal()
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/central") {
+            content {
+                excludeGroup("top.ceroxe.api")
+            }
+        }
+        maven("https://maven.aliyun.com/repository/public") {
+            content {
+                excludeGroup("top.ceroxe.api")
+            }
+        }
         maven("https://packages.jetbrains.team/maven/p/cmp/dev") {
             content {
                 includeGroupByRegex("androidx\\.compose.*")
@@ -38,7 +49,6 @@ allprojects {
                 includeGroup("org.jetbrains.skiko")
             }
         }
-        maven("https://maven.aliyun.com/repository/google")
         maven("https://repo1.maven.org/maven2")
     }
 }
