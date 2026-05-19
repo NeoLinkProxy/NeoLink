@@ -26,15 +26,27 @@ version = extra["neoLinkUiVersion"] as String
 // ============================================================================
 subprojects {
     repositories {
-        mavenLocal()
-        mavenCentral()
-        google()
-        maven("https://maven.pkg.jetbrains.space/public/p/public/compose/dev") {
-            content {
+        // Compose Desktop 的平台 runtime 会传递解析 Skiko native JAR。
+        // 阿里云 central 镜像存在“POM 可见但 native JAR 缺失”的情况；Gradle 一旦在某个仓库解析到
+        // module metadata，就会把该 module 的 artifact 固定到同一个仓库，后续不会再回退到其它仓库。
+        // 因此必须用 exclusiveContent 把 Compose/Skiko 明确绑定到官方 Compose 仓库，避免低 CPU 的
+        // 重复 HEAD/GET 探测和最终解析失败。
+        exclusiveContent {
+            forRepository {
+                maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+            }
+            filter {
                 includeGroup("org.jetbrains.compose")
                 includeGroup("org.jetbrains.skiko")
             }
         }
+
+        mavenLocal()
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/central")
+        maven("https://maven.aliyun.com/repository/public")
+        google()
+        mavenCentral()
     }
 }
 

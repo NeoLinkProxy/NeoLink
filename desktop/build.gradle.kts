@@ -10,6 +10,8 @@ import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.attributes.Usage
 import org.gradle.api.attributes.java.TargetJvmVersion
+import org.gradle.api.tasks.bundling.ZipEntryCompression
+import java.io.File
 
 plugins {
     kotlin("jvm")
@@ -128,9 +130,10 @@ dependencies {
 // 资源处理：将 Gradle 版本号注入 app.properties
 // ============================================================================
 tasks.processResources {
-    inputs.property("version", project.version)
+    val appVersion = project.version.toString()
+    inputs.property("version", appVersion)
     filesMatching("app.properties") {
-        expand("version" to project.version)
+        expand("version" to appVersion)
     }
 }
 
@@ -141,17 +144,25 @@ tasks.processResources {
 val verifyNeoLinkVersionDeclarations by tasks.registering {
     group = "verification"
     description = "Ensures UI and API versions are explicitly declared and intentionally decoupled."
+    val declaredUiVersion = neoLinkUiVersion
+    val declaredApiVersion = neoLinkApiVersion
+    val desktopArtifactVersion = project.version.toString()
+
+    inputs.property("neoLinkUiVersion", declaredUiVersion)
+    inputs.property("neoLinkApiVersion", declaredApiVersion)
+    inputs.property("desktopArtifactVersion", desktopArtifactVersion)
+
     doLast {
-        require(neoLinkUiVersion.isNotBlank()) {
+        require(declaredUiVersion.isNotBlank()) {
             "neoLinkUiVersion must be declared at the root project."
         }
-        require(neoLinkApiVersion.isNotBlank()) {
+        require(declaredApiVersion.isNotBlank()) {
             "neoLinkApiVersion must be declared at the root project."
         }
-        require(project.version.toString() == neoLinkUiVersion) {
-            "Desktop artifact version must use neoLinkUiVersion. project.version=${project.version}, neoLinkUiVersion=$neoLinkUiVersion"
+        require(desktopArtifactVersion == declaredUiVersion) {
+            "Desktop artifact version must use neoLinkUiVersion. project.version=$desktopArtifactVersion, neoLinkUiVersion=$declaredUiVersion"
         }
-        logger.lifecycle("[VersionBinding] OK: ui=$neoLinkUiVersion, neolinkapi=$neoLinkApiVersion")
+        logger.lifecycle("[VersionBinding] OK: ui=$declaredUiVersion, neolinkapi=$declaredApiVersion")
     }
 }
 
@@ -167,6 +178,10 @@ fun ShadowJar.configureCommonShadow() {
     manifest {
         attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
+    // ShadowJar 的默认 DEFLATED 压缩会把每个平台大包变成单线程 CPU 压缩任务；
+    // 在多核机器上表现为整体 CPU 占用很低，但 4 个平台包串行累加耗时很长。
+    // 发布包里的依赖 JAR 本身大多已经压缩过，二次压缩收益有限；使用 STORED 明确用体积换构建时延。
+    entryCompression = ZipEntryCompression.STORED
     // 排除签名文件，防止 JAR 签名校验失败
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
@@ -266,7 +281,78 @@ tasks.register<ShadowJar>("shadowJarLinux") {
 tasks.register("shadowJarAll") {
     group = "build"
     description = "Builds universal + all platform-specific shadow JARs."
-    dependsOn("shadowJar", "shadowJarWindows", "shadowJarMacos", "shadowJarLinux")
+    dependsOn("classes", verifyNeoLinkVersionDeclarations)
+
+    val gradleWrapperPath = rootProject.layout.projectDirectory.file(
+        if (System.getProperty("os.name").contains("Windows", ignoreCase = true)) {
+            "gradlew.bat"
+        } else {
+            "gradlew"
+        }
+    ).asFile.absolutePath
+    val rootProjectPath = rootProject.projectDir
+    val packageTasks = listOf(
+        ":desktop:shadowJar",
+        ":desktop:shadowJarWindows",
+        ":desktop:shadowJarMacos",
+        ":desktop:shadowJarLinux"
+    )
+    val commonArgs = listOf("--console=plain", "--configure-on-demand", "--configuration-cache", "--offline")
+    val onlineFallbackArgs = listOf("--console=plain", "--configure-on-demand", "--configuration-cache")
+
+    doLast {
+        val gradleWrapper = File(gradleWrapperPath)
+        require(gradleWrapper.isFile) {
+            "Gradle Wrapper not found: ${gradleWrapper.absolutePath}"
+        }
+
+        fun runPackageBuilds(args: List<String>): List<String> {
+            // Gradle does not parallelize independent archive tasks inside the same project.
+            // Running the already-defined, single-package ShadowJar tasks as sibling Gradle builds
+            // preserves their existing inputs/outputs while letting this workstation build the four
+            // large archives concurrently instead of paying their wall time serially.
+            val runningBuilds = packageTasks.associateWith { taskPath ->
+                ProcessBuilder(listOf(gradleWrapper.absolutePath, taskPath) + args)
+                    .directory(rootProjectPath)
+                    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                    .redirectError(ProcessBuilder.Redirect.INHERIT)
+                    .start()
+            }
+
+            return runningBuilds.mapNotNull { (taskPath, process) ->
+                val exitCode = process.waitFor()
+                taskPath.takeIf { exitCode != 0 }
+            }
+        }
+
+        // Warm packaging should consume Gradle's local artifact cache and avoid four repeated
+        // remote metadata probes. If a fresh machine has not cached every runtime artifact yet,
+        // retry the failed package tasks online so cold builds remain self-healing.
+        val offlineFailures = runPackageBuilds(commonArgs)
+        val failedTasks = if (offlineFailures.isEmpty()) {
+            emptyList()
+        } else {
+            logger.lifecycle(
+                "[shadowJarAll] Offline parallel packaging missed cached artifacts for: ${offlineFailures.joinToString()}. Retrying online."
+            )
+            val retryTasks = packageTasks.filter { it in offlineFailures }
+            val retryBuilds = retryTasks.associateWith { taskPath ->
+                ProcessBuilder(listOf(gradleWrapper.absolutePath, taskPath) + onlineFallbackArgs)
+                    .directory(rootProjectPath)
+                    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                    .redirectError(ProcessBuilder.Redirect.INHERIT)
+                    .start()
+            }
+            retryBuilds.mapNotNull { (taskPath, process) ->
+                val exitCode = process.waitFor()
+                taskPath.takeIf { exitCode != 0 }
+            }
+        }
+
+        require(failedTasks.isEmpty()) {
+            "Parallel shadow packaging failed for: ${failedTasks.joinToString()}"
+        }
+    }
 }
 
 // ============================================================================
