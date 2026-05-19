@@ -5,6 +5,8 @@
 // ============================================================================
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.tasks.bundling.ZipEntryCompression
+import java.io.File
 
 plugins {
     kotlin("jvm") version "2.3.21"
@@ -30,6 +32,20 @@ extra["neoLinkUiVersion"] = neoLinkUiVersion
 // ============================================================================
 allprojects {
     repositories {
+        // Compose Desktop 的平台 runtime 会传递解析 Skiko native JAR。
+        // 国内 Maven 镜像可能出现 POM 已同步、native artifact 未同步的短暂不一致；Gradle 一旦在某个
+        // 仓库解析到 module metadata，就会把该 module 的 artifact 固定到同一个仓库，不会再回退。
+        // 用 exclusiveContent 将 Compose/Skiko 绑定到官方 Compose 仓库，避免低 CPU 的重复远程探测。
+        exclusiveContent {
+            forRepository {
+                maven("https://packages.jetbrains.team/maven/p/cmp/dev")
+            }
+            filter {
+                includeGroup("org.jetbrains.compose")
+                includeGroup("org.jetbrains.skiko")
+            }
+        }
+
         mavenLocal()
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/central") {
@@ -40,13 +56,6 @@ allprojects {
         maven("https://maven.aliyun.com/repository/public") {
             content {
                 excludeGroup("top.ceroxe.api")
-            }
-        }
-        maven("https://packages.jetbrains.team/maven/p/cmp/dev") {
-            content {
-                includeGroupByRegex("androidx\\.compose.*")
-                includeGroup("org.jetbrains.compose")
-                includeGroup("org.jetbrains.skiko")
             }
         }
         maven("https://repo1.maven.org/maven2")
@@ -135,9 +144,10 @@ dependencies {
 // 资源处理：将 Gradle 版本号注入 app.properties
 // ============================================================================
 tasks.processResources {
-    inputs.property("version", project.version)
+    val appVersion = project.version.toString()
+    inputs.property("version", appVersion)
     filesMatching("app.properties") {
-        expand("version" to project.version)
+        expand("version" to appVersion)
     }
 }
 
@@ -148,17 +158,25 @@ tasks.processResources {
 val verifyNeoLinkVersionDeclarations by tasks.registering {
     group = "verification"
     description = "Ensures UI and API versions are explicitly declared and intentionally decoupled."
+    val declaredUiVersion = neoLinkUiVersion
+    val declaredApiVersion = neoLinkApiVersion
+    val desktopArtifactVersion = project.version.toString()
+
+    inputs.property("neoLinkUiVersion", declaredUiVersion)
+    inputs.property("neoLinkApiVersion", declaredApiVersion)
+    inputs.property("desktopArtifactVersion", desktopArtifactVersion)
+
     doLast {
-        require(neoLinkUiVersion.isNotBlank()) {
+        require(declaredUiVersion.isNotBlank()) {
             "neoLinkUiVersion must be declared."
         }
-        require(neoLinkApiVersion.isNotBlank()) {
+        require(declaredApiVersion.isNotBlank()) {
             "neoLinkApiVersion must be declared."
         }
-        require(project.version.toString() == neoLinkUiVersion) {
-            "Desktop artifact version must use neoLinkUiVersion. project.version=${project.version}, neoLinkUiVersion=$neoLinkUiVersion"
+        require(desktopArtifactVersion == declaredUiVersion) {
+            "Desktop artifact version must use neoLinkUiVersion. project.version=$desktopArtifactVersion, neoLinkUiVersion=$declaredUiVersion"
         }
-        logger.lifecycle("[VersionBinding] OK: ui=$neoLinkUiVersion, neolinkapi=$neoLinkApiVersion")
+        logger.lifecycle("[VersionBinding] OK: ui=$declaredUiVersion, neolinkapi=$declaredApiVersion")
     }
 }
 
@@ -174,6 +192,9 @@ fun ShadowJar.configureCommonShadow() {
     manifest {
         attributes["Main-Class"] = "neoproxy.neolink.NeoLink"
     }
+    // ShadowJar 的默认 DEFLATED 压缩会让每个平台包进入单线程二次压缩；
+    // 依赖 JAR 本身大多已压缩，继续压缩对体积收益有限，却会让 shadowJarAll 串行耗时膨胀。
+    entryCompression = ZipEntryCompression.STORED
     // 排除签名文件，避免 fat JAR 聚合第三方包后触发签名校验失败。
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
@@ -240,7 +261,59 @@ tasks.register<ShadowJar>("shadowJarLinux") {
 tasks.register("shadowJarAll") {
     group = "build"
     description = "Builds universal + all platform-specific shadow JARs."
-    dependsOn("shadowJar", "shadowJarWindows", "shadowJarMacos", "shadowJarLinux")
+    dependsOn("classes", verifyNeoLinkVersionDeclarations)
+
+    val gradleWrapperPath = layout.projectDirectory.file(
+        if (System.getProperty("os.name").contains("Windows", ignoreCase = true)) {
+            "gradlew.bat"
+        } else {
+            "gradlew"
+        }
+    ).asFile.absolutePath
+    val projectPath = projectDir
+    val packageTasks = listOf(":shadowJar", ":shadowJarWindows", ":shadowJarMacos", ":shadowJarLinux")
+    val commonArgs = listOf("--console=plain", "--configure-on-demand", "--configuration-cache", "--offline")
+    val onlineFallbackArgs = listOf("--console=plain", "--configure-on-demand", "--configuration-cache")
+
+    doLast {
+        val gradleWrapper = File(gradleWrapperPath)
+        require(gradleWrapper.isFile) {
+            "Gradle Wrapper not found: ${gradleWrapper.absolutePath}"
+        }
+
+        fun runPackageBuilds(args: List<String>, tasksToRun: List<String>): List<String> {
+            // Gradle 不会并行同一 project 内的多个重型归档任务；这里复用已有单包 ShadowJar 任务，
+            // 用兄弟 Gradle 进程并发打包，避免四个平台包墙钟时间串行累加。
+            val runningBuilds = tasksToRun.associateWith { taskPath ->
+                ProcessBuilder(listOf(gradleWrapper.absolutePath, taskPath) + args)
+                    .directory(projectPath)
+                    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                    .redirectError(ProcessBuilder.Redirect.INHERIT)
+                    .start()
+            }
+
+            return runningBuilds.mapNotNull { (taskPath, process) ->
+                val exitCode = process.waitFor()
+                taskPath.takeIf { exitCode != 0 }
+            }
+        }
+
+        // 热构建应直接消费本机 Gradle artifact cache，避免四个并发子构建重复做远程 metadata 探测。
+        // 如果冷缓存缺 artifact，只对失败任务在线重试，保证新环境仍可自恢复。
+        val offlineFailures = runPackageBuilds(commonArgs, packageTasks)
+        val failedTasks = if (offlineFailures.isEmpty()) {
+            emptyList()
+        } else {
+            logger.lifecycle(
+                "[shadowJarAll] Offline parallel packaging missed cached artifacts for: ${offlineFailures.joinToString()}. Retrying online."
+            )
+            runPackageBuilds(onlineFallbackArgs, packageTasks.filter { it in offlineFailures })
+        }
+
+        require(failedTasks.isEmpty()) {
+            "Parallel shadow packaging failed for: ${failedTasks.joinToString()}"
+        }
+    }
 }
 
 // ============================================================================
